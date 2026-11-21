@@ -13,9 +13,40 @@ from . import _ctypes as C
 def _scalar(value:float, like:"Tensor") -> "Tensor":
   return Tensor.from_numpy(np.array(value, dtype=np.float32), like.device)
 
+def _unbroadcast_device(g:"Tensor", shape:tuple[int, ...]) -> "Tensor" | None:
+  """Sum a gradient back via device matmul/view (exp_016: no host sync).
+
+  A reduction along an axis is a matmul with a ones vector, which keeps the
+  whole backward graph on the GPU so a training step can be captured as a
+  single command buffer. Returns None for shapes this interim path cannot
+  express (middle axes, >2D), which then use the CPU fallback below.
+  """
+  out = g
+  while len(out.shape) > len(shape):
+    if out.shape[0] == 1:
+      out = out.reshape(*out.shape[1:])
+    else:
+      ones = Tensor.from_numpy(np.ones((1, out.shape[0]), np.float32), out.device)
+      out = ones @ out
+      out = out.reshape(*out.shape[1:])
+  for axis, (got, want) in enumerate(zip(out.shape, shape)):
+    if want == 1 and got != 1:
+      if axis == len(out.shape) - 1:
+        ones = Tensor.from_numpy(np.ones((got, 1), np.float32), out.device)
+        out = out @ ones
+      elif axis == 0:
+        ones = Tensor.from_numpy(np.ones((1, got), np.float32), out.device)
+        out = ones @ out
+      else:
+        return None
+  return out if out.shape == shape else None
+
 def _unbroadcast(g:"Tensor", shape:tuple[int, ...]) -> "Tensor":
-  """Sum a gradient back to a parent's shape (interim: uses a CPU roundtrip)."""
+  """Sum a gradient back to a parent's shape (2D on device, CPU fallback)."""
   if g.shape == shape: return g
+  if len(g.shape) <= 2:
+    dev = _unbroadcast_device(g, shape)
+    if dev is not None: return dev
   arr = g.numpy()
   while arr.ndim > len(shape): arr = arr.sum(axis=0)
   for axis, (got, want) in enumerate(zip(arr.shape, shape)):
