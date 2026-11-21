@@ -34,6 +34,13 @@ BT_API const char* bt_version(void);
 /* Non-zero when a Vulkan compute device was initialized. */
 BT_API int bt_has_vulkan(void);
 
+/* Submit all recorded Vulkan work and wait for it. Readback also flushes.
+ * Call this before comparing wall time against a synchronized PyTorch op. */
+BT_API bt_status_t bt_vulkan_flush(void);
+
+/* GPU time of the last flushed batch, measured with timestamp queries. */
+BT_API double bt_vulkan_device_time_ms(void);
+
 #ifdef __cplusplus
 }
 #endif

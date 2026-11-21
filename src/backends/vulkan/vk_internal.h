@@ -11,6 +11,8 @@ void bt_vk_shutdown(void);
 int bt_vk_available(void);
 const char* bt_vk_device_name(void);
 bt_status_t bt_vk_register(void);
+bt_status_t bt_vk_flush(void);
+double bt_vk_device_time_ms(void);
 
 void* bt_vk_alloc(size_t nbytes);
 void bt_vk_free(void* handle);

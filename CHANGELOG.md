@@ -6,6 +6,16 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added (M10 experiment)
+
+- Batched Vulkan submissions: dispatches are recorded until `bt_vulkan_flush()`
+  or host readback; rotating descriptor sets preserve per-dispatch bindings.
+- GPU timestamp queries with `bt_vulkan_device_time_ms()` when the device
+  exposes `timestampComputeAndGraphics`.
+- `experiments/exp_003` with hypothesis, before/after snapshots and findings:
+  20-op chain 2.17x faster (2.773 → 1.277 ms). Single-op ratios remain below
+  target and are reported honestly in `BENCHMARKS.md` / `docs/PROGRESS.md`.
+
 ### Added (docs)
 
 - `docs/FEATURE_INVENTORY.md`: full PyTorch-grade API surface with per-group status.

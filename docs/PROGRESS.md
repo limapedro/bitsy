@@ -21,7 +21,7 @@ Counting group-level rows in [FEATURE_INVENTORY.md](FEATURE_INVENTORY.md):
 
 | Status | Rows | Meaning |
 |---|---:|---|
-| done | 7 | implemented and parity-verified where applicable |
+| done | 8 | implemented and parity-verified where applicable |
 | partial | 10 | subset of the group implemented |
 | missing | 55 | no implementation |
 
@@ -67,33 +67,42 @@ exact-mode ops are bit-identical apart from NaN payloads.
 
 ## 3. Implemented functions — performance vs PyTorch CUDA
 
-Ratio = Bitsy throughput ÷ PyTorch throughput (higher is better). All numbers
-are wall time with sync per iteration; device timestamp queries are not
-implemented yet. Sources: `benchmarks/results/elementwise.json`,
-`benchmarks/results/gemm.json`, `BENCHMARKS.md`.
+Ratio = Bitsy throughput ÷ PyTorch throughput (higher is better). Wall time
+includes `bt.flush()` (submit + fence wait) per iteration on the Bitsy side and
+`torch.cuda.synchronize()` on the PyTorch side. Bitsy device time is from Vulkan
+timestamp queries; PyTorch device time is not measured, so it is not compared.
+Sources: `benchmarks/results/elementwise.json`, `benchmarks/results/gemm.json`,
+`BENCHMARKS.md`.
 
-| Op | Shape | Bitsy ms | PyTorch ms | Ratio | Target | Gap |
-|---|---|---:|---:|---:|---:|---|
-| add | 4096 | 0.0772 | 0.0132 | 0.17 | ≥0.95 | miss 0.78 |
-| mul | 4096 | 0.0703 | 0.0246 | 0.35 | ≥0.95 | miss 0.60 |
-| relu | 4096 | 0.0942 | 0.0167 | 0.18 | ≥0.95 | miss 0.77 |
-| add | 1,048,576 | 0.1551 | 0.0553 | 0.36 | ≥0.95 / ≥90% peak | miss 0.59 |
-| mul | 1,048,576 | 0.1514 | 0.0537 | 0.35 | ≥0.95 / ≥90% peak | miss 0.60 |
-| relu | 1,048,576 | 0.1616 | 0.0421 | 0.26 | ≥0.95 / ≥90% peak | miss 0.69 |
-| GEMM (naive) | 1024² | 10.224 | 0.908 | 0.09 | ≥0.80 | miss 0.71 |
-| GEMM (tiled) | 1024² | 4.337 | 0.961 | 0.22 | ≥0.80 | miss 0.58 |
-| GEMM (tiled) | 256² | 0.146 | 0.046 | 0.31 | ≥0.80 | miss 0.49 |
+| Op | Shape | Bitsy ms | PyTorch ms | Bitsy device ms | Ratio | Target | Gap |
+|---|---|---:|---:|---:|---:|---:|---|
+| add | 4096 | 0.0783 | 0.0244 | 0.0020 | 0.31 | ≥0.95 | miss 0.64 |
+| mul | 4096 | 0.1107 | 0.0307 | 0.0021 | 0.28 | ≥0.95 | miss 0.67 |
+| relu | 4096 | 0.0862 | 0.0266 | 0.0021 | 0.31 | ≥0.95 | miss 0.64 |
+| add | 1,048,576 | 0.1784 | 0.0868 | 0.0483 | 0.49 | ≥0.95 / ≥90% peak | miss 0.46 |
+| mul | 1,048,576 | 0.1963 | 0.0889 | 0.0518 | 0.45 | ≥0.95 / ≥90% peak | miss 0.50 |
+| relu | 1,048,576 | 0.1999 | 0.0773 | 0.0492 | 0.39 | ≥0.95 / ≥90% peak | miss 0.56 |
+| GEMM (naive) | 1024² | 10.224 | 0.908 | — | 0.09 | ≥0.80 | miss 0.71 |
+| GEMM (tiled) | 1024² | 4.824 | 1.128 | 4.443 | 0.23 | ≥0.80 | miss 0.57 |
+| GEMM (tiled) | 256² | 0.185 | 0.045 | 0.070 | 0.24 | ≥0.80 | miss 0.56 |
 
-Achieved throughput: elementwise peaks at ~77 GiB/s vs PyTorch ~212 GiB/s;
-tiled GEMM reaches 495 GFLOPS vs PyTorch 2234 GFLOPS at n=1024.
+Achieved throughput: large elementwise peaks at ~66 GiB/s vs PyTorch ~135 GiB/s;
+tiled GEMM reaches 445 GFLOPS vs PyTorch 1905 GFLOPS at n=1024.
 
 **No performance target is met.** Conv2d performance has not been benchmarked
-at all — only its numerics. Unmeasured ops are deliberately absent from this
-table rather than assumed fast.
+at all — only its numerics. Single-op ratios moved versus the previous snapshot
+mostly because PyTorch's small-op timings vary run to run; see exp_003 findings.
+
+**Batched multi-op workload** (`benchmarks/ops/batch_chain.py`, 20 adds of 1M
+elements): eager submit-per-op 2.773 ms → batched 1.277 ms, a **2.17x** speedup.
+Timestamp queries report 0.942 ms of GPU work in the batched case, leaving
+~0.34 ms of host/submit overhead. Raw JSON:
+`experiments/exp_003/chain_eager.json`, `chain_batched.json`.
 
 Experiment trail:
 - `experiments/exp_001` — caching allocator: 4.2–5.7× lower wall time.
 - `experiments/exp_002` — tiled SGEMM: 2.36× faster than naive at n=1024.
+- `experiments/exp_003` — batched submissions (2.17× on a 20-op chain) and GPU timestamp queries.
 
 ---
 
@@ -117,9 +126,10 @@ current, documented stand-in. Any loosening requires an
 
 ## 5. Open issues that block "professional grade"
 
-1. **Performance:** every measured ratio is below target. Needs batched
-   submissions/timeline semaphores, GPU timestamp queries, register-blocked and
-   autotuned GEMM, vectorized loads, and pointwise fusion.
+1. **Performance:** every measured ratio is below target. Batched submissions
+   and timestamp queries are now done (exp_003); still needed: timeline
+   semaphores/asynchronous submissions without per-op fence waits,
+   register-blocked and autotuned GEMM, vectorized loads, and pointwise fusion.
 2. **C autograd:** gradients currently come from an interim Python graph; hooks,
    `no_grad`, and double backward are missing.
 3. **Correctness:** intermittent wrong logits on very large Vulkan eval batches
@@ -139,9 +149,11 @@ current, documented stand-in. Any loosening requires an
 python tests/parity/run.py                 # 40/40, overwrites reports/latest.json
 python tests/parity/gradcheck.py           # gradient parity
 python tests/parity/conv_check.py          # conv forward/backward parity
-python benchmarks/ops/elementwise.py       # elementwise ratios
+python benchmarks/ops/elementwise.py       # elementwise ratios + device time
 $env:BT_GEMM_TILED="0"; python benchmarks/ops/gemm.py   # naive GEMM baseline
 $env:BT_GEMM_TILED="1"; python benchmarks/ops/gemm.py   # tiled GEMM
+$env:BT_VK_NO_BATCH="1"; python benchmarks/ops/batch_chain.py  # eager chain
+$env:BT_VK_NO_BATCH="0"; python benchmarks/ops/batch_chain.py  # batched chain
 python benchmarks/models/mnist_mlp.py      # MNIST loss curves
 python benchmarks/models/cifar_cnn.py      # CIFAR loss curves (needs data/cifar_subset.npz; see tools/export_cifar.py)
 ```
@@ -155,8 +167,8 @@ Then update the numbers in this file and in `BENCHMARKS.md` together, and keep
 
 1. Fix the large-batch Vulkan eval anomaly with a dedicated synchronization/race
    experiment.
-2. Batched command submission + timestamp queries, then re-benchmark; publish
-   device time instead of only wall time.
+2. Asynchronous submissions with timeline semaphores so host code does not wait
+   for each batch; re-benchmark end-to-end training steps.
 3. Register-blocked/vectorized GEMM with per-device autotuning (new `exp_NNN`).
 4. Native reduction kernels (`sum`, `mean`, `max`, `argmax`) so log_softmax and
    normalization no longer need matmul-based stand-ins.

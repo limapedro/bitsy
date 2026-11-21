@@ -60,9 +60,11 @@ static void destroy_buffer(vk_buffer_t* b) {
 VkBuffer bt_vk_buffer_of(void* handle) { return handle ? ((vk_buffer_t*)handle)->buffer : VK_NULL_HANDLE; }
 
 void bt_vk_begin_cmd(void) {
+  if (g_vk.recording) return; // keep recording across dispatches until a flush
   VkCommandBufferBeginInfo bi = { .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
                                   .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT };
   (void)vkBeginCommandBuffer(g_vk.cmd, &bi);
+  g_vk.recording = 1;
 }
 
 /* Conservative global barrier: transfers and shaders must see each other's writes. */

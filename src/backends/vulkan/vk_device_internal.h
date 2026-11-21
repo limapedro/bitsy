@@ -5,6 +5,11 @@
 
 #include <bitsy/bt_error.h>
 
+/* Maximum dispatches per batched submission. One descriptor set per dispatch
+ * is required because set contents are written on the host, not captured by
+ * vkCmdBindDescriptorSets. */
+#define BT_VK_MAX_DISPATCHES 1024
+
 typedef struct {
   VkInstance instance;
   VkPhysicalDevice phys;
@@ -13,24 +18,41 @@ typedef struct {
   uint32_t qfam;
   VkCommandPool pool;
   VkCommandBuffer cmd;
-  VkFence fence;         /* one fence: dispatches are serialized in M2 */
+  VkFence fence;
   VkDescriptorSetLayout set_layout;
   VkDescriptorPool descriptor_pool;
-  VkDescriptorSet set;
+  VkDescriptorSet sets[BT_VK_MAX_DISPATCHES];
+  int set_index;
+  int recording;
   VkPipelineLayout pipeline_layout;
   VkPipeline pipeline;
   VkPipeline matmul_pipeline;
   VkPipeline conv_pipeline;
   VkPipeline gemm_tiled_pipeline;
+  VkQueryPool timestamp_pool;
+  int query_index;
+  int have_timestamps;
+  double device_time_ms;
   VkPhysicalDeviceProperties props;
   int ready;
 } vk_ctx_t;
 
 extern vk_ctx_t g_vk;
 
-/* End, submit and wait on the single fence. Serialized but deterministic. */
-bt_status_t bt_vk_flush(void);
+/* Ensure the command buffer is recording; no submit happens here. */
 void bt_vk_begin_cmd(void);
+
+/* Submit everything recorded so far and wait. Safe with zero pending work. */
+bt_status_t bt_vk_flush(void);
+
+/* Next descriptor set for one dispatch; flushes when the batch is full. */
+VkDescriptorSet bt_vk_next_set(void);
+
+/* Timestamp around one dispatch (no-op if the device lacks the feature). */
+void bt_vk_timestamp_start(void);
+void bt_vk_timestamp_end(void);
+
+double bt_vk_device_time_ms(void);
 void bt_vk_barrier(void);
 VkBuffer bt_vk_buffer_of(void* handle);
 void bt_vk_allocator_shutdown(void);
