@@ -316,6 +316,22 @@ Conclusion: the remaining elementwise gap is bandwidth/kernel-bound
   dispatches per step. Next: fuse backward reduction chains or packed f16;
   all changes must pass the 43-case gate.
 
+## Phase 5/6 update (exp_028)
+
+- Fused cross-entropy loss reduction: one workgroup reduces
+  `onehot*log_softmax` over both axes and applies `-1/B`; backward is
+  `-g*onehot/B`. Combined with exp_027's log_softmax, the old reduction chain
+  and its `broadcast_grad` backwards disappear.
+- Dispatches/step 30 → **22** (8 fewer), barriers 30 → 22. Captured step
+  0.180 → **0.156 ms** (1.15×), graph ratio 0.366 → **0.425–0.542** (PyTorch
+  graph timing varied; still below 0.85). Eager ratio 1.11–1.24 (target MET).
+  GEMM 0.68 and elementwise ≤0.75 remain missed.
+- Parity 43/43 incl. gradient gate, CTest both builds; MNIST W1 diff 3.3e-07,
+  CIFAR W diff 7.3e-07 (within 1e-5).
+- Remaining step: 5 elementwise, 4 sgd_step, 3 reduce_sum, 6 GEMM dispatches.
+  Next: optimizer fusion, remaining reduction chains, or packed f16; all
+  changes must pass the 43-case gate.
+
 ## Honesty
 
 - Timestamp GPU time is a proxy, not the 1000-repeat isolated kernel time the

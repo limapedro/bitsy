@@ -981,3 +981,25 @@ end-to-end target still met). Parity holds (43/43, CTest both builds). MNIST W1
 diff rose from 1.8e-07 to 3.3e-07 from the fused reduction order — measured and
 reported, well inside the 1e-5 gate. Standalone GEMM 0.71 and elementwise
 ≤0.54 remain missed. Next: fuse backward reduction chains or packed f16.
+
+---
+
+## 2026-11-21 — Fused cross-entropy loss (exp_028)
+
+**Context.** After exp_027, cross-entropy still used a mul, two reductions and
+a scale (four dispatches) plus their backward broadcasts — the largest
+remaining reduction cluster.
+
+**Options considered.** (1) Keep the chain, (2) a single workgroup reduction
+kernel computing `-sum(onehot*log_softmax)/B` with backward `-g*onehot/B`.
+
+**Decision.** Option 2, recorded in `experiments/exp_028/HYPOTHESIS.md`, with a
+CPU fallback. No tolerance change.
+
+**Consequences.** Dispatches/step 30 → **22** (barriers 30 → 22), the biggest
+cut since the bias epilogue. Captured step 0.180 → **0.156 ms** (1.15×); graph
+ratio 0.366 → 0.425–0.542 (PyTorch graph timing varied; Bitsy stable, still
+below 0.85). Eager 0.906–1.042 ms (ratio 1.11–1.24, target met). Parity holds
+(43/43, CTest both builds) with the same small fp32 drift as exp_027. Standalone
+GEMM 0.68 and elementwise ≤0.75 remain missed. Next: optimizer fusion or
+packed f16, always behind the 43-case gate.

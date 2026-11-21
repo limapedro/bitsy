@@ -81,10 +81,8 @@ def log_softmax(logits:Tensor) -> Tensor:
   return logits.log_softmax()
 
 def cross_entropy(logits:Tensor, onehot:Tensor) -> Tensor:
-  B = logits.shape[0]
-  # exp_018: both reductions via the dedicated kernel (autograd-aware).
-  per_row = reduce_sum_op(-onehot * log_softmax(logits), 1, True)
-  return reduce_sum_op(per_row, 0, True) * (1.0 / B)
+  # exp_028: one fused reduction kernel instead of mul + two reductions + scale.
+  return logits.log_softmax().ce_loss(onehot)
 
 def mse_loss(pred:Tensor, target:Tensor) -> Tensor:
   d = pred - target

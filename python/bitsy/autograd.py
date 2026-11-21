@@ -136,6 +136,13 @@ class Tensor:
       return (self._op(C.mul(g._t, d._t), (), None),)
     return self._op(out, (self,), back)
 
+  def ce_loss(self, onehot:"Tensor") -> "Tensor":
+    out = C.ce_loss(self._t, onehot._t)
+    def back(g):
+      scale = -1.0 / self.shape[0]
+      return (g * onehot * scale, None)
+    return self._op(out, (self, onehot), back)
+
   def log_softmax(self) -> "Tensor":
     out = C.log_softmax(self._t)
     def back(g):

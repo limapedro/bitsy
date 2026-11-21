@@ -64,6 +64,10 @@ BT_API bt_status_t bt_matmul_bias(const bt_tensor_t* a, const bt_tensor_t* b,
 /* exp_027: fused 2D log_softmax (one row per workgroup). */
 BT_API bt_status_t bt_log_softmax(const bt_tensor_t* x, bt_tensor_t** out);
 
+/* exp_028: fused cross-entropy loss = -sum(onehot*log_softmax)/B. */
+BT_API bt_status_t bt_ce_loss(const bt_tensor_t* ls, const bt_tensor_t* onehot,
+                              bt_tensor_t** out);
+
 #ifdef __cplusplus
 }
 #endif

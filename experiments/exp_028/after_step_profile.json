@@ -1,0 +1,34 @@
+{
+  "traceEvents": [
+    {"name": "gemm_tiled_bias", "cat": "dispatch", "ph": "X", "ts": 180.000, "dur": 43.300, "pid": 1, "tid": 1, "args": {"gpu_ms": 0.000000, "bytes": 417792.0, "flops": 6422528.0}},
+    {"name": "elementwise_vec4", "cat": "dispatch", "ph": "X", "ts": 357.900, "dur": 9.000, "pid": 1, "tid": 1, "args": {"gpu_ms": 0.000000, "bytes": 49152.0, "flops": 8192.0}},
+    {"name": "gemm_tiled_bias", "cat": "dispatch", "ph": "X", "ts": 476.400, "dur": 10.900, "pid": 1, "tid": 1, "args": {"gpu_ms": 0.000000, "bytes": 21504.0, "flops": 81920.0}},
+    {"name": "log_softmax", "cat": "dispatch", "ph": "X", "ts": 585.100, "dur": 7.900, "pid": 1, "tid": 1, "args": {"gpu_ms": 0.000000, "bytes": 5120.0, "flops": 0.0}},
+    {"name": "ce_loss", "cat": "dispatch", "ph": "X", "ts": 660.900, "dur": 4.700, "pid": 1, "tid": 1, "args": {"gpu_ms": 0.000000, "bytes": 5120.0, "flops": 0.0}},
+    {"name": "elementwise", "cat": "dispatch", "ph": "X", "ts": 870.200, "dur": 5.400, "pid": 1, "tid": 1, "args": {"gpu_ms": 0.000000, "bytes": 7680.0, "flops": 1280.0}},
+    {"name": "elementwise", "cat": "dispatch", "ph": "X", "ts": 1154.100, "dur": 8.900, "pid": 1, "tid": 1, "args": {"gpu_ms": 0.000000, "bytes": 7680.0, "flops": 1280.0}},
+    {"name": "reduce_sum", "cat": "dispatch", "ph": "X", "ts": 1192.600, "dur": 4.500, "pid": 1, "tid": 1, "args": {"gpu_ms": 0.000000, "bytes": 2560.0, "flops": 0.0}},
+    {"name": "elementwise", "cat": "dispatch", "ph": "X", "ts": 1216.100, "dur": 4.900, "pid": 1, "tid": 1, "args": {"gpu_ms": 0.000000, "bytes": 7680.0, "flops": 1280.0}},
+    {"name": "elementwise", "cat": "dispatch", "ph": "X", "ts": 1358.100, "dur": 5.400, "pid": 1, "tid": 1, "args": {"gpu_ms": 0.000000, "bytes": 7680.0, "flops": 1280.0}},
+    {"name": "elementwise", "cat": "dispatch", "ph": "X", "ts": 1446.900, "dur": 5.200, "pid": 1, "tid": 1, "args": {"gpu_ms": 0.000000, "bytes": 7680.0, "flops": 1280.0}},
+    {"name": "gemm_tiled", "cat": "dispatch", "ph": "X", "ts": 1774.200, "dur": 8.300, "pid": 1, "tid": 1, "args": {"gpu_ms": 0.000000, "bytes": 21504.0, "flops": 81920.0}},
+    {"name": "gemm_tiled", "cat": "dispatch", "ph": "X", "ts": 1955.500, "dur": 12.500, "pid": 1, "tid": 1, "args": {"gpu_ms": 0.000000, "bytes": 21504.0, "flops": 81920.0}},
+    {"name": "reduce_sum", "cat": "dispatch", "ph": "X", "ts": 1988.300, "dur": 3.200, "pid": 1, "tid": 1, "args": {"gpu_ms": 0.000000, "bytes": 2560.0, "flops": 0.0}},
+    {"name": "tanh_backward", "cat": "dispatch", "ph": "X", "ts": 2107.500, "dur": 6.300, "pid": 1, "tid": 1, "args": {"gpu_ms": 0.000000, "bytes": 49152.0, "flops": 8192.0}},
+    {"name": "gemm_rb", "cat": "dispatch", "ph": "X", "ts": 2421.900, "dur": 11.700, "pid": 1, "tid": 1, "args": {"gpu_ms": 0.000000, "bytes": 417792.0, "flops": 6422528.0}},
+    {"name": "gemm_rb", "cat": "dispatch", "ph": "X", "ts": 2663.100, "dur": 9.900, "pid": 1, "tid": 1, "args": {"gpu_ms": 0.000000, "bytes": 417792.0, "flops": 6422528.0}},
+    {"name": "reduce_sum", "cat": "dispatch", "ph": "X", "ts": 2694.700, "dur": 3.900, "pid": 1, "tid": 1, "args": {"gpu_ms": 0.000000, "bytes": 16384.0, "flops": 0.0}},
+    {"name": "sgd_step", "cat": "dispatch", "ph": "X", "ts": 2725.100, "dur": 3.000, "pid": 1, "tid": 1, "args": {"gpu_ms": 0.000000, "bytes": 602112.0, "flops": 100352.0}},
+    {"name": "sgd_step", "cat": "dispatch", "ph": "X", "ts": 2807.800, "dur": 4.200, "pid": 1, "tid": 1, "args": {"gpu_ms": 0.000000, "bytes": 768.0, "flops": 128.0}},
+    {"name": "sgd_step", "cat": "dispatch", "ph": "X", "ts": 2840.100, "dur": 9.300, "pid": 1, "tid": 1, "args": {"gpu_ms": 0.000000, "bytes": 7680.0, "flops": 1280.0}},
+    {"name": "sgd_step", "cat": "dispatch", "ph": "X", "ts": 2957.100, "dur": 8.400, "pid": 1, "tid": 1, "args": {"gpu_ms": 0.000000, "bytes": 120.0, "flops": 20.0}}
+  ],
+  "summary": {
+    "dispatches": 22, "barriers": 22, "submits": 1,
+    "allocations": 17, "allocation_hits": 7,
+    "gpu_ms": 0.000000, "cpu_enqueue_ms": 0.190800, "alloc_ms": 1.361500,
+    "bytes": 2097016.0, "flops": 19637908.0,
+    "achieved_GBs": 0.000, "pct_dram_ceiling": 0.000,
+    "achieved_GFLOPs": 0.000, "pct_fp32_ceiling": 0.000
+  }
+}

@@ -180,6 +180,18 @@ Linear was worth ~1.6×. The captured graph path improved from 0.30 to 0.34–0.
 but remains well below 0.85. Standalone GEMM (0.72) and elementwise (≤0.54)
 targets are still missed. See `experiments/exp_024/FINDINGS.md`.
 
+## exp_028 — fused cross-entropy loss reduction
+
+`nn.cross_entropy` now composes the fused log_softmax with a single fused
+loss-reduction kernel (`onehot*log_softmax` reduced over both axes), with
+backward `-g*onehot/B`. Dispatches per step 30 → **22** (8 fewer, including
+the old reduction backwards). Captured step 0.180 → **0.156 ms** (1.15×), graph
+ratio 0.366 → **0.425–0.542** (wide range from PyTorch graph timing variance;
+Bitsy stable at 0.156 ms), still below 0.85. Eager 0.906–1.042 ms (ratio
+1.11–1.24, target met). GEMM (0.68) and elementwise (≤0.75) targets remain
+missed. Parity 43/43 incl. gradient gate; MNIST W1 diff 3.3e-07 (within 1e-5).
+See `experiments/exp_028/FINDINGS.md`.
+
 ## exp_027 — fused log_softmax
 
 `nn.log_softmax` is now one fused dispatch (one workgroup per row: exp, shared
