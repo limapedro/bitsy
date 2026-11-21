@@ -6,6 +6,12 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added (docs)
+
+- `docs/FEATURE_INVENTORY.md`: full PyTorch-grade API surface with per-group status.
+- `docs/PROGRESS.md`: implemented functions with numeric differences, benchmark
+  ratios versus targets, training parity, tolerance policy, and next priorities.
+
 ### Added (M5 experiment)
 
 - `experiments/exp_002`: hypothesis-first 16x16x16 shared-memory tiled SGEMM.

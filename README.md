@@ -115,6 +115,8 @@ rules and the tinygrad sources they came from are recorded in
 
 ## Conventions and decisions
 
+- [docs/FEATURE_INVENTORY.md](docs/FEATURE_INVENTORY.md) — full PyTorch-grade API surface
+- [docs/PROGRESS.md](docs/PROGRESS.md) — implemented functions, numeric differences, measured ratios vs targets
 - [ARCHITECTURE_LOG.md](ARCHITECTURE_LOG.md) — locked architectural decisions
 - [DEVIATIONS.md](DEVIATIONS.md) — intentional differences from PyTorch
 - [BENCHMARKS.md](BENCHMARKS.md) — performance results and methodology
