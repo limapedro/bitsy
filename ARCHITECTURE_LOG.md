@@ -1025,3 +1025,24 @@ implementation bugs were found and fixed (descriptor pool size, C pointer
 level, ctypes out-array): 43/43 incl. gradient gate, CTest both builds, direct
 SGD comparison max diff < 2e-08. Eager ratio 1.11–1.17 (target met); graph
 ratio 0.43–0.45. Dispatch count is not a sufficient proxy for speed.
+
+---
+
+## 2026-11-21 — Packed f16 GEMM rejected (exp_030)
+
+**Context.** The GEMM ladder's last untried rung was packed f16 storage with
+FP32 accumulation; Phase 1 had the extension supported but the rate unmeasured.
+
+**Options considered.** (1) Leave the FP32 ladder as-is, (2) add a tiled
+`f16vec2` shared-memory GEMM variant.
+
+**Decision.** Option 2 was implemented as variant 9 and measured, recorded in
+`experiments/exp_030/HYPOTHESIS.md`.
+
+**Consequences.** Negative on both axes: 1024² 3.508 ms / 612 GFLOP/s (about
+3× slower than FP32) and numerically wrong on a K=16 check even after fixing a
+tile-index bug and trying fp32 conversion of the f16 values. Variant 9 was
+removed entirely rather than leave a wrong kernel selectable; no tolerance was
+relaxed. The tree equals exp_029 after re-verification (43/43, CTest 1/1).
+The GEMM ladder is now comprehensively measured with no variant reaching the
+≥0.80 standalone target on TU116.

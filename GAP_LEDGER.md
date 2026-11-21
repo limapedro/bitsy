@@ -346,6 +346,18 @@ Conclusion: the remaining elementwise gap is bandwidth/kernel-bound
 - Next: packed f16 GEMM or a different step-level fusion; dispatch count alone
   is not a reliable proxy for speed. All changes must pass the 43-case gate.
 
+## Phase 6 update (exp_030)
+
+- Packed f16 GEMM (last ladder rung) tried and **removed**: ~3× slower at
+  1024² (3.508 ms / 612 GFLOP/s / ratio 0.26) and numerically wrong on a K=16
+  check even after fixing swapped tile indices. TU116 CUDA cores offer no
+  packed-f16 advantage; the Phase 1 "not measured" f16 rate is now answered.
+  Predictions (≥1.05×, ≥0.80) not met; no code retained, tree equals exp_029.
+- GEMM ladder is now comprehensively measured with no variant reaching ≥0.80
+  on this GPU. Best FP32 winner remains variant 8 (64×128) from exp_026.
+- Remaining gaps unchanged: standalone GEMM 0.68–0.76, elementwise ≤0.76,
+  captured graph ~0.43. End-to-end target still MET (eager 1.11–1.17).
+
 ## Honesty
 
 - Timestamp GPU time is a proxy, not the 1000-repeat isolated kernel time the

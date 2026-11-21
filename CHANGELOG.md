@@ -6,6 +6,14 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Rejected (TOGISHI Phase 6, exp_030)
+
+- Packed f16 GEMM (last ladder rung) was tried and removed: ~3× slower at
+  1024² (3.508 ms) and numerically wrong on a K=16 check even after fixing a
+  tile-index bug. No code retained; tree equals exp_029. Predictions
+  (≥1.05×, ≥0.80) not met. Parity 43/43 incl. gradient gate, CTest 1/1.
+  Details in `experiments/exp_030/FINDINGS.md`.
+
 ### Added (TOGISHI Phase 5/6, exp_029)
 
 - Fused four-parameter SGD update in one dispatch (12-binding layout, dedicated
