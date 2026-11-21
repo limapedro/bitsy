@@ -56,12 +56,11 @@ set_target_properties(hagane PROPERTIES
   RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}
   LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+include(HaganeShader)
+
 if(HG_ENABLE_VULKAN)
   message(STATUS "Vulkan backend requested; shaders are compiled when added in M2")
-  find_program(HG_GLSLC glslc)
-  if(NOT HG_GLSLC)
-    message(WARNING "glslc not found: shader compilation will be unavailable")
-  endif()
 endif()
 
 if(HG_BUILD_TESTS)
