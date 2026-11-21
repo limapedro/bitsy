@@ -100,6 +100,22 @@ Conclusion: the remaining elementwise gap is bandwidth/kernel-bound
   now the floor. Next: make deferred/captured submission the default for
   chains and measure end-to-end training steps.
 
+## Phase 4/5 update (exp_014)
+
+- Default transfers are now deferred: uploads/readbacks use a persistent
+  host-visible staging pool instead of allocating + flush + wait per call.
+  A synthetic MLP training step drops 9.575 → 3.220 ms/step at matched
+  1530 MHz (**2.97×**) with **0** staging allocations during 200 timed steps.
+- The ≥0.85 end-to-end throughput target is **still missed** (PyTorch/Bitsy
+  0.34–0.37, i.e. Bitsy ≈2.7× slower). The remaining cost is per-op
+  Python/ctypes dispatch and autograd construction over many small dispatches;
+  it is launch/CPU-bound, not bandwidth- or transfer-bound.
+- Numeric parity: 42/42; MNIST report identical, CIFAR Bitsy losses
+  bit-identical between the two transfer modes. The ~1e-8 torch loss variation
+  is cuDNN benchmark nondeterminism.
+- Next: capture the whole training step (CUDA-graph equivalent) with managed
+  input/parameter buffers and replay it, then measure against PyTorch graphs.
+
 ## Honesty
 
 - Timestamp GPU time is a proxy, not the 1000-repeat isolated kernel time the

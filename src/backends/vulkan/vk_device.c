@@ -275,6 +275,7 @@ bt_status_t bt_vk_flush(void) {
                           .signalSemaphoreCount = 1,
                           .pSignalSemaphores = &g_vk.timeline };
   VKCHECK(vkQueueSubmit(g_vk.queue, 1, &submit, VK_NULL_HANDLE));
+  bt_vk_stage_on_flush(); // exp_014: used staging is now submitted
   bt_profiler_submit();
   g_vk.recording = 0;
   return BT_OK;
@@ -288,6 +289,7 @@ bt_status_t bt_vk_wait(void) {
                                .semaphoreCount = 1, .pSemaphores = &g_vk.timeline,
                                .pValues = &g_vk.timeline_value };
   VKCHECK(vkWaitSemaphores(g_vk.device, &wait, UINT64_MAX));
+  bt_vk_stage_on_wait(); // exp_014: submitted staging is safe to reuse
   bt_vk_deferred_release(); // scratch buffers are safe once the GPU is idle
   bt_vk_hazard_reset();
 

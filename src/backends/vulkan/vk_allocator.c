@@ -136,6 +136,62 @@ void bt_vk_free(void* handle) {
   g_free[bucket_of((size_t)b->size)] = b;
 }
 
+/* exp_014: persistent host-visible staging pool for deferred transfers.
+ * A staging slot moves used -> submitted (on flush) -> pooled (on wait), so it
+ * is never reused while the GPU may still be reading/writing its copy. */
+#define STAGE_MAX 64
+static vk_buffer_t* g_stage_pool[STAGE_MAX]; static int g_stage_pool_n;
+static vk_buffer_t* g_stage_used[STAGE_MAX]; static int g_stage_used_n;
+static vk_buffer_t* g_stage_submitted[STAGE_MAX]; static int g_stage_submitted_n;
+static unsigned long g_stage_allocs;
+
+static void stage_push(vk_buffer_t* dst[], int* dn, vk_buffer_t* b) {
+  if (*dn < STAGE_MAX) dst[(*dn)++] = b;
+  else { destroy_buffer(b); free(b); }
+}
+
+void bt_vk_stage_on_flush(void) {
+  for (int i = 0; i < g_stage_used_n; ++i)
+    stage_push(g_stage_submitted, &g_stage_submitted_n, g_stage_used[i]);
+  g_stage_used_n = 0;
+}
+
+void bt_vk_stage_on_wait(void) {
+  for (int i = 0; i < g_stage_submitted_n; ++i)
+    stage_push(g_stage_pool, &g_stage_pool_n, g_stage_submitted[i]);
+  g_stage_submitted_n = 0;
+}
+
+unsigned long bt_vk_stage_alloc_count(void) { return g_stage_allocs; }
+
+static vk_buffer_t* stage_acquire(size_t nbytes) {
+  for (int i = 0; i < g_stage_pool_n; ++i) {
+    if (g_stage_pool[i]->size >= nbytes) {
+      vk_buffer_t* b = g_stage_pool[i];
+      g_stage_pool[i] = g_stage_pool[--g_stage_pool_n]; // swap-remove
+      return b;
+    }
+  }
+  vk_buffer_t* b = calloc(1, sizeof(*b));
+  if (!b) return NULL;
+  size_t size = 1; while (size < nbytes) size <<= 1;
+  if (make_buffer(size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                  VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, b) != BT_OK) {
+    free(b); return NULL;
+  }
+  ++g_stage_allocs;
+  return b;
+}
+
+static int deferred_transfers(void) {
+  static int val = -1;
+  if (val < 0) {
+    const char* env = getenv("BITSY_DEFERRED_UPLOAD");
+    val = env && !atoi(env) ? 0 : 1; // exp_014: deferred is the default; BITSY_DEFERRED_UPLOAD=0 restores the old sync path
+  }
+  return val;
+}
+
 void bt_vk_allocator_shutdown(void) {
   for (int i = 0; i < CACHE_BUCKETS; ++i) {
     for (vk_buffer_t* b = g_free[i]; b;) {
@@ -146,50 +202,89 @@ void bt_vk_allocator_shutdown(void) {
     }
     g_free[i] = NULL;
   }
+  vk_buffer_t** pools[3] = { g_stage_pool, g_stage_used, g_stage_submitted };
+  int counts[3] = { g_stage_pool_n, g_stage_used_n, g_stage_submitted_n };
+  for (int p = 0; p < 3; ++p)
+    for (int i = 0; i < counts[p]; ++i) { destroy_buffer(pools[p][i]); free(pools[p][i]); }
+  g_stage_pool_n = g_stage_used_n = g_stage_submitted_n = 0;
 }
 
 bt_status_t bt_vk_upload(void* handle, const void* host, size_t nbytes) {
   if (!handle || !nbytes) return BT_OK;
   vk_buffer_t* dst = handle;
-  vk_buffer_t stage = { 0 };
-  bt_status_t status = make_buffer(nbytes, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-                                   VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, &stage);
-  if (status != BT_OK) return status;
+  if (!deferred_transfers()) {
+    /* Old path (A/B baseline): fresh staging buffer + synchronous flush/wait. */
+    vk_buffer_t stage = { 0 };
+    bt_status_t status = make_buffer(nbytes, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                                     VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, &stage);
+    if (status != BT_OK) return status;
+    void* mapped = NULL;
+    VKCHECK(vkMapMemory(g_vk.device, stage.memory, 0, nbytes, 0, &mapped));
+    memcpy(mapped, host, nbytes);
+    vkUnmapMemory(g_vk.device, stage.memory);
+    bt_vk_begin_cmd();
+    VkBufferCopy copy = { .srcOffset = 0, .dstOffset = 0, .size = nbytes };
+    vkCmdCopyBuffer(g_vk.cmd, stage.buffer, dst->buffer, 1, &copy);
+    bt_vk_barrier();
+    status = bt_vk_flush();
+    if (status == BT_OK) status = bt_vk_wait(); // staging dies after this
+    destroy_buffer(&stage);
+    return status;
+  }
+  /* Deferred path: pooled staging, copy enqueued into the current command
+   * buffer; the only host wait is the existing completion point. */
+  if (g_stage_used_n >= STAGE_MAX) { bt_vk_flush(); bt_vk_wait(); } // safety: avoid in-use reuse
+  vk_buffer_t* stage = stage_acquire(nbytes);
+  if (!stage) return bt_fail(BT_ERR_OUT_OF_MEMORY, "bt_vk_upload: staging OOM");
   void* mapped = NULL;
-  VKCHECK(vkMapMemory(g_vk.device, stage.memory, 0, nbytes, 0, &mapped));
+  VKCHECK(vkMapMemory(g_vk.device, stage->memory, 0, nbytes, 0, &mapped));
   memcpy(mapped, host, nbytes);
-  vkUnmapMemory(g_vk.device, stage.memory);
-
+  vkUnmapMemory(g_vk.device, stage->memory);
   bt_vk_begin_cmd();
   VkBufferCopy copy = { .srcOffset = 0, .dstOffset = 0, .size = nbytes };
-  vkCmdCopyBuffer(g_vk.cmd, stage.buffer, dst->buffer, 1, &copy);
+  vkCmdCopyBuffer(g_vk.cmd, stage->buffer, dst->buffer, 1, &copy);
   bt_vk_barrier();
-  status = bt_vk_flush();
-  if (status == BT_OK) status = bt_vk_wait(); // staging dies after this
-  destroy_buffer(&stage);
-  return status;
+  stage_push(g_stage_used, &g_stage_used_n, stage);
+  return BT_OK;
 }
 
 bt_status_t bt_vk_readback(void* handle, void* host, size_t nbytes) {
   if (!handle || !nbytes) return BT_OK;
   vk_buffer_t* src = handle;
-  vk_buffer_t stage = { 0 };
-  bt_status_t status = make_buffer(nbytes, VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-                                   VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, &stage);
-  if (status != BT_OK) return status;
-
+  if (!deferred_transfers()) {
+    vk_buffer_t stage = { 0 };
+    bt_status_t status = make_buffer(nbytes, VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                                     VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, &stage);
+    if (status != BT_OK) return status;
+    bt_vk_begin_cmd();
+    VkBufferCopy copy = { .srcOffset = 0, .dstOffset = 0, .size = nbytes };
+    vkCmdCopyBuffer(g_vk.cmd, src->buffer, stage.buffer, 1, &copy);
+    bt_vk_barrier();
+    status = bt_vk_flush();
+    if (status == BT_OK) status = bt_vk_wait(); // host maps the staging buffer
+    if (status != BT_OK) { destroy_buffer(&stage); return status; }
+    void* mapped = NULL;
+    VKCHECK(vkMapMemory(g_vk.device, stage.memory, 0, nbytes, 0, &mapped));
+    memcpy(host, mapped, nbytes);
+    vkUnmapMemory(g_vk.device, stage.memory);
+    destroy_buffer(&stage);
+    return BT_OK;
+  }
+  /* Deferred path: pooled staging. The host wait is inherent to readback, but
+   * the staging allocation is amortised instead of paid every call. */
+  vk_buffer_t* stage = stage_acquire(nbytes);
+  if (!stage) return bt_fail(BT_ERR_OUT_OF_MEMORY, "bt_vk_readback: staging OOM");
   bt_vk_begin_cmd();
   VkBufferCopy copy = { .srcOffset = 0, .dstOffset = 0, .size = nbytes };
-  vkCmdCopyBuffer(g_vk.cmd, src->buffer, stage.buffer, 1, &copy);
+  vkCmdCopyBuffer(g_vk.cmd, src->buffer, stage->buffer, 1, &copy);
   bt_vk_barrier();
-  status = bt_vk_flush();
-  if (status == BT_OK) status = bt_vk_wait(); // host maps the staging buffer
-  if (status != BT_OK) { destroy_buffer(&stage); return status; }
-
+  bt_status_t status = bt_vk_flush();
+  if (status == BT_OK) status = bt_vk_wait();
+  if (status != BT_OK) { stage_push(g_stage_pool, &g_stage_pool_n, stage); return status; }
   void* mapped = NULL;
-  VKCHECK(vkMapMemory(g_vk.device, stage.memory, 0, nbytes, 0, &mapped));
+  VKCHECK(vkMapMemory(g_vk.device, stage->memory, 0, nbytes, 0, &mapped));
   memcpy(host, mapped, nbytes);
-  vkUnmapMemory(g_vk.device, stage.memory);
-  destroy_buffer(&stage);
+  vkUnmapMemory(g_vk.device, stage->memory);
+  stage_push(g_stage_pool, &g_stage_pool_n, stage);
   return BT_OK;
 }

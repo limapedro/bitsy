@@ -6,6 +6,18 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed (TOGISHI Phase 4/5, exp_014)
+
+- Deferred transfers are now the **default**: uploads/readbacks use a pooled
+  host-visible staging buffer and enqueue the copy instead of flushing and
+  waiting per call. `BITSY_DEFERRED_UPLOAD=0` restores the old synchronous path.
+- Training-step wall time 9.575 → 3.220 ms/step at matched 1530 MHz (**2.97×**),
+  0 staging allocations over 200 timed steps. The ≥0.85 end-to-end throughput
+  target is still missed (0.34–0.37); remaining cost is per-op dispatch/autograd
+  overhead. Parity 42/42; MNIST/CIFAR Bitsy losses bit-identical between modes.
+  New `benchmarks/models/train_step_bench.py` and `bt.stage_alloc_count()`.
+  Details in `experiments/exp_014/FINDINGS.md`.
+
 ### Added (TOGISHI Phase 5, exp_013)
 
 - `bt_vulkan_capture_begin/end/replay` record-once command buffers with

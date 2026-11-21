@@ -22,6 +22,10 @@ void* bt_vk_alloc(size_t nbytes);
 void bt_vk_free(void* handle);
 bt_status_t bt_vk_upload(void* handle, const void* host, size_t nbytes);
 bt_status_t bt_vk_readback(void* handle, void* host, size_t nbytes);
+/* exp_014: deferred-transfer staging pool lifecycle. */
+void bt_vk_stage_on_flush(void);
+void bt_vk_stage_on_wait(void);
+unsigned long bt_vk_stage_alloc_count(void);
 
 /* `op` is the bt_op_id_t value from the dispatcher. */
 bt_status_t bt_vk_elementwise(const bt_tensor_t* a, const bt_tensor_t* b,

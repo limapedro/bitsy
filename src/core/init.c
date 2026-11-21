@@ -95,3 +95,11 @@ double bt_vulkan_device_time_ms(void) {
   return 0.0;
 #endif
 }
+
+unsigned long bt_vulkan_stage_alloc_count(void) {
+#ifdef BT_ENABLE_VULKAN
+  return bt_vk_stage_alloc_count();
+#else
+  return 0;
+#endif
+}
