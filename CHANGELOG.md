@@ -6,6 +6,16 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added (TOGISHI Phase 5/6, exp_028)
+
+- Fused cross-entropy loss reduction (`onehot*log_softmax` over both axes,
+  `-1/B`) with backward `-g*onehot/B` and a CPU fallback; combined with the
+  fused log_softmax, `nn.cross_entropy` no longer needs the reduction chain.
+  Dispatches/step 30 → 22, captured step 0.180 → 0.156 ms (1.15×), graph ratio
+  0.425–0.542 (PyTorch timing variance; still below 0.85), eager ratio 1.11–1.24
+  (end-to-end target met). Parity 43/43 incl. gradient gate, CTest both builds.
+  Details in `experiments/exp_028/FINDINGS.md`.
+
 ### Added (TOGISHI Phase 5/6, exp_027)
 
 - Fused `log_softmax` kernel (one dispatch per row) with an analytic backward

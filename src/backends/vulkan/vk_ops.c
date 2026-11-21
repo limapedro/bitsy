@@ -464,6 +464,26 @@ bt_status_t bt_vk_broadcast_grad(const bt_tensor_t* g, bt_tensor_t* out) {
   return status;
 }
 
+/* exp_028: fused cross-entropy scalar reduction. */
+typedef struct { uint32_t n; float invB; uint32_t offls, offoh, offo; } vk_ce_pc_t;
+
+bt_status_t bt_vk_ce_loss(const bt_tensor_t* ls, const bt_tensor_t* onehot, bt_tensor_t* out) {
+  if (!g_vk.ready) return bt_fail(BT_ERR_BACKEND, "bt_vk_ce_loss: Vulkan not ready");
+  int64_t n = bt_shape_numel(bt_tensor_shape(ls));
+  vk_ce_pc_t pc = { .n = (uint32_t)n,
+                    .invB = 1.0f / (float)ls->shape.dims[0],
+                    .offls = (uint32_t)ls->offset, .offoh = (uint32_t)onehot->offset,
+                    .offo = (uint32_t)out->offset };
+  VkBuffer buffers[4] = {
+    bt_vk_buffer_of(ls->storage->gpu), bt_vk_buffer_of(onehot->storage->gpu),
+    bt_vk_buffer_of(out->storage->gpu), bt_vk_buffer_of(ls->storage->gpu),
+  };
+  bt_status_t status = dispatch(g_vk.ce_loss_pipeline, buffers, &pc, sizeof(pc),
+                                1, 1, "ce_loss", (double)n * 8.0, 0.0);
+  if (status == BT_OK) bt_storage_bump_version(out->storage);
+  return status;
+}
+
 /* exp_027: fused log_softmax, one workgroup per row. */
 typedef struct { uint32_t M, N, offx, offo; } vk_logsoftmax_pc_t;
 

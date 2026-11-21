@@ -78,6 +78,47 @@ bt_status_t bt_reduce_sum(const bt_tensor_t* a, uint32_t axis, int keepdim,
   return BT_OK;
 }
 
+bt_status_t bt_ce_loss(const bt_tensor_t* ls, const bt_tensor_t* onehot,
+                       bt_tensor_t** out) {
+  bt_clear_error();
+  if (!ls || !onehot || !out) return bt_fail(BT_ERR_INVALID_ARGUMENT, "bt_ce_loss: NULL");
+  if (bt_tensor_dtype(ls) != BT_FLOAT32 || bt_tensor_shape(ls)->ndim != 2 ||
+      !bt_shape_equal(bt_tensor_shape(ls), bt_tensor_shape(onehot)))
+    return bt_fail(BT_ERR_SHAPE_MISMATCH, "bt_ce_loss: 2D fp32 matching shapes");
+  int64_t M = bt_tensor_shape(ls)->dims[0], N = bt_tensor_shape(ls)->dims[1];
+  bt_device_t device = bt_tensor_device(ls);
+  if (bt_backend_for_device(device) == BT_BACKEND_VULKAN) {
+#ifdef BT_ENABLE_VULKAN
+    int64_t dims[2] = { 1, 1 };
+    bt_tensor_t* result = bt_tensor_empty(dims, 2, BT_FLOAT32, device);
+    if (!result) return bt_fail(BT_ERR_OUT_OF_MEMORY, "bt_ce_loss: allocation failed");
+    bt_status_t status = bt_vk_ce_loss(ls, onehot, result);
+    if (status != BT_OK) { bt_tensor_release(result); return status; }
+    *out = result;
+    return BT_OK;
+#else
+    return bt_fail(BT_ERR_NOT_IMPLEMENTED, "bt_ce_loss: Vulkan unavailable");
+#endif
+  }
+  size_t count = (size_t)(M * N);
+  float* a = (float*)malloc(count * sizeof(float));
+  float* b = (float*)malloc(count * sizeof(float));
+  if (!a || !b) { free(a); free(b); return bt_fail(BT_ERR_OUT_OF_MEMORY, "bt_ce_loss: host OOM"); }
+  if (bt_tensor_copy_to_host(ls, a, count * sizeof(float)) != BT_OK ||
+      bt_tensor_copy_to_host(onehot, b, count * sizeof(float)) != BT_OK) {
+    free(a); free(b); return bt_fail(BT_ERR_BACKEND, "bt_ce_loss: copy failed");
+  }
+  float sum = 0.0f;
+  for (size_t i = 0; i < count; ++i) sum += a[i] * b[i];
+  float v = -sum / (float)M;
+  free(a); free(b);
+  int64_t dims[2] = { 1, 1 };
+  bt_tensor_t* result = bt_tensor_create(dims, 2, BT_FLOAT32, device, &v);
+  if (!result) return bt_fail(BT_ERR_OUT_OF_MEMORY, "bt_ce_loss: result OOM");
+  *out = result;
+  return BT_OK;
+}
+
 bt_status_t bt_log_softmax(const bt_tensor_t* x, bt_tensor_t** out) {
   bt_clear_error();
   if (!x || !out) return bt_fail(BT_ERR_INVALID_ARGUMENT, "bt_log_softmax: NULL");
