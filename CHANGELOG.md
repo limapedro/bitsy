@@ -6,6 +6,18 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added (TOGISHI Phase 5, exp_011)
+
+- Per-run GPU clock logging in `gemm.py`/`elementwise.py` via
+  `benchmarks/common/clock.py`.
+- Hazard-tracked per-buffer Vulkan barriers replacing the unconditional global
+  barrier; transfer barriers unchanged.
+- Validated on-disk pipeline-cache load path (persistence blocked by driver
+  621.01, documented in `experiments/exp_011/FINDINGS.md`).
+- `benchmarks/ops/async_chain.py`: 1.10× from submitting 8 chains before one
+  wait (below the 1.2× prediction). Elementwise ratios 0.34–0.54 at 1530 MHz;
+  parity 42/42.
+
 ### Added (TOGISHI Phase 6, exp_010)
 
 - On-disk GEMM autotune cache (`benchmarks/results/gemm_autotune.txt`) written

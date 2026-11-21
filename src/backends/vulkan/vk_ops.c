@@ -40,6 +40,62 @@ static int32_t stride_at(const bt_tensor_t* t, int64_t out_dim, int64_t out_ndim
   return (int32_t)t->strides[in_dim];
 }
 
+/* Hazard tracking: emit a barrier only when a buffer was written/read by an
+ * earlier dispatch in this batch. Replaces the unconditional global barrier. */
+#define HAZ_MAX 2048
+static VkBuffer haz_buf[HAZ_MAX];
+static unsigned char haz_written[HAZ_MAX];
+static unsigned char haz_read[HAZ_MAX];
+static int haz_count;
+
+void bt_vk_hazard_reset(void) {
+  for (int i = 0; i < haz_count; ++i) { haz_buf[i] = VK_NULL_HANDLE; haz_written[i] = 0; haz_read[i] = 0; }
+  haz_count = 0;
+}
+
+static int haz_slot(VkBuffer buffer) {
+  for (int i = 0; i < haz_count; ++i) if (haz_buf[i] == buffer) return i;
+  if (haz_count >= HAZ_MAX) return -1;
+  haz_buf[haz_count] = buffer;
+  haz_written[haz_count] = 0;
+  haz_read[haz_count] = 0;
+  return haz_count++;
+}
+
+static void hazard_barrier(VkBuffer buffers[4]) {
+  VkBufferMemoryBarrier mb[3];
+  int n = 0;
+  for (int i = 0; i < 3; ++i) { // binding 3 (program) is read-only host-written
+    int slot = haz_slot(buffers[i]);
+    if (slot < 0) continue;
+    VkAccessFlags src = 0, dst = 0;
+    if (i < 2 && haz_written[slot]) { src = VK_ACCESS_SHADER_WRITE_BIT; dst = VK_ACCESS_SHADER_READ_BIT; }
+    if (i == 2 && (haz_written[slot] || haz_read[slot])) {
+      src = haz_written[slot] ? VK_ACCESS_SHADER_WRITE_BIT : VK_ACCESS_SHADER_READ_BIT;
+      dst = VK_ACCESS_SHADER_WRITE_BIT;
+    }
+    if (!src) continue;
+    mb[n++] = (VkBufferMemoryBarrier){
+      .sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER, .buffer = buffers[i],
+      .offset = 0, .size = VK_WHOLE_SIZE, .srcAccessMask = src, .dstAccessMask = dst };
+  }
+  if (n) {
+    vkCmdPipelineBarrier(g_vk.cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0,
+                         0, NULL, (uint32_t)n, mb, 0, NULL);
+    bt_profiler_barrier();
+  }
+}
+
+static void hazard_mark(VkBuffer buffers[4]) {
+  for (int i = 0; i < 2; ++i) {
+    int slot = haz_slot(buffers[i]);
+    if (slot >= 0) haz_read[slot] = 1;
+  }
+  int slot = haz_slot(buffers[2]);
+  if (slot >= 0) { haz_written[slot] = 1; haz_read[slot] = 0; }
+}
+
 /* Record a dispatch into the current batch. Submission happens at flush time. */
 static bt_status_t dispatch(VkPipeline pipeline, VkBuffer buffers[4],
                             const void* pc, size_t pc_size, uint32_t gx, uint32_t gy,
@@ -64,6 +120,7 @@ static bt_status_t dispatch(VkPipeline pipeline, VkBuffer buffers[4],
                           g_vk.pipeline_layout, 0, 1, &set, 0, NULL);
   vkCmdPushConstants(g_vk.cmd, g_vk.pipeline_layout, VK_SHADER_STAGE_COMPUTE_BIT,
                      0, (uint32_t)pc_size, pc);
+  hazard_barrier(buffers);
   bt_vk_timestamp_start();
   int qi = -1;
   if (bt_profiler_enabled() && g_vk.have_timestamps &&
@@ -77,7 +134,7 @@ static bt_status_t dispatch(VkPipeline pipeline, VkBuffer buffers[4],
     vkCmdWriteTimestamp(g_vk.cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
                         g_vk.profiler_pool, (uint32_t)(2 * qi + 1));
   bt_vk_timestamp_end();
-  bt_vk_barrier();
+  hazard_mark(buffers);
   int event_index = bt_profiler_record(name, t0, prof_now_us(), bytes, flops, qi);
   if (qi >= 0) g_vk.profiler_events[qi] = event_index;
   // Experiment toggle: BT_VK_NO_BATCH=1 restores the old submit-per-op path.
