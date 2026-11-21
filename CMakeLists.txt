@@ -54,6 +54,11 @@ target_include_directories(bitsy PUBLIC
 target_include_directories(bitsy PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_compile_definitions(bitsy PRIVATE BT_BUILD_SHARED)
 
+# expf/tanhf in cpu_ref need libm on Linux (MSVC provides them in the CRT).
+if(UNIX)
+  target_link_libraries(bitsy PRIVATE m)
+endif()
+
 # Put the DLL/.so next to the test binaries so ctypes and CTest find it.
 set_target_properties(bitsy PROPERTIES
   OUTPUT_NAME bitsy
