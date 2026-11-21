@@ -180,6 +180,17 @@ Linear was worth ~1.6×. The captured graph path improved from 0.30 to 0.34–0.
 but remains well below 0.85. Standalone GEMM (0.72) and elementwise (≤0.54)
 targets are still missed. See `experiments/exp_024/FINDINGS.md`.
 
+## exp_027 — fused log_softmax
+
+`nn.log_softmax` is now one fused dispatch (one workgroup per row: exp, shared
+reduction, log, subtract) with an analytic backward `g - exp(y)*sum_cols(g)`.
+Dispatches per step 35 → **30**. Captured step 0.194 → **0.179–0.182 ms**
+(1.07×), graph ratio 0.343 → **0.366–0.368**; eager 0.896–0.980 ms (ratio
+1.09–1.11, target met). Standalone GEMM (0.71) and elementwise (≤0.54) targets
+remain missed. Parity 43/43 incl. gradient gate; MNIST W1 diff 3.3e-07 (small
+fp32 drift from the fused reduction order, within 1e-5). See
+`experiments/exp_027/FINDINGS.md`.
+
 ## exp_026 — median GEMM tuning and 64x128 tile
 
 `gemm_tune.py` now takes the **median of 3 samples** per variant; two

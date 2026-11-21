@@ -960,3 +960,24 @@ autotune choice at both shapes. The ≥1.05× prediction was met in one run only
 and the GEMM ratio remains 0.72–0.76 (≥0.80 missed); both reported as ranges.
 Parity holds (43/43, CTest both builds) and the end-to-end target remains met.
 Median tuning is now the baseline for promoting any future variant.
+
+---
+
+## 2026-11-21 — Fused log_softmax (exp_027)
+
+**Context.** log_softmax was four dispatches (exp, GEMM reduction, log,
+subtract) per cross-entropy; the campaign lists fused softmax as a target.
+
+**Options considered.** (1) Keep the chain, (2) a single row-parallel shader
+with a shared-memory tree reduction and an analytic backward, with a CPU
+fallback.
+
+**Decision.** Option 2, recorded in `experiments/exp_027/HYPOTHESIS.md`. No
+tolerance change.
+
+**Consequences.** Dispatches/step 35 → 30; captured step 0.194 → 0.179–0.182 ms
+(1.07×), graph ratio 0.343 → 0.366–0.368; eager 0.896–0.980 ms (ratio 1.09–1.11,
+end-to-end target still met). Parity holds (43/43, CTest both builds). MNIST W1
+diff rose from 1.8e-07 to 3.3e-07 from the fused reduction order — measured and
+reported, well inside the 1e-5 gate. Standalone GEMM 0.71 and elementwise
+≤0.54 remain missed. Next: fuse backward reduction chains or packed f16.

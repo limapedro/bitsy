@@ -300,6 +300,22 @@ Conclusion: the remaining elementwise gap is bandwidth/kernel-bound
 - Next: packed f16 or backward-GEMM fusion; median tuner is now the baseline
   for any variant promotion.
 
+## Phase 5/6 update (exp_027)
+
+- Fused log_softmax forward (exp + reduction + log + subtract → one dispatch)
+  with an analytic backward `g - exp(y)*sum_cols(g)` and a CPU fallback.
+  Dispatches/step 35 → **30**, barriers 35 → 30.
+- Captured step 0.194 → **0.179–0.182 ms** (1.07×), graph ratio 0.343 →
+  **0.366–0.368** (still far below 0.85). Eager step 0.896–0.980 ms, ratio
+  1.09–1.11 (end-to-end target still MET). Standalone GEMM 0.71 and
+  elementwise ≤0.54 remain missed.
+- Parity: 43/43 incl. gradient gate, CTest both builds; MNIST W1 diff 3.3e-07
+  (small fp32 drift from the fused reduction order, within 1e-5), CIFAR W diff
+  7.2e-07.
+- Ranked remaining cost: 10 elementwise + 5 reduce_sum + 4 sgd_step + 6 GEMM
+  dispatches per step. Next: fuse backward reduction chains or packed f16;
+  all changes must pass the 43-case gate.
+
 ## Honesty
 
 - Timestamp GPU time is a proxy, not the 1000-repeat isolated kernel time the

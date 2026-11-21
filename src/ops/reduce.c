@@ -1,6 +1,7 @@
 #include <bitsy/bt_ops.h>
 
 #include <stdlib.h>
+#include <math.h>
 
 #ifdef BT_ENABLE_VULKAN
 #include "../backends/vulkan/vk_internal.h"
@@ -73,6 +74,46 @@ bt_status_t bt_reduce_sum(const bt_tensor_t* a, uint32_t axis, int keepdim,
   free(sums);
   free(host);
   if (!result) return bt_fail(BT_ERR_OUT_OF_MEMORY, "bt_reduce_sum: result OOM");
+  *out = result;
+  return BT_OK;
+}
+
+bt_status_t bt_log_softmax(const bt_tensor_t* x, bt_tensor_t** out) {
+  bt_clear_error();
+  if (!x || !out) return bt_fail(BT_ERR_INVALID_ARGUMENT, "bt_log_softmax: NULL");
+  if (bt_tensor_dtype(x) != BT_FLOAT32 || bt_tensor_shape(x)->ndim != 2)
+    return bt_fail(BT_ERR_SHAPE_MISMATCH, "bt_log_softmax: 2D fp32 only");
+  int64_t M = bt_tensor_shape(x)->dims[0], N = bt_tensor_shape(x)->dims[1];
+  bt_device_t device = bt_tensor_device(x);
+  if (bt_backend_for_device(device) == BT_BACKEND_VULKAN) {
+#ifdef BT_ENABLE_VULKAN
+    int64_t dims[2] = { M, N };
+    bt_tensor_t* result = bt_tensor_empty(dims, 2, BT_FLOAT32, device);
+    if (!result) return bt_fail(BT_ERR_OUT_OF_MEMORY, "bt_log_softmax: allocation failed");
+    bt_status_t status = bt_vk_log_softmax(x, result);
+    if (status != BT_OK) { bt_tensor_release(result); return status; }
+    *out = result;
+    return BT_OK;
+#else
+    return bt_fail(BT_ERR_NOT_IMPLEMENTED, "bt_log_softmax: Vulkan unavailable");
+#endif
+  }
+  size_t count = (size_t)(M * N);
+  float* h = (float*)malloc(count * sizeof(float));
+  if (!h) return bt_fail(BT_ERR_OUT_OF_MEMORY, "bt_log_softmax: host OOM");
+  if (bt_tensor_copy_to_host(x, h, count * sizeof(float)) != BT_OK) {
+    free(h); return bt_fail(BT_ERR_BACKEND, "bt_log_softmax: copy failed");
+  }
+  for (int64_t r = 0; r < M; ++r) {
+    float sum = 0.0f;
+    for (int64_t c = 0; c < N; ++c) sum += expf(h[r * N + c]);
+    float ls = logf(sum);
+    for (int64_t c = 0; c < N; ++c) h[r * N + c] -= ls;
+  }
+  int64_t dims[2] = { M, N };
+  bt_tensor_t* result = bt_tensor_create(dims, 2, BT_FLOAT32, device, h);
+  free(h);
+  if (!result) return bt_fail(BT_ERR_OUT_OF_MEMORY, "bt_log_softmax: result OOM");
   *out = result;
   return BT_OK;
 }

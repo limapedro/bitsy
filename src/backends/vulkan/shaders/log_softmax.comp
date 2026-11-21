@@ -1,0 +1,23 @@
+#version 450
+/* exp_027: fused log_softmax: out[i,j] = x[i,j] - log(sum_j exp(x[i,j])).
+ * One workgroup per row; reduction order over j is ascending, matching the
+ * campaign's 1e-5 tolerance for reduction-class ops. */
+layout(local_size_x = 256) in;
+layout(std430, binding = 0) readonly buffer X { float x[]; };
+layout(std430, binding = 2) writeonly buffer O { float o[]; };
+layout(push_constant) uniform PC { uint M, N, offx, offo; } pc;
+shared float partial[256];
+void main() {
+  uint row = gl_WorkGroupID.x;
+  uint tid = gl_LocalInvocationID.x;
+  float v = 0.0;
+  if (tid < pc.N) v = exp(x[pc.offx + row * pc.N + tid]);
+  partial[tid] = v;
+  barrier();
+  for (uint stride = 128; stride > 0; stride >>= 1) {
+    if (tid < stride) partial[tid] += partial[tid + stride];
+    barrier();
+  }
+  float logsum = log(partial[0]);
+  if (tid < pc.N) o[pc.offo + row * pc.N + tid] = x[pc.offx + row * pc.N + tid] - logsum;
+}
