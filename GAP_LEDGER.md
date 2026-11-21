@@ -1,8 +1,10 @@
 # GAP_LEDGER — ranked performance gaps
 
-**Final assessment:** see `docs/PERFORMANCE_CEILING.md` (exp_035) for the
-evidence-backed, conditional conclusion on this GPU/backend stack. Every gap
-below remains a measured miss, not an estimate.
+**Campaign closed — ceiling accepted (2026-11-21).** The user accepted the
+evidence-backed conclusion in `docs/PERFORMANCE_CEILING.md` (exp_035) after 36
+experiments. Every gap below remains a measured miss, not an estimate; no
+further performance work is planned on this GTX 1660 Super / Vulkan stack.
+Numeric parity is intact under 44 gates, including the training-scale check.
 
 **Phase:** TOGISHI Phase 2 (profiling only; no framework optimization yet)
 **Evidence:** `benchmarks/results/three_way.json`, `benchmarks/results/torch_kernels.json`,

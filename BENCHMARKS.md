@@ -1,8 +1,9 @@
 # Benchmarks
 
-**Final assessment:** `docs/PERFORMANCE_CEILING.md` (exp_035) consolidates the
-measured gaps, their limiting mechanisms, and what would be needed to improve
-further. Targets still missed are stated plainly below.
+**Campaign closed — ceiling accepted (2026-11-21).** The user accepted the
+evidence-backed conclusion in `docs/PERFORMANCE_CEILING.md` (exp_035) after 36
+experiments. Targets still missed are stated plainly below; no further
+performance work is planned on this GPU/backend stack.
 
 For function-by-function status, numeric differences and the same ratios in a
 tracker form, see [docs/PROGRESS.md](docs/PROGRESS.md). The full API inventory is

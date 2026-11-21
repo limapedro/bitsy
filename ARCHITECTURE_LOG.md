@@ -1156,6 +1156,26 @@ graph ratio.
 
 ---
 
+## 2026-11-21 — Performance ceiling formally accepted (campaign close)
+
+**Context.** After 36 experiments the campaign presented the user with the
+evidence in `docs/PERFORMANCE_CEILING.md` and three options: accept the ceiling,
+authorize a step-level graph-compiler rewrite, or move to tensor-core hardware.
+
+**Decision.** The user chose **accept the documented ceiling**. No further
+performance experiments are to be run on this GTX 1660 Super / Vulkan stack.
+
+**Consequences.** TOGISHI is closed with one target met (eager end-to-end
+throughput 1.14–1.29 vs ≥0.85) and the others honestly missed (GEMM ~0.71 vs
+≥0.80, elementwise eager 0.41–0.53 vs ≥0.95 with captured kernels at 0.87–0.93,
+captured full step ~0.46 vs ≥0.85). Numeric parity is intact and protected by
+44 gates including the training-scale gradient check. All experiment records,
+including negatives and the two reverted parity failures, remain in
+`experiments/`. Any future work would be a new phase (graph compiler) or new
+hardware, not a continuation of this campaign.
+
+---
+
 ## 2026-11-21 — Training-scale gradient gate in CI (exp_034)
 
 **Context.** exp_019 and exp_033 both passed the 43-case gate while training
