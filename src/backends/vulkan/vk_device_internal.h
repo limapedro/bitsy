@@ -37,6 +37,7 @@ typedef struct {
   VkPipeline gemm_rb_vec4_k16_pipeline;
   VkPipeline splitk_reduce_pipeline;
   VkPipeline fused_pipeline;
+  VkPipelineCache pipeline_cache;
   VkQueryPool timestamp_pool;
   VkQueryPool profiler_pool;
   uint32_t profiler_query_count;
@@ -72,6 +73,7 @@ VkBuffer bt_vk_buffer_of(void* handle);
 void bt_vk_allocator_shutdown(void);
 void bt_vk_defer_free(void* handle);        /* free after the next flush waits */
 void bt_vk_deferred_release(void);
+void bt_vk_hazard_reset(void);
 
 #define VKCHECK(expr) do { \
   VkResult _r = (expr); \

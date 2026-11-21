@@ -4,7 +4,7 @@ For function-by-function status, numeric differences and the same ratios in a
 tracker form, see [docs/PROGRESS.md](docs/PROGRESS.md). The full API inventory is
 [docs/FEATURE_INVENTORY.md](docs/FEATURE_INVENTORY.md).
 
-## Elementwise results (updated 2026-11-21, exp_004)
+## Elementwise results (updated 2026-11-21, exp_011)
 
 `python benchmarks/ops/elementwise.py` on the GTX 1660 Super, torch
 2.11.0+cu126 / CUDA 12.6, Vulkan 1.4.363. Median of 60 iterations after 10
@@ -13,19 +13,19 @@ host completion) on the Bitsy side and `torch.cuda.synchronize()` on the PyTorch
 side. Bitsy device time comes from Vulkan timestamp queries; PyTorch device time
 is not measured, so only wall time is compared.
 
-| op | elements | Bitsy ms | PyTorch ms | Bitsy device ms | ratio (target ≥ 0.95) | Bitsy GiB/s | PyTorch GiB/s |
-|---|---:|---:|---:|---:|---:|---:|---:|
-| add | 4096 | 0.0689 | 0.0365 | 0.0019 | 0.53 | 0.7 | 1.3 |
-| mul | 4096 | 0.1137 | 0.0334 | 0.0020 | 0.29 | 0.4 | 1.4 |
-| relu | 4096 | 0.1142 | 0.0400 | 0.0020 | 0.35 | 0.3 | 0.8 |
-| add | 1,048,576 | 0.1522 | 0.0556 | 0.0479 | 0.36 | 77.0 | 211.0 |
-| mul | 1,048,576 | 0.1746 | 0.0621 | 0.0521 | 0.36 | 67.1 | 188.6 |
-| relu | 1,048,576 | 0.1840 | 0.0429 | 0.0492 | 0.23 | 42.5 | 182.1 |
+| op | elements | Bitsy ms | PyTorch ms | Bitsy device ms | clock MHz | ratio (target ≥ 0.95) | Bitsy GiB/s | PyTorch GiB/s |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| add | 4096 | 0.0694 | 0.0255 | 0.0019 | 1530 | 0.37 | 0.7 | 1.8 |
+| mul | 4096 | 0.0678 | 0.0364 | 0.0020 | 1530 | 0.54 | 0.7 | 1.3 |
+| relu | 4096 | 0.0616 | 0.0279 | 0.0020 | 1530 | 0.45 | 0.5 | 1.1 |
+| add | 1,048,576 | 0.1162 | 0.0572 | 0.0476 | 1530 | 0.49 | 100.8 | 204.9 |
+| mul | 1,048,576 | 0.1156 | 0.0524 | 0.0515 | 1530 | 0.45 | 101.4 | 223.6 |
+| relu | 1,048,576 | 0.1140 | 0.0385 | 0.0488 | 1530 | 0.34 | 68.5 | 202.7 |
 
-**Targets are missed** (best ratio 0.53 vs ≥ 0.95). Ratio movement between runs
-is dominated by PyTorch's small-op timing variance (PyTorch add 1M: 0.0868 ms in
-exp_003, 0.0556 ms here). See `experiments/exp_001` (allocator), `exp_003`
-(batching/timestamps), `exp_004` (async/fusion) for before/after snapshots.
+**Targets are missed** (best ratio 0.54 vs ≥ 0.95). Every result in this table
+was measured at 1530 MHz and now logs its clock; the earlier 0.23–0.87 spread
+was partly clock variance. exp_011 hazard-tracked barriers and host-overlap
+experiments did not close the gap (see `experiments/exp_011/FINDINGS.md`).
 
 ## GEMM results (updated 2026-11-21, exp_008)
 
@@ -37,7 +37,7 @@ register-blocked+split-K; the default is an autotuned shape threshold.
 | n | kernel | Bitsy ms | PyTorch ms | Bitsy device ms | ratio (target ≥ 0.80) | Bitsy GFLOPS |
 |---:|---|---:|---:|---:|---:|---:|
 | 256 | tiled (autotune) | 0.134 | 0.042 | 0.070 | 0.31 | 250 |
-| 1024 | register-blocked vec4 + double buffer (autotune) | 1.289 | 0.893 | 1.035 | **0.69** | 1666 |
+| 1024 | register-blocked vec4 + double buffer (autotune) | 1.265 | 0.903 | 1.028 | **0.71** | 1698 |
 
 Before exp_008 (16×16 tiled): 0.177 ms / 0.27 at 256² and 4.329 ms / 0.22 at
 1024². exp_008 register blocking was 3.54× faster at 1024² (496 → 1754

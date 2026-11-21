@@ -18,6 +18,43 @@
 #include "fused.spv.h"
 
 vk_ctx_t g_vk;
+static const char *g_pipeline_cache_path = NULL;
+
+/* Load an on-disk pipeline cache only when its device UUID matches. */
+static void load_pipeline_cache(void) {
+  g_pipeline_cache_path = getenv("BITSY_PIPELINE_CACHE");
+  if (!g_pipeline_cache_path) g_pipeline_cache_path = "bitsy.pipeline_cache";
+  void *data = NULL;
+  size_t size = 0;
+  FILE *f = fopen(g_pipeline_cache_path, "rb");
+  if (f) {
+    fseek(f, 0, SEEK_END);
+    long n = ftell(f);
+    fseek(f, 0, SEEK_SET);
+    if (n > (long)sizeof(VkPipelineCacheHeaderVersionOne)) {
+      data = malloc((size_t)n);
+      if (data && fread(data, 1, (size_t)n, f) == (size_t)n) {
+        VkPipelineCacheHeaderVersionOne *h = data;
+        if (h->headerVersion != VK_PIPELINE_CACHE_HEADER_VERSION_ONE ||
+            h->vendorID != g_vk.props.vendorID || h->deviceID != g_vk.props.deviceID ||
+            memcmp(h->pipelineCacheUUID, g_vk.props.pipelineCacheUUID, VK_UUID_SIZE) != 0) {
+          free(data); data = NULL;
+        } else {
+          size = (size_t)n;
+        }
+      } else {
+        free(data); data = NULL;
+      }
+    }
+    fclose(f);
+  }
+  VkPipelineCacheCreateInfo ci = { .sType = VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO,
+                                   .initialDataSize = size, .pInitialData = data };
+  VkResult pr = vkCreatePipelineCache(g_vk.device, &ci, NULL, &g_vk.pipeline_cache);
+  if (pr != VK_SUCCESS) bt_fail(BT_ERR_BACKEND, "vkCreatePipelineCache failed (%d)", (int)pr);
+  free(data);
+}
+
 
 /* Pick a discrete GPU when there is one; otherwise the first compute device. */
 static bt_status_t pick_physical(void) {
@@ -62,7 +99,7 @@ static bt_status_t pipeline_from_spv(const uint32_t* code, size_t bytes, VkPipel
                                             .module = module, .pName = "main" };
   VkComputePipelineCreateInfo cpi = { .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
                                       .stage = stage, .layout = g_vk.pipeline_layout };
-  VkResult result = vkCreateComputePipelines(g_vk.device, VK_NULL_HANDLE, 1, &cpi, NULL, pipeline);
+  VkResult result = vkCreateComputePipelines(g_vk.device, g_vk.pipeline_cache, 1, &cpi, NULL, pipeline);
   vkDestroyShaderModule(g_vk.device, module, NULL); // the pipeline owns the code
   return result == VK_SUCCESS ? BT_OK : bt_fail(BT_ERR_BACKEND, "vkCreateComputePipelines failed (%d)", (int)result);
 }
@@ -171,6 +208,7 @@ bt_status_t bt_vk_init(void) {
     VKCHECK(vkCreateQueryPool(g_vk.device, &qi3, NULL, &g_vk.profiler_pool));
   }
 
+  load_pipeline_cache();
   status = make_pipeline();
   if (status != BT_OK) return status;
   g_vk.ready = 1;
@@ -193,6 +231,7 @@ void bt_vk_shutdown(void) {
   vkDestroyPipeline(g_vk.device, g_vk.gemm_rb_vec4_k16_pipeline, NULL);
   vkDestroyPipeline(g_vk.device, g_vk.splitk_reduce_pipeline, NULL);
   vkDestroyPipelineLayout(g_vk.device, g_vk.pipeline_layout, NULL);
+  vkDestroyPipelineCache(g_vk.device, g_vk.pipeline_cache, NULL);
   if (g_vk.have_timestamps) {
     vkDestroyQueryPool(g_vk.device, g_vk.timestamp_pool, NULL);
     vkDestroyQueryPool(g_vk.device, g_vk.profiler_pool, NULL);
@@ -240,6 +279,7 @@ bt_status_t bt_vk_wait(void) {
                                .pValues = &g_vk.timeline_value };
   VKCHECK(vkWaitSemaphores(g_vk.device, &wait, UINT64_MAX));
   bt_vk_deferred_release(); // scratch buffers are safe once the GPU is idle
+  bt_vk_hazard_reset();
 
   if (g_vk.have_timestamps && g_vk.query_index > g_vk.query_read_index) {
     int count = g_vk.query_index - g_vk.query_read_index;

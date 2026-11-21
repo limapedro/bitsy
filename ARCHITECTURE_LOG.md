@@ -582,3 +582,27 @@ negative result. Final ratio is 0.69–0.78 depending on GPU clock
 (1530–1950 MHz sampled), still below the 0.80 target. Two bugs found while
 building the cache (static env caching, GPU name with spaces in the key) were
 fixed before commit. Parity remains 42/42.
+
+---
+
+## 2026-11-21 — Clock logging, minimal barriers, async overlap (exp_011)
+
+**Context.** Phase 5 remained: no clock normalization, one global barrier per
+dispatch, and a host wait after every benchmark iteration.
+
+**Options considered.** (1) Keep the global barrier and sync-per-iteration,
+(2) add per-run clock logging, hazard-tracked buffer barriers, async host
+overlap, and an on-disk pipeline cache.
+
+**Decision.** Option 2, recorded in `experiments/exp_011/HYPOTHESIS.md`. No
+kernel algorithm changed.
+
+**Consequences.** Clock logging explains the GEMM ratio spread (0.71 at a fixed
+1530 MHz). Hazard barriers reduce a 20-add chain from 20 global barriers to 19
+buffer-specific ones — a true dependency chain still needs them, so the
+material benefit is barrier scope, not count. Async batching gives 1.10×,
+below the 1.2× prediction; host overhead is no longer dominant. Pipeline cache
+persistence is blocked by driver 621.01 (`vkGetPipelineCacheData` crashes with
+NULL pData and returns `VK_INCOMPLETE` up to 64 MiB), so only the validated
+load path remains. All negative results are in `experiments/exp_011/FINDINGS.md`;
+parity stays 42/42.

@@ -1,0 +1,15 @@
+{
+  "generated_at": "2026-11-21T16:18:52.145962+00:00",
+  "gpu_clock_mhz": 1530.0,
+  "config": {
+    "elements": 1048576,
+    "ops": 20,
+    "batch": 8,
+    "iters": 20,
+    "warmup": 3,
+    "result_path": "E:\\__PROJECTS__\\Hagane\\benchmarks\\results\\async_chain.json"
+  },
+  "sync_ms_per_chain": 1.2140549995820038,
+  "async_ms_per_chain": 1.1066687511629425,
+  "speedup": 1.0970355838693506
+}

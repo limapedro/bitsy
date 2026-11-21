@@ -15,7 +15,8 @@ from pathlib import Path
 import torch
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path[:0] = [str(ROOT), str(ROOT / "python")]
+sys.path[:0] = [str(ROOT), str(ROOT / "python"), str(ROOT / "benchmarks")]
+from common.clock import sample_around  # noqa: E402
 
 import bitsy as bt  # noqa: E402
 
@@ -75,7 +76,12 @@ def run(config:BenchConfig = CONFIG) -> int:
   if not (torch.cuda.is_available() and bt.has_vulkan()):
     print("needs CUDA and Vulkan; skipping")
     return 0
-  rows = [bench_one(op, n, config) for n in config.sizes for op in config.ops]
+  rows = []
+  for n in config.sizes:
+    for op in config.ops:
+      result, clock = sample_around(lambda: bench_one(op, n, config))
+      result["clockMHz"] = clock
+      rows.append(result)
   report = {
     "generated_at": datetime.now(timezone.utc).isoformat(),
     "gpu": torch.cuda.get_device_name(0),
@@ -87,10 +93,10 @@ def run(config:BenchConfig = CONFIG) -> int:
   config.result_path.parent.mkdir(parents=True, exist_ok=True)
   config.result_path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
   print(f"{'op':8} {'n':>9} {'bitsy ms':>10} {'torch ms':>10} "
-        f"{'device ms':>10} {'ratio':>7} {'GiB/s b/t':>16}")
+        f"{'device ms':>10} {'clockMHz':>9} {'ratio':>7} {'GiB/s b/t':>16}")
   for r in rows:
     print(f"{r['op']:8} {r['elements']:9d} {r['bitsy_ms']:10.4f} {r['torch_ms']:10.4f} "
-          f"{r['bitsy_device_ms']:10.4f} {r['ratio']:7.2f} "
+          f"{r['bitsy_device_ms']:10.4f} {r['clockMHz']:9.0f} {r['ratio']:7.2f} "
           f"{r['bitsy_GiB_s']:7.1f}/{r['torch_GiB_s']:.1f}")
   print(f"report: {config.result_path}")
   return 0

@@ -61,6 +61,23 @@ per iteration remains because the benchmark explicitly waits each iteration.
    50 steps); keep the cache, add stream-ordered reuse and memory-budget
    awareness in Phase 4.
 
+## Phase 5 update (exp_011)
+
+- GPU clock is now logged per benchmark run; at a fixed 1530 MHz the GEMM ratio
+  is 0.71 and elementwise ratios are 0.34–0.54. The earlier 0.69–0.78 GEMM
+  spread was partly 1530–1950 MHz clock variance.
+- Hazard-tracked per-buffer barriers replaced the unconditional global barrier,
+  but a 20-add dependency chain still needs 19 barriers for 20 dispatches
+  (only the first is avoided). The win is narrower barriers, not fewer.
+- Submitting 8 chains before one wait improves wall time 1.214 → 1.107 ms per
+  chain (1.10×), below the 1.2× prediction. Host overhead is no longer dominant.
+- On-disk pipeline cache persistence is **blocked**: driver 621.01 crashes on
+  `vkGetPipelineCacheData(pData=NULL)` and returns `VK_INCOMPLETE` for all sizes
+  up to 64 MiB otherwise. Loading a supplied cache file still works.
+
+Conclusion: the remaining elementwise gap is bandwidth/kernel-bound
+(86% of measured DRAM ceiling in the chain), not launch/sync-bound.
+
 ## Honesty
 
 - Timestamp GPU time is a proxy, not the 1000-repeat isolated kernel time the

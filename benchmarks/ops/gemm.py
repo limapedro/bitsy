@@ -14,7 +14,8 @@ from pathlib import Path
 import torch
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path[:0] = [str(ROOT), str(ROOT / "python")]
+sys.path[:0] = [str(ROOT), str(ROOT / "python"), str(ROOT / "benchmarks")]
+from common.clock import sample_around  # noqa: E402
 
 import bitsy as bt  # noqa: E402
 
@@ -62,7 +63,11 @@ def run(config:GemmConfig = CONFIG) -> int:
   mode = { "0": "naive", "1": "tiled", "2": "rb", "3": "rb_splitk",
            "4": "rb_vec4", "5": "rb_vec4_k16" }.get(
       os.environ.get("BT_GEMM_VARIANT", ""), "auto")
-  rows = [bench(n, config) for n in config.sizes]
+  rows = []
+  for n in config.sizes:
+    result, clock = sample_around(lambda: bench(n, config))
+    result["clockMHz"] = clock
+    rows.append(result)
   report = {"generated_at": datetime.now(timezone.utc).isoformat(),
             "mode": mode, "gpu": torch.cuda.get_device_name(0),
             "torch": torch.__version__, "cuda": torch.version.cuda,
@@ -73,10 +78,10 @@ def run(config:GemmConfig = CONFIG) -> int:
   config.result_path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
   print(f"mode={mode}")
   print(f"{'n':>6} {'bitsy ms':>10} {'torch ms':>10} {'device ms':>10} "
-        f"{'ratio':>7} {'b GFLOPS':>10} {'t GFLOPS':>10}")
+        f"{'clockMHz':>9} {'ratio':>7} {'b GFLOPS':>10} {'t GFLOPS':>10}")
   for r in rows:
     print(f"{r['n']:6d} {r['bitsy_ms']:10.3f} {r['torch_ms']:10.3f} "
-          f"{r['bitsy_device_ms']:10.3f} {r['ratio']:7.2f} "
+          f"{r['bitsy_device_ms']:10.3f} {r['clockMHz']:9.0f} {r['ratio']:7.2f} "
           f"{r['bitsy_GFLOPS']:10.1f} {r['torch_GFLOPS']:10.1f}")
   print(f"report: {config.result_path}")
   return 0
