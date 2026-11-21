@@ -4,54 +4,67 @@ For function-by-function status, numeric differences and the same ratios in a
 tracker form, see [docs/PROGRESS.md](docs/PROGRESS.md). The full API inventory is
 [docs/FEATURE_INVENTORY.md](docs/FEATURE_INVENTORY.md).
 
-## M2 elementwise results (2026-11-21)
+## Elementwise results (updated 2026-11-21, exp_003)
 
-Measured with `python benchmarks/ops/elementwise.py` on the GTX 1660 Super,
-torch 2.11.0+cu126 / CUDA 12.6, Vulkan 1.4.363. Median of 60 iterations after
-10 warm-ups. Both sides allocate an output per op and synchronize every
-iteration. **Device time via timestamp queries is not implemented yet**, so
-only wall time is reported; this understates neither side but makes small-op
-launch overhead visible.
+`python benchmarks/ops/elementwise.py` on the GTX 1660 Super, torch
+2.11.0+cu126 / CUDA 12.6, Vulkan 1.4.363. Median of 60 iterations after 10
+warm-ups. Each iteration calls `bt.flush()` (submit + fence wait) on the Bitsy
+side and `torch.cuda.synchronize()` on the PyTorch side. Bitsy device time comes
+from Vulkan timestamp queries; PyTorch device time is not measured, so only
+wall time is compared.
 
-| op | elements | Bitsy ms | PyTorch ms | ratio (target >= 0.95) | Bitsy GiB/s | PyTorch GiB/s |
-|---|---:|---:|---:|---:|---:|---:|
-| add | 4096 | 0.0772 | 0.0132 | 0.17 | 0.6 | 3.5 |
-| mul | 4096 | 0.0703 | 0.0246 | 0.35 | 0.7 | 1.9 |
-| relu | 4096 | 0.0942 | 0.0167 | 0.18 | 0.3 | 1.8 |
-| add | 1,048,576 | 0.1551 | 0.0553 | 0.36 | 75.6 | 211.9 |
-| mul | 1,048,576 | 0.1514 | 0.0537 | 0.35 | 77.4 | 218.2 |
-| relu | 1,048,576 | 0.1616 | 0.0421 | 0.26 | 48.3 | 185.6 |
+| op | elements | Bitsy ms | PyTorch ms | Bitsy device ms | ratio (target ≥ 0.95) | Bitsy GiB/s | PyTorch GiB/s |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| add | 4096 | 0.0783 | 0.0244 | 0.0020 | 0.31 | 0.6 | 1.9 |
+| mul | 4096 | 0.1107 | 0.0307 | 0.0021 | 0.28 | 0.4 | 1.5 |
+| relu | 4096 | 0.0862 | 0.0266 | 0.0021 | 0.31 | 0.4 | 1.1 |
+| add | 1,048,576 | 0.1784 | 0.0868 | 0.0483 | 0.49 | 65.7 | 135.1 |
+| mul | 1,048,576 | 0.1963 | 0.0889 | 0.0518 | 0.45 | 59.7 | 131.9 |
+| relu | 1,048,576 | 0.1999 | 0.0773 | 0.0492 | 0.39 | 39.1 | 101.1 |
 
-**Targets are missed.** The §7.2 bandwidth-bound target is >= 0.95 and >= 90%
-of peak; the best result here is 0.36. The caching allocator experiment
-(`experiments/exp_001`) improved ratios from ~0.07 to ~0.17–0.36 by removing
-per-op `vkAllocateMemory`, and documented what remains: fence/submission
-overhead on small tensors and shader/bandwidth efficiency on large ones. Raw
-results: `benchmarks/results/elementwise.json`,
-`experiments/exp_001/before.json`, `experiments/exp_001/after.json`.
+**Targets are missed** (best ratio 0.49 vs ≥ 0.95). Single-op wall time did
+not improve with batching; ratio changes are dominated by PyTorch's run-to-run
+variance (PyTorch add 1M was 0.0553 ms in the previous run). Timestamp queries
+now show the split: for add 1M the GPU kernel is 0.048 ms of the 0.178 ms wall
+time. See `experiments/exp_001` (allocator) and `experiments/exp_003`
+(batching/timestamps) for before/after snapshots.
 
-## M5 GEMM results (2026-11-21)
+## GEMM results (updated 2026-11-21, exp_003)
 
-`python benchmarks/ops/gemm.py`, same GTX 1660 Super, median of 30 iterations
-after 5 warm-ups, sync per iteration. Select the kernel with `BT_GEMM_TILED`.
+`python benchmarks/ops/gemm.py`, median of 30 iterations after 5 warm-ups,
+`bt.flush()` + `torch.cuda.synchronize()` per iteration. `BT_GEMM_TILED` selects
+the kernel.
 
-| n | kernel | Bitsy ms | PyTorch ms | ratio (target >= 0.80) | Bitsy GFLOPS |
-|---:|---|---:|---:|---:|---:|
-| 256 | naive | 0.237 | 0.043 | 0.18 | 141 |
-| 256 | tiled | 0.146 | 0.046 | 0.31 | 229 |
-| 1024 | naive | 10.224 | 0.908 | 0.09 | 210 |
-| 1024 | tiled | 4.337 | 0.961 | 0.22 | 495 |
+| n | kernel | Bitsy ms | PyTorch ms | Bitsy device ms | ratio (target ≥ 0.80) | Bitsy GFLOPS |
+|---:|---|---:|---:|---:|---:|---:|
+| 256 | tiled | 0.185 | 0.045 | 0.070 | 0.24 | 182 |
+| 1024 | tiled | 4.824 | 1.128 | 4.443 | 0.23 | 445 |
 
-**GEMM target missed** (0.22 vs >= 0.80). The tiled kernel is 2.36x faster than
-naive at n=1024; see `experiments/exp_002/` for the hypothesis, raw before/after
-JSON and findings. Both kernels pass 40/40 parity cases.
+Naive baseline at n=1024 was 10.224 ms / 0.09 ratio (`experiments/exp_002`).
+**GEMM target missed** (0.23 vs ≥ 0.80). Recent naive numbers are in
+`experiments/exp_003/before_gemm.json`; the tiled kernel is still the faster one.
+
+## Batched submissions (exp_003)
+
+`python benchmarks/ops/batch_chain.py`: 20 chained adds of 1M elements.
+
+| mode | wall ms | device ms | note |
+|---|---:|---:|---|
+| eager (`BT_VK_NO_BATCH=1`) | 2.773 | 0.048 | device time is the last submit only |
+| batched (default) | 1.277 | 0.942 | device time sums all 20 kernels |
+
+Batching is **2.17x faster** for a multi-op chain. This is the path to
+end-to-end speed; single-op benchmark ratios are unchanged because one op still
+means one submit. Raw JSON: `experiments/exp_003/chain_eager.json`,
+`chain_batched.json`.
 
 ## Comparison target
 
 PyTorch CUDA on the **same** GTX 1660 Super, in the same machine, with warm-up,
 correct synchronization on both sides, and median/spread reported over many
-iterations. Both device time (GPU timestamp queries) and wall time (including
-launch and dispatch overhead) are reported; device time is pending for M10.
+iterations. Bitsy device time is reported from GPU timestamp queries; PyTorch
+device time measurement is still pending, so device time is never compared
+against PyTorch wall time.
 
 ## Targets
 

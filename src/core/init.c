@@ -46,3 +46,19 @@ int bt_has_vulkan(void) {
   return 0;
 #endif
 }
+
+bt_status_t bt_vulkan_flush(void) {
+#ifdef BT_ENABLE_VULKAN
+  return bt_vk_flush();
+#else
+  return BT_OK;
+#endif
+}
+
+double bt_vulkan_device_time_ms(void) {
+#ifdef BT_ENABLE_VULKAN
+  return bt_vk_device_time_ms();
+#else
+  return 0.0;
+#endif
+}

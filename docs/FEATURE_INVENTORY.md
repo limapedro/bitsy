@@ -151,10 +151,11 @@ Per-function numeric and performance evidence lives in [PROGRESS.md](PROGRESS.md
 
 | Representative API | Status |
 |---|---|
-| `device`, `cpu`, `vulkan`, `torch.cuda.synchronize` equivalent | partial (device strings, fence waits) |
+| `device`, `cpu`, `vulkan`, `torch.cuda.synchronize` equivalent | partial (device strings, `bt_vulkan_flush()`, fence waits) |
 | `Stream`, `Event`, timeline semaphores, async scheduler | missing |
 | `autocast`, `GradScaler`, AMP, mixed precision | missing |
-| `torch.compile`, `torch.profiler`, `torch.utils.benchmark`, GPU timestamp queries | missing |
+| `torch.compile`, `torch.profiler`, `torch.utils.benchmark` | missing |
+| GPU timestamp queries | done (`bt_vulkan_device_time_ms()`) |
 | deterministic algorithms, `set_num_threads`, matmul precision flags | missing |
 
 ## 16. Distributed

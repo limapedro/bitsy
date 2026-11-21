@@ -27,14 +27,16 @@ class GemmConfig:
 
 CONFIG = GemmConfig()
 
-def _timed(fn, iters:int) -> list[float]:
-  out = []
+def _timed(fn, iters:int):
+  out, device = [], []
   for _ in range(iters):
     start = time.perf_counter()
     fn()
+    bt.flush()
     torch.cuda.synchronize()
     out.append((time.perf_counter() - start) * 1e3)
-  return out
+    device.append(bt.device_time_ms())
+  return out, device
 
 def bench(n:int, config:GemmConfig) -> dict:
   ta = torch.randn(n, n, device="cuda")
@@ -43,12 +45,13 @@ def bench(n:int, config:GemmConfig) -> dict:
   bb = bt.Tensor.from_numpy(tb.cpu().numpy(), "vulkan")
   for _ in range(config.warmup):
     torch.mm(ta, tb); torch.cuda.synchronize()
-    bt.matmul(ba, bb)
-  tt = _timed(lambda: torch.mm(ta, tb), config.iters)
-  bt_times = _timed(lambda: bt.matmul(ba, bb), config.iters)
+    bt.matmul(ba, bb); bt.flush()
+  tt, _ = _timed(lambda: torch.mm(ta, tb), config.iters)
+  bt_times, dev = _timed(lambda: bt.matmul(ba, bb), config.iters)
   tm, bm = statistics.median(tt), statistics.median(bt_times)
   flops = 2 * n * n * n
-  return {"n": n, "torch_ms": tm, "bitsy_ms": bm, "ratio": tm / bm,
+  return {"n": n, "torch_ms": tm, "bitsy_ms": bm,
+          "bitsy_device_ms": statistics.median(dev), "ratio": tm / bm,
           "torch_GFLOPS": flops / (tm * 1e-3) / 1e9,
           "bitsy_GFLOPS": flops / (bm * 1e-3) / 1e9,
           "torch_spread_ms": [min(tt), max(tt)],
@@ -61,14 +64,16 @@ def run(config:GemmConfig = CONFIG) -> int:
             "mode": mode, "gpu": torch.cuda.get_device_name(0),
             "torch": torch.__version__, "cuda": torch.version.cuda,
             "bitsy": bt.version(),
-            "method": "wall time, sync every iteration, output allocated per op",
+            "method": "wall time with bt.flush()+torch.cuda.synchronize() per iteration; device time from timestamp queries",
             "results": rows}
   config.result_path.parent.mkdir(parents=True, exist_ok=True)
   config.result_path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
   print(f"mode={mode}")
-  print(f"{'n':>6} {'bitsy ms':>10} {'torch ms':>10} {'ratio':>7} {'b GFLOPS':>10} {'t GFLOPS':>10}")
+  print(f"{'n':>6} {'bitsy ms':>10} {'torch ms':>10} {'device ms':>10} "
+        f"{'ratio':>7} {'b GFLOPS':>10} {'t GFLOPS':>10}")
   for r in rows:
-    print(f"{r['n']:6d} {r['bitsy_ms']:10.3f} {r['torch_ms']:10.3f} {r['ratio']:7.2f} "
+    print(f"{r['n']:6d} {r['bitsy_ms']:10.3f} {r['torch_ms']:10.3f} "
+          f"{r['bitsy_device_ms']:10.3f} {r['ratio']:7.2f} "
           f"{r['bitsy_GFLOPS']:10.1f} {r['torch_GFLOPS']:10.1f}")
   print(f"report: {config.result_path}")
   return 0

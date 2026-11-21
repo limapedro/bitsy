@@ -24,15 +24,16 @@ static int32_t stride_at(const bt_tensor_t* t, int64_t out_dim, int64_t out_ndim
   return (int32_t)t->strides[in_dim];
 }
 
-/* One descriptor set is enough: every dispatch is serialized by the fence. */
+/* Record a dispatch into the current batch. Submission happens at flush time. */
 static bt_status_t dispatch(VkPipeline pipeline, VkBuffer buffers[4],
                             const void* pc, size_t pc_size, uint32_t gx, uint32_t gy) {
+  VkDescriptorSet set = bt_vk_next_set(); // may flush when the batch is full
   VkDescriptorBufferInfo info[4];
   VkWriteDescriptorSet writes[4];
   for (int i = 0; i < 4; ++i) {
     info[i] = (VkDescriptorBufferInfo){ .buffer = buffers[i], .offset = 0, .range = VK_WHOLE_SIZE };
     writes[i] = (VkWriteDescriptorSet){
-      .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, .dstSet = g_vk.set,
+      .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, .dstSet = set,
       .dstBinding = (uint32_t)i, .descriptorCount = 1,
       .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, .pBufferInfo = &info[i],
     };
@@ -42,12 +43,20 @@ static bt_status_t dispatch(VkPipeline pipeline, VkBuffer buffers[4],
   bt_vk_begin_cmd();
   vkCmdBindPipeline(g_vk.cmd, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline);
   vkCmdBindDescriptorSets(g_vk.cmd, VK_PIPELINE_BIND_POINT_COMPUTE,
-                          g_vk.pipeline_layout, 0, 1, &g_vk.set, 0, NULL);
+                          g_vk.pipeline_layout, 0, 1, &set, 0, NULL);
   vkCmdPushConstants(g_vk.cmd, g_vk.pipeline_layout, VK_SHADER_STAGE_COMPUTE_BIT,
                      0, (uint32_t)pc_size, pc);
+  bt_vk_timestamp_start();
   vkCmdDispatch(g_vk.cmd, gx, gy, 1);
+  bt_vk_timestamp_end();
   bt_vk_barrier();
-  return bt_vk_flush();
+  // Experiment toggle: BT_VK_NO_BATCH=1 restores the old submit-per-op path.
+  static int no_batch = -1;
+  if (no_batch < 0) {
+    const char* env = getenv("BT_VK_NO_BATCH");
+    no_batch = env && atoi(env) ? 1 : 0;
+  }
+  return no_batch ? bt_vk_flush() : BT_OK;
 }
 
 bt_status_t bt_vk_elementwise(const bt_tensor_t* a, const bt_tensor_t* b,

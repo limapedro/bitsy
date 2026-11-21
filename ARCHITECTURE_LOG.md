@@ -457,3 +457,31 @@ PyTorch CUDA (`benchmarks/results/cifar_cnn_parity.json`). The intermittent
 full-batch eval anomaly still needs a dedicated Vulkan synchronization/race
 investigation; only the chunked path is claimed correct. No tolerance was
 loosened.
+
+---
+
+## 2026-11-21 — Batched Vulkan submissions and timestamp queries (exp_003)
+
+**Context.** Elementwise and GEMM ratios were 0.17–0.36 and 0.22 of PyTorch
+CUDA. exp_001 removed allocation overhead; the remaining fixed cost was one
+`vkQueueSubmit` + fence wait per operator. Single-op benchmarks could not show
+the cost of a whole training step, so the gap needed to be measured directly.
+
+**Options considered.** (1) Keep submit-per-op, (2) record many dispatches into
+one command buffer and flush only on host readback or an explicit API call,
+(3) go straight to timeline semaphores and multiple in-flight frames.
+
+**Decision.** Option 2, driven by `experiments/exp_003/HYPOTHESIS.md`. Each
+dispatch gets its own descriptor set from a rotating pool (descriptor contents
+are host-written, so one shared set cannot represent a batch). A new public
+`bt_vulkan_flush()` submits and waits; host readback also flushes. Vulkan
+timestamp queries measure each dispatch when the device limit
+`timestampComputeAndGraphics` is true, and `bt_vulkan_device_time_ms()` reports
+the last batch. `BT_VK_NO_BATCH=1` restores the old path for A/B measurement.
+
+**Consequences.** A 20-op pointwise chain is 2.17x faster (2.773 → 1.277 ms),
+meeting the experiment's prediction; timestamps show 0.942 ms of GPU work in
+that batch. Single-op wall time is unchanged because one op still means one
+submit, and the headline ratios remain below target. All correctness checks
+stayed green (CTest 1/1, parity 40/40, gradcheck and conv_check unchanged).
+Timeline semaphores and pointwise fusion remain the next performance steps.

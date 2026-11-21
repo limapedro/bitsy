@@ -29,14 +29,16 @@ class BenchConfig:
 
 CONFIG = BenchConfig()
 
-def _timed(fn, iters:int) -> list[float]:
-  times = []
+def _timed(fn, iters:int):
+  times, device_times = [], []
   for _ in range(iters):
     start = time.perf_counter()
     fn()
-    torch.cuda.synchronize()
+    bt.flush()                 # submit + fence wait for Bitsy
+    torch.cuda.synchronize()   # equivalent sync for PyTorch
     times.append((time.perf_counter() - start) * 1e3)
-  return times
+    device_times.append(bt.device_time_ms())
+  return times, device_times
 
 def bench_one(op:str, n:int, config:BenchConfig) -> dict:
   ta = torch.randn(n, device="cuda")
@@ -50,9 +52,9 @@ def bench_one(op:str, n:int, config:BenchConfig) -> dict:
 
   for _ in range(config.warmup):
     torch_call(); torch.cuda.synchronize()
-    bitsy_call()
-  t_torch = _timed(torch_call, config.iters)
-  t_bitsy = _timed(bitsy_call, config.iters)
+    bitsy_call(); bt.flush()
+  t_torch, _ = _timed(torch_call, config.iters)
+  t_bitsy, dev = _timed(bitsy_call, config.iters)
   tm, bm = statistics.median(t_torch), statistics.median(t_bitsy)
   # add/mul: 3 arrays touched; relu: 2. Bytes = elements * 4 * arrays.
   arrays = 2 if op in ("relu", "sigmoid", "tanh", "exp") else 3
@@ -60,6 +62,7 @@ def bench_one(op:str, n:int, config:BenchConfig) -> dict:
   return {
     "op": op, "elements": n,
     "bitsy_ms": bm, "torch_ms": tm,
+    "bitsy_device_ms": statistics.median(dev),
     "bitsy_spread_ms": [min(t_bitsy), max(t_bitsy)],
     "torch_spread_ms": [min(t_torch), max(t_torch)],
     "ratio": tm / bm,
@@ -77,15 +80,17 @@ def run(config:BenchConfig = CONFIG) -> int:
     "gpu": torch.cuda.get_device_name(0),
     "torch": torch.__version__, "cuda": torch.version.cuda, "bitsy": bt.version(),
     "vulkan_device": "GTX 1660 SUPER (queried via vulkaninfo)",
-    "method": "wall time, sync every iteration, output allocated each op; device time unavailable",
+    "method": "wall time with bt.flush()+torch.cuda.synchronize() per iteration; Bitsy device time from Vulkan timestamp queries",
     "results": rows,
   }
   config.result_path.parent.mkdir(parents=True, exist_ok=True)
   config.result_path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
-  print(f"{'op':8} {'n':>9} {'bitsy ms':>10} {'torch ms':>10} {'ratio':>7} {'GiB/s b/t':>16}")
+  print(f"{'op':8} {'n':>9} {'bitsy ms':>10} {'torch ms':>10} "
+        f"{'device ms':>10} {'ratio':>7} {'GiB/s b/t':>16}")
   for r in rows:
     print(f"{r['op']:8} {r['elements']:9d} {r['bitsy_ms']:10.4f} {r['torch_ms']:10.4f} "
-          f"{r['ratio']:7.2f} {r['bitsy_GiB_s']:7.1f}/{r['torch_GiB_s']:.1f}")
+          f"{r['bitsy_device_ms']:10.4f} {r['ratio']:7.2f} "
+          f"{r['bitsy_GiB_s']:7.1f}/{r['torch_GiB_s']:.1f}")
   print(f"report: {config.result_path}")
   return 0
 
