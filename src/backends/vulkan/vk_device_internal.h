@@ -45,6 +45,7 @@ typedef struct {
   VkPipeline gemm_rb_vec4_pipeline;
   VkPipeline gemm_rb_vec4_k16_pipeline;
   VkPipeline splitk_reduce_pipeline;
+  VkPipeline sgd_step_pipeline;
   VkPipeline fused_pipeline;
   VkPipelineCache pipeline_cache;
   VkQueryPool timestamp_pool;

@@ -734,3 +734,27 @@ recorded as a miss. The dominant remaining cost is now clearly the ~66 small
 dispatches and barriers per step, not submit count. Next: fuse backward/
 optimizer chains to cut dispatch count. Parity stays 42/42; MNIST identical,
 CIFAR unchanged.
+
+---
+
+## 2026-11-21 — Profiler-guided dispatch fusion (exp_017)
+
+**Context.** exp_016 identified ~66 Vulkan dispatches per step as the limiting
+cost. A profile showed 16 of them were materialised transposes for matmul
+backward, and the SGD update used two ops plus an lr upload per parameter.
+
+**Options considered.** (1) Accept the dispatch count, (2) turn transposes into
+zero-dispatch strided views (GEMM already consumes strides) and fuse the SGD
+update into a dedicated shader with lr as a push constant.
+
+**Decision.** Option 2, recorded in `experiments/exp_017/HYPOTHESIS.md`. The
+fused kernel keeps the fp32 multiply-then-subtract order; the CPU-only build
+uses the existing ops with the same order. No tolerance change.
+
+**Consequences.** Dispatch count 66 → 46 (30.3%, target met) and barriers
+66 → 52. Captured step 0.296–0.334 → **0.257 ms** (1.15–1.30×, centrally
+~1.23×) and graph ratio 0.20–0.23 → 0.259; the ≥1.3× / ≥0.28 stretch goals
+were not reliably met and are recorded as misses. Eager step 2.626 → 2.46 ms,
+ratio 0.41–0.47 — the best eager result so far. Parity holds (42/42, CTest
+both builds, MNIST/CIFAR drift < 2e-7). The remaining ~20 tiled-GEMM
+dispatches (many tiny reduction matmuls) are the next target.

@@ -114,6 +114,28 @@ bt_status_t bt_tensor_view(const bt_tensor_t* tensor, const int64_t* dims,
   return BT_OK;
 }
 
+bt_status_t bt_tensor_transpose_view(const bt_tensor_t* tensor, bt_tensor_t** out) {
+  if (!tensor || !out) return bt_fail(BT_ERR_INVALID_ARGUMENT, "bt_tensor_transpose_view: NULL");
+  if (tensor->shape.ndim != 2)
+    return bt_fail(BT_ERR_SHAPE_MISMATCH, "bt_tensor_transpose_view: expects 2D input");
+  int64_t dims[2] = { tensor->shape.dims[1], tensor->shape.dims[0] };
+  bt_shape_t shape;
+  bt_status_t status = bt_shape_make(dims, 2, &shape);
+  if (status != BT_OK) return status;
+  bt_tensor_t* view = calloc(1, sizeof(*view));
+  if (!view) return bt_fail(BT_ERR_OUT_OF_MEMORY, "bt_tensor_transpose_view: OOM");
+  view->storage = bt_storage_retain(tensor->storage);
+  view->offset = tensor->offset;
+  view->shape = shape;
+  view->strides[0] = tensor->strides[1];
+  view->strides[1] = tensor->strides[0];
+  view->dtype = tensor->dtype;
+  view->device = tensor->device;
+  view->refcount = 1;
+  *out = view;
+  return BT_OK;
+}
+
 bt_status_t bt_tensor_copy_to_host(const bt_tensor_t* tensor, void* dst, size_t dst_bytes) {
   if (!tensor || !dst) return bt_fail(BT_ERR_INVALID_ARGUMENT, "bt_tensor_copy_to_host: NULL");
   // Strided copy is a separate op; claiming contiguous-only here avoids wrong data.
