@@ -807,3 +807,26 @@ important locked consequence is procedural: **end-to-end training parity is a
 required gate for autograd/view changes**, because the isolated harness did not
 detect this error. Next: a safe contiguous full-shape gradient kernel or a
 fully stride-audited tensor stack.
+
+---
+
+## 2026-11-21 — Gradient gate and safe broadcast elimination (exp_020)
+
+**Context.** exp_019 locked the procedural requirement; `ones * grad` still
+cost bandwidth and an extra input tensor, and stride-0 views were unsafe.
+
+**Options considered.** (1) Leave `ones * grad`, (2) restore the unsafe view,
+(3) a dedicated kernel writing a contiguous full-shape gradient.
+
+**Decision.** Option 3, recorded in `experiments/exp_020/HYPOTHESIS.md`, plus a
+hard `tests/parity/grad_flow.py` gate wired into `run.py` (43/43) and CI. The
+gate was shown to FAIL on a corrupted gradient whose loss still matched, then
+PASS on the correct path (`grad_flow_FAULT_detected.json`, `grad_flow_PASS.json`).
+
+**Consequences.** Captured step 0.240 → **0.219 ms** (~1.10×), graph ratio
+0.278 → **0.304** (≥0.31 narrowly missed), eager 1.669 → **1.57 ms** (ratio
+0.62). Dispatch count is unchanged at 41 because the kernel replaces one mul
+1:1; the gain is from removing the ones tensor. Parity holds (43/43, CTest
+both builds, MNIST/CIFAR gradients within tolerance). The ≥3-dispatch and
+≥0.31 stretch predictions are recorded as misses. Remaining cost: ~15 scalar
+elementwise and 10 tiled GEMM dispatches per step.

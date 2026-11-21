@@ -27,14 +27,16 @@ jobs:
         run: |
           python -m pip install numpy
           python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
-      - name: Parity harness
+      - name: Parity harness (isolated ops + gradient-flow gate)
         run: python tests/parity/run.py
       - name: Upload parity report
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: parity-report-windows
-          path: tests/parity/reports/latest.json
+          path: |
+            tests/parity/reports/latest.json
+            tests/parity/reports/grad_flow.json
 
   linux:
     name: Linux (gcc + Ninja, software Vulkan available)
@@ -61,11 +63,13 @@ jobs:
         run: |
           python -m pip install numpy
           python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
-      - name: Parity harness
+      - name: Parity harness (isolated ops + gradient-flow gate)
         run: python tests/parity/run.py
       - name: Upload parity report
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: parity-report-linux
-          path: tests/parity/reports/latest.json
+          path: |
+            tests/parity/reports/latest.json
+            tests/parity/reports/grad_flow.json

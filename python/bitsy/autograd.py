@@ -45,8 +45,9 @@ def reduce_sum_op(t:"Tensor", axis:int, keepdim:bool) -> "Tensor":
     shp[axis] = 1
     gg = g.reshape(*shp)
     # exp_019: zero-dispatch broadcast view; reduce_sum is stride-aware now.
-    ones = Tensor.from_numpy(np.ones(t.shape, np.float32), t.device)
-    return (ones * gg,)
+    # exp_020: dedicated contiguous full-shape gradient kernel (no ones tensor,
+    # no unsafe stride-0 view).
+    return (Tensor(C.broadcast_grad(gg._t, t.shape), False, t.device),)
   return t._op(out, (t,), back)
 
 def _unbroadcast(g:"Tensor", shape:tuple[int, ...]) -> "Tensor":

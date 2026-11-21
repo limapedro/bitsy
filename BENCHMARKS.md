@@ -146,6 +146,21 @@ kernel, taking it to **0.234–0.246 ms** and the graph ratio to 0.277–0.287.
 The ≥0.29 stretch ratio was just missed. Remaining cost: ~19 scalar elementwise
 and 10 GEMM dispatches. See `experiments/exp_015`–`exp_018/FINDINGS.md`.
 
+## End-to-end gradient-flow gate (exp_020)
+
+`tests/parity/grad_flow.py` is now a **required** parity case (43/43 total)
+and runs in CI: one MLP step in Bitsy vs PyTorch CUDA/CPU, comparing loss, all
+four parameter gradients and all post-step parameters. It was proven to fail
+on a deliberately corrupted gradient even when loss still matched, closing the
+gap that let exp_019's bad broadcast view through.
+
+With that gate in place, `ones * grad` was replaced by a dedicated kernel that
+writes a contiguous full-shape gradient (no unsafe stride-0 view). Captured
+step 0.240 → **0.219 ms**, graph ratio 0.278 → **0.304**, eager step 1.669 →
+**1.57 ms**, eager ratio 0.62. Dispatch count is unchanged at 41 (1:1 kernel
+replacement); the graph ≥0.31 stretch ratio was narrowly missed. See
+`experiments/exp_020/FINDINGS.md`.
+
 ## exp_019 — negative result (kept for honesty)
 
 A zero-dispatch broadcast view for reduction gradients was tried. It improved

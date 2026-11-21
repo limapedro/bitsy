@@ -426,6 +426,27 @@ bt_status_t bt_vk_tanh_backward(const bt_tensor_t* g, const bt_tensor_t* t, bt_t
   return status;
 }
 
+/* exp_020: contiguous full-shape gradient from a reduction gradient. */
+typedef struct { uint32_t n, outN, gM, gN; int32_t gs0, gs1; } vk_bcast_pc_t;
+
+bt_status_t bt_vk_broadcast_grad(const bt_tensor_t* g, bt_tensor_t* out) {
+  if (!g_vk.ready) return bt_fail(BT_ERR_BACKEND, "bt_vk_broadcast_grad: Vulkan not ready");
+  int64_t n = bt_shape_numel(&out->shape);
+  if (!n) return BT_OK;
+  vk_bcast_pc_t pc = { .n = (uint32_t)n, .outN = (uint32_t)out->shape.dims[1],
+                       .gM = (uint32_t)g->shape.dims[0], .gN = (uint32_t)g->shape.dims[1],
+                       .gs0 = (int32_t)g->strides[0], .gs1 = (int32_t)g->strides[1] };
+  VkBuffer buffers[4] = {
+    bt_vk_buffer_of(g->storage->gpu), bt_vk_buffer_of(g->storage->gpu),
+    bt_vk_buffer_of(out->storage->gpu), bt_vk_buffer_of(g->storage->gpu),
+  };
+  bt_status_t status = dispatch(g_vk.broadcast_grad_pipeline, buffers, &pc, sizeof(pc),
+                                (uint32_t)((n + 255) / 256), 1, "broadcast_grad",
+                                (double)n * 2.0 * 4.0, 0.0);
+  if (status == BT_OK) bt_storage_bump_version(out->storage);
+  return status;
+}
+
 /* *** convolution *** */
 
 typedef struct {
