@@ -1069,3 +1069,24 @@ graph-replay launch cost). Parity 43/43 incl. gradient gate, CTest both builds.
 This locks in the decision that further elementwise kernel work is not
 justified; the remaining classes are eager submit cost, standalone GEMM and
 captured full-step graph.
+
+---
+
+## 2026-11-21 — Lazy device-time timestamps (exp_032)
+
+**Context.** Every `bt_vk_wait()` collected device-time queries with a WAIT_BIT
+and reset the pool, even for callers that never read device time.
+
+**Options considered.** (1) Keep unconditional collection, (2) gate recording
+and collection on a `timestamps_wanted` flag set by `bt_vk_device_time_ms()`;
+the profiler's separate query pool is untouched.
+
+**Decision.** Option 2, recorded in `experiments/exp_032/HYPOTHESIS.md`.
+
+**Consequences.** Captured step 0.156 → 0.145–0.166 ms (ratio 0.46–0.49), eager
+step 0.894–0.899 ms (ratio 1.23–1.24); elementwise/GEMM unchanged. The ≥1.1×
+prediction was **not met** — the benchmarks that report device time request it
+every iteration and therefore cannot benefit — so this is kept as a neutral
+cleanup, not a speed win. The first `device_time_ms()` call after enabling
+returns 0 by design (documented). Parity holds (43/43, CTest both builds). This
+confirms the eager gap is WDDM queue submission itself, not query collection.
