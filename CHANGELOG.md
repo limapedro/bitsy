@@ -4,6 +4,22 @@ All notable changes to this project are documented in this file. The format is
 based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+## [0.2.0-bitsy] - 2026-11-21
+
+### Changed
+
+- Full rename: Hagane → Bitsy. GitHub repo `limapedro/bitsy`, public headers
+  `include/bitsy/bt_*.h`, C ABI `bt_*` / `BT_*`, shared library `bitsy.dll` /
+  `libbitsy.so`, Python import `import bitsy as bt`. The previous exact-name
+  repo was preserved as `limapedro/bitsy-legacy-2023` (nothing deleted).
+- Code style now follows tinygrad / geohot: 2-space indentation in C and
+  Python, dense one-line functions, section banners, and short comments that
+  explain *why*. Rules and source links are in `ARCHITECTURE_LOG.md`.
+- Re-verified after both changes: CTest 1/1, parity 13/13 bit-exact against
+  PyTorch CPU and CUDA on the GTX 1660 SUPER.
+
 ## [0.1.0-m0] - 2026-11-21
 
 ### Added
@@ -16,5 +32,3 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Initial `add` operator on the `cpu_ref` backend with PyTorch broadcasting
   semantics; 13/13 parity cases pass bit-exactly against PyTorch CPU and CUDA.
 - M0 status report (`docs/m0_status.md`) and committed parity report.
-
-## [Unreleased]

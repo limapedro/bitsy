@@ -1,9 +1,9 @@
-#ifndef HAGANE_SRC_CORE_ERROR_INTERNAL_H
-#define HAGANE_SRC_CORE_ERROR_INTERNAL_H
+#ifndef BITSY_SRC_CORE_ERROR_INTERNAL_H
+#define BITSY_SRC_CORE_ERROR_INTERNAL_H
 
-#include <hagane/hg_error.h>
+#include <bitsy/bt_error.h>
 
 /* Record a formatted thread-local error and return `status` for convenience. */
-hg_status_t hg_fail(hg_status_t status, const char* fmt, ...);
+bt_status_t bt_fail(bt_status_t status, const char* fmt, ...);
 
-#endif /* HAGANE_SRC_CORE_ERROR_INTERNAL_H */
+#endif /* BITSY_SRC_CORE_ERROR_INTERNAL_H */

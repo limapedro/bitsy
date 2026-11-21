@@ -8,7 +8,7 @@ only by a later entry that supersedes it and explains why.
 
 ## 2026-11-21 — Core language is C11, with no C++ in the core
 
-**Context.** Hagane must be a small, auditable framework whose internals a C
+**Context.** Bitsy must be a small, auditable framework whose internals a C
 reader can follow. PyTorch's ATen is C++, but the brief requires a C core.
 
 **Options considered.** (1) C11 core with a thin C ABI, (2) C++ core with a C
@@ -27,15 +27,15 @@ gcc's.
 
 ## 2026-11-21 — Refcounted storage/tensor split with explicit ownership
 
-**Context.** PyTorch views share storage; Hagane must reproduce view semantics
+**Context.** PyTorch views share storage; Bitsy must reproduce view semantics
 and detect invalid in-place edits during backward.
 
 **Options considered.** (1) One object with embedded data and copied views,
 (2) refcounted storage plus a lightweight tensor view, (3) arena with manual
 lifetimes.
 
-**Decision.** `hg_storage_t` is a refcounted buffer owning bytes and a version
-counter. `hg_tensor_t` is a view holding `(storage, offset, sizes, strides,
+**Decision.** `bt_storage_t` is a refcounted buffer owning bytes and a version
+counter. `bt_tensor_t` is a view holding `(storage, offset, sizes, strides,
 dtype, device, requires_grad)`. Both expose `retain`/`release`. No hidden
 global ownership.
 
@@ -56,7 +56,7 @@ table keyed by `(op, backend, dtype)`, (3) virtual function tables in C.
 
 **Decision.** A dispatcher table keyed by `(op id, backend id, dtype id)` maps
 to a backend kernel function pointer, with a generic fallback and a clear
-`HG_ERR_NOT_IMPLEMENTED` result when no entry exists.
+`BT_ERR_NOT_IMPLEMENTED` result when no entry exists.
 
 **Consequences.** Adding a backend kernel is a registration, not an edit to
 the operator body. The table is the single place to audit coverage.
@@ -69,11 +69,11 @@ the operator body. The table is the single place to audit coverage.
 errors, and Python bindings need to raise exceptions with PyTorch-like types
 and intent.
 
-**Options considered.** (1) Exceptions across the C ABI, (2) `hg_status_t`
+**Options considered.** (1) Exceptions across the C ABI, (2) `bt_status_t`
 returns plus a thread-local message buffer, (3) global error singleton.
 
-**Decision.** All fallible API functions return `hg_status_t`. A thread-local
-message buffer is readable with `hg_get_last_error()`. Only proven-unrecoverable
+**Decision.** All fallible API functions return `bt_status_t`. A thread-local
+message buffer is readable with `bt_get_last_error()`. Only proven-unrecoverable
 internal corruption may abort, and each such site must be documented at the
 call.
 
@@ -93,7 +93,7 @@ extension (milestone M6).
 `ctypes`/`cffi` shim for early bring-up and replace it at M6, (3) implement the
 core in Python first.
 
-**Decision.** Use a narrow, explicit `ctypes` shim (`python/hagane/_ctypes.py`)
+**Decision.** Use a narrow, explicit `ctypes` shim (`python/bitsy/_ctypes.py`)
 that loads the built shared library and wraps only the bring-up API. It is
 marked as transitional in `DEVIATIONS.md` and in its docstring, and is replaced
 by the C extension in M6. No third-party runtime dependency is introduced.
@@ -105,13 +105,13 @@ complete. The shim is not the public `Tensor` API; it is test tooling.
 
 ## 2026-11-21 — Licensing: BSD-3-Clause with PyTorch attribution
 
-**Context.** Hagane studies PyTorch's API and source for semantics. PyTorch is
+**Context.** Bitsy studies PyTorch's API and source for semantics. PyTorch is
 BSD-3-Clause.
 
 **Options considered.** (1) BSD-3-Clause with a NOTICE file, (2) MIT, (3)
 Apache-2.0.
 
-**Decision.** License Hagane under BSD-3-Clause and include `NOTICE` crediting
+**Decision.** License Bitsy under BSD-3-Clause and include `NOTICE` crediting
 the PyTorch project and reproducing its license text.
 
 **Consequences.** Derived semantics and algorithms are attributed. PyTorch is
@@ -146,7 +146,7 @@ compiled from GLSL to SPIR-V reproducibly.
 **Options considered.** (1) Hand-written Makefiles, (2) CMake + Ninja with
 `glslc` at build time, (3) runtime GLSL compilation.
 
-**Decision.** CMake 3.20+ with Ninja. A `hg_add_shader()` helper compiles each
+**Decision.** CMake 3.20+ with Ninja. A `bt_add_shader()` helper compiles each
 `.comp` to `.spv` with `glslc` from the Vulkan SDK. Vulkan headers are 1.3, but
 the targeted feature set is Vulkan 1.2 as exposed by Turing; optional
 extensions are always queried, never assumed.
@@ -236,3 +236,77 @@ expected to be slow on this GPU.
 **Consequences.** Reduced-precision GEMM will not match PyTorch's tensor-core
 throughput, but it matches the honest regular-core baseline and keeps accuracy
 no worse than PyTorch's FP32-accumulate path.
+
+---
+
+## 2026-11-21 — Project rename: Hagane is now Bitsy (supersedes all prior naming)
+
+**Context.** The user requested the project be called Bitsy. Every user-visible
+name, document, header, symbol prefix and Python import must change; the
+architecture and milestone history stay intact.
+
+**Options considered.** (1) Alias `bitsy` while keeping `hagane` internally,
+(2) full rename of repo, documents, paths, C ABI prefix (`hg_` → `bt_`) and
+Python package (`import bitsy as bt`), (3) rename only the repository.
+
+**Decision.** Full rename. GitHub repo `limapedro/hagane` → `limapedro/bitsy`;
+`include/hagane` → `include/bitsy`; `hg_*.h` → `bt_*.h`; `hagane.h` →
+`bitsy.h`; `python/hagane` → `python/bitsy`; C symbols `hg_*`/`HG_*` →
+`bt_*`/`BT_*`; shared library `bitsy.dll` / `libbitsy.so`; Python import
+convention `import bitsy as bt`. Version `v0.1.0-m0` stays published and a new
+`v0.2.0-bitsy` tag marks the rename.
+
+**Consequences.** No compatibility shim for the old `hg_` ABI is provided: this
+is a pre-1.0 rename and every call site in the tree is updated atomically.
+PyTorch API parity is unaffected — only the Hagane-specific prefix changed.
+
+---
+
+## 2026-11-21 — GitHub name collision: preserve the old `bitsy` repository
+
+**Context.** `limapedro/bitsy` already existed: a 11 MB deep-learning framework
+last updated 2024-05-15 with real commits (`add CNN layers`, `conv2d`, MNIST
+training). It blocked the requested name.
+
+**Options considered.** (1) Delete it, (2) rename it and keep all history,
+(3) leave it and use a different name for this project.
+
+**Decision.** Rename the old repo to `limapedro/bitsy-legacy-2023`. Nothing was
+deleted; its full history and data remain available. The other two similarly
+named repos (`bitsy_2`, `bitsy_alpha`) do not collide with the exact name and
+were left untouched.
+
+**Consequences.** The exact `bitsy` name is now owned by this project. The
+legacy repo is preserved read-mostly as a historical artifact.
+
+---
+
+## 2026-11-21 — Code style follows tinygrad / geohot: small, dense, commented
+
+**Context.** The user asked for geohot's style and pointed at tinygrad. I read
+the actual source rather than guessing:
+`https://raw.githubusercontent.com/tinygrad/tinygrad/master/tinygrad/helpers.py`,
+`.../tinygrad/tensor.py`, `.../tinygrad/nn/optim.py`. Observed rules there:
+2-space indentation; many one-line functions that return directly; walrus
+assignment inside conditions; `@dataclass(frozen=True)` for configs;
+`# *** section ***` banners instead of structural boilerplate; short `NOTE:`
+and explanatory comments that say *why* ("Python has a non moving GC, so this
+should be okay", "a self assign is a NOOP", "classic momentum does post
+learning rate update"); `assert` for internal invariants and `RuntimeError`
+with context for user errors; tiny helpers that do one thing.
+
+**Options considered.** (1) Keep the verbose, heavily-separated style of M0,
+(2) adopt the tinygrad conventions above in both C and Python, (3) adopt only
+the Python conventions.
+
+**Decision.** Adopt the conventions in both languages, adapted to C11:
+2-space indentation; small functions with early returns; no wrapper layers
+that add no behaviour; section banners; comments on non-obvious lines that
+explain *why*; explicit invariants at API boundaries; keep the public header
+comments required by the quality bar. Python uses 2-space indentation, one-line
+methods where readable, walrus assignment, `__slots__`, frozen dataclasses and
+lazy imports.
+
+**Consequences.** Files get shorter and denser. Behaviour must not change:
+every refactor is re-verified with CTest and the 13-case PyTorch parity suite.
+This is a style change only, not a semantic deviation from PyTorch.

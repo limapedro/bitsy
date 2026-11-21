@@ -1,17 +1,17 @@
-Hagane (鋼)
-Copyright (c) 2026, Hagane contributors
+Bitsy
+Copyright (c) 2026, Bitsy contributors
 
 This product includes software developed by the PyTorch contributors
 (https://github.com/pytorch/pytorch), licensed under the BSD 3-Clause License.
 
-Hagane studies PyTorch's public API, documentation, and source code to reproduce
+Bitsy studies PyTorch's public API, documentation, and source code to reproduce
 its semantics faithfully. Operator naming, broadcasting and type-promotion
 rules, view behaviour, autograd conventions, and state-dict structure are
-derived from PyTorch. Where Hagane ports an algorithm or mirrors a structure
+derived from PyTorch. Where Bitsy ports an algorithm or mirrors a structure
 from PyTorch, that derivation is acknowledged here.
 
 PyTorch is used only as a numeric oracle and performance baseline during
-development and testing. The Hagane Python package does not import or depend on
+development and testing. The Bitsy Python package does not import or depend on
 PyTorch at runtime.
 
 The full PyTorch license text is reproduced below.

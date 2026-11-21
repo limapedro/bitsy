@@ -1,34 +1,40 @@
-# Hagane (鋼)
+# Bitsy
 
-[![CI](https://github.com/limapedro/hagane/actions/workflows/ci.yml/badge.svg)](https://github.com/limapedro/hagane/actions/workflows/ci.yml)
+[![CI](https://github.com/limapedro/bitsy/actions/workflows/ci.yml/badge.svg)](https://github.com/limapedro/bitsy/actions/workflows/ci.yml)
 
-Hagane is a deep learning framework written from scratch in **C11** with a
+Bitsy is a deep learning framework written from scratch in **C11** with a
 **Vulkan compute** backend and a Python front end that mirrors PyTorch.
-The goal is that PyTorch code moves to Hagane with minimal edits:
+The goal is that PyTorch code moves to Bitsy with minimal edits
+(`import bitsy as bt`). The M0 bring-up surface is intentionally tiny:
 
 ```python
-import hagane as hg          # instead of `import torch`
+import numpy as np
+import bitsy as bt                    # no PyTorch dependency at runtime
 
-x = hg.tensor([1.0, 2.0, 3.0])
-y = hg.tensor([4.0, 5.0, 6.0])
-print(x + y)                 # tensor([5., 7., 9.])
+a = bt.Tensor.from_numpy(np.array([1., 2., 3.], dtype=np.float32))
+b = bt.Tensor.from_numpy(np.array([4., 5., 6.], dtype=np.float32))
+print(bt.add(a, b).numpy())            # [5. 7. 9.]
 ```
+
+The full `bt.tensor` / `bt.nn` / `bt.optim` surface lands in M6/M7.
 
 ## Status
 
-**M0 "Anvil" — foundations complete (`v0.1.0-m0`).** Hagane is not yet usable
-for training. See [docs/m0_status.md](docs/m0_status.md) for the evidence,
+**M0 "Anvil" — foundations complete (`v0.2.0-bitsy`, renamed from `v0.1.0-m0`
+"Hagane").** Bitsy is not yet usable for training. See
+[docs/m0_status.md](docs/m0_status.md) for the evidence,
 [ROADMAP.md](ROADMAP.md) for the milestone plan, and
-[CHANGELOG.md](CHANGELOG.md) for released changes.
+[CHANGELOG.md](CHANGELOG.md) for released changes. The earlier `bitsy` repo on
+this account was preserved as `bitsy-legacy-2023`; nothing was deleted.
 
 ## Two goals
 
 Everything in the project serves two measurable goals:
 
 1. **Numeric parity.** For any supported operation, module or training step,
-   Hagane's outputs match PyTorch's within the tolerances in
+   Bitsy's outputs match PyTorch's within the tolerances in
    `tests/parity/tolerances.py`. Every claim is verified by running both.
-2. **Performance parity.** Hagane's Vulkan backend matches PyTorch's CUDA
+2. **Performance parity.** Bitsy's Vulkan backend matches PyTorch's CUDA
    backend on the *same GPU on the same machine*. Results are reported honestly
    in [BENCHMARKS.md](BENCHMARKS.md), including misses.
 
@@ -42,23 +48,23 @@ Everything in the project serves two measurable goals:
 - Backends: `cpu_ref` (naive, independent correctness oracle) and `vulkan`
   (the performance target).
 - Dynamic **autograd** graph with per-op backward functions.
-- Python package `hagane`, conventionally imported as `hg`, that mirrors
+- Python package `bitsy`, conventionally imported as `bt`, that mirrors
   PyTorch's API and does **not** depend on PyTorch at runtime.
 
 ## Repository map
 
 | Path | Contents |
 |---|---|
-| `include/hagane/` | Public C headers |
+| `include/bitsy/` | Public C headers |
 | `src/core/` | Storage, tensor, dtype, shape/stride math, dispatcher |
 | `src/autograd/` | Graph, engine, backward formulas |
 | `src/ops/` | Backend-independent op definitions |
 | `src/backends/cpu_ref/` | Naive reference kernels |
 | `src/backends/vulkan/` | Device, allocator, streams, pipelines, shaders |
-| `python/hagane/` | Python package |
+| `python/bitsy/` | Python package |
 | `python/ext/` | CPython C extension binding |
 | `tests/unit/` | C unit tests |
-| `tests/parity/` | Hagane-vs-PyTorch comparison harness |
+| `tests/parity/` | Bitsy-vs-PyTorch comparison harness |
 | `tests/golden/` | Small reference data and deterministic generators |
 | `benchmarks/` | Operators, models, and committed results |
 | `experiments/` | Hypothesis-first tuning experiments (`exp_NNN`) |
@@ -72,7 +78,7 @@ SDK 1.3+ with `glslc`.
 Windows, from a Visual Studio developer prompt:
 
 ```powershell
-cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DHG_BUILD_TESTS=ON
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DBT_BUILD_TESTS=ON
 cmake --build build
 ctest --test-dir build --output-on-failure
 ```
@@ -80,12 +86,12 @@ ctest --test-dir build --output-on-failure
 Linux:
 
 ```sh
-cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DHG_BUILD_TESTS=ON
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DBT_BUILD_TESTS=ON
 cmake --build build
 ctest --test-dir build --output-on-failure
 ```
 
-Vulkan is opt-in during the early milestones (`-DHG_ENABLE_VULKAN=ON`).
+Vulkan is opt-in during the early milestones (`-DBT_ENABLE_VULKAN=ON`).
 
 ## Parity testing
 
@@ -98,6 +104,14 @@ python tests/parity/run.py
 ```
 
 It writes a machine-readable report to `tests/parity/reports/latest.json`.
+
+## Code style
+
+Dense, small and direct, following the style of tinygrad / geohot: 2-space
+indentation in C and Python, one-line functions where they read cleanly,
+section banners, and short comments that explain **why** a line exists. The
+rules and the tinygrad sources they came from are recorded in
+[ARCHITECTURE_LOG.md](ARCHITECTURE_LOG.md) (2026-11-21 entry).
 
 ## Conventions and decisions
 
