@@ -43,6 +43,8 @@ void main() {
   else if (pc.op == 4) r = max(av, 0.0);
   else if (pc.op == 5) r = 1.0 / (1.0 + exp(-av));
   else if (pc.op == 6) r = tanh(av);
-  else r = exp(av);
+  else if (pc.op == 7) r = exp(av);
+  else if (pc.op == 10) r = log(av); // BT_OP_LOG = 10; 8 is transpose/copy
+  else r = av; // op 8: transpose (strides are swapped by the host)
   o[io] = r;
 }

@@ -22,7 +22,9 @@ APPROX = Tolerance("rtol_atol", rtol=1e-5, atol=1e-6,
 
 TOLERANCES:dict[tuple[str, str], Tolerance] = {
   **{(op, "float32"): EXACT for op in ("add", "sub", "mul", "div", "relu")},
-  **{(op, "float32"): APPROX for op in ("sigmoid", "tanh", "exp")},
+  **{(op, "float32"): APPROX for op in ("sigmoid", "tanh", "exp", "log")},
+  ("matmul", "float32"): Tolerance("rtol_atol", rtol=1e-5, atol=1e-5,
+                                   reason="fp32 accumulation order differs from cuBLAS"),
 }
 
 def tolerance_for(op:str, dtype:str) -> Tolerance:

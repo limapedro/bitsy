@@ -189,6 +189,24 @@ static void vulkan_add(void) {
   bt_tensor_release(r); bt_tensor_release(a); bt_tensor_release(b);
 }
 
+/* GEMM smoke test on both backends. */
+static void matmul_test(void) {
+  int64_t ad[2] = { 2, 3 }, bd[2] = { 3, 2 };
+  float av[6] = { 1.f, 2.f, 3.f, 4.f, 5.f, 6.f }, bv[6] = { 1.f, 2.f, 3.f, 4.f, 5.f, 6.f };
+  float out[4];
+  bt_device_t devices[2] = { bt_device_cpu(), bt_device_vulkan(0) };
+  for (int i = 0; i < 2; ++i) {
+    if (devices[i].type == BT_DEVICE_TYPE_VULKAN && !bt_has_vulkan()) continue;
+    bt_tensor_t* a = bt_tensor_create(ad, 2, BT_FLOAT32, devices[i], av);
+    bt_tensor_t* b = bt_tensor_create(bd, 2, BT_FLOAT32, devices[i], bv);
+    bt_tensor_t* r = NULL;
+    check_status(bt_matmul(a, b, &r), BT_OK, "matmul");
+    CHECK(r && bt_tensor_copy_to_host(r, out, sizeof(out)) == BT_OK);
+    CHECK(out[0] == 22.f && out[1] == 28.f && out[2] == 49.f && out[3] == 64.f);
+    bt_tensor_release(r); bt_tensor_release(a); bt_tensor_release(b);
+  }
+}
+
 /* *** suite *** */
 
 typedef void (*test_fn)(void);
@@ -197,7 +215,7 @@ int main(void) {
   check_status(bt_init(), BT_OK, "bt_init");
   const test_fn tests[] = {
     dtypes, devices, shapes, storage, tensor_creation,
-    add_basic, add_broadcast, add_scalar, add_empty, add_errors, vulkan_add
+    add_basic, add_broadcast, add_scalar, add_empty, add_errors, vulkan_add, matmul_test
   };
   const size_t count = sizeof(tests) / sizeof(tests[0]);
   for (size_t i = 0; i < count; ++i) tests[i]();

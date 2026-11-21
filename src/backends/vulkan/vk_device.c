@@ -6,6 +6,7 @@
 #include "../../core/error_internal.h"
 #include "vk_device_internal.h"
 #include "elementwise.spv.h"
+#include "matmul.spv.h"
 
 vk_ctx_t g_vk;
 
@@ -42,6 +43,21 @@ static bt_status_t pick_physical(void) {
   return g_vk.phys ? BT_OK : bt_fail(BT_ERR_BACKEND, "vulkan: device has no compute queue");
 }
 
+static bt_status_t pipeline_from_spv(const uint32_t* code, size_t bytes, VkPipeline* pipeline) {
+  VkShaderModuleCreateInfo sci = { .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+                                   .codeSize = bytes, .pCode = code };
+  VkShaderModule module;
+  VKCHECK(vkCreateShaderModule(g_vk.device, &sci, NULL, &module));
+  VkPipelineShaderStageCreateInfo stage = { .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+                                            .stage = VK_SHADER_STAGE_COMPUTE_BIT,
+                                            .module = module, .pName = "main" };
+  VkComputePipelineCreateInfo cpi = { .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
+                                      .stage = stage, .layout = g_vk.pipeline_layout };
+  VkResult result = vkCreateComputePipelines(g_vk.device, VK_NULL_HANDLE, 1, &cpi, NULL, pipeline);
+  vkDestroyShaderModule(g_vk.device, module, NULL); // the pipeline owns the code
+  return result == VK_SUCCESS ? BT_OK : bt_fail(BT_ERR_BACKEND, "vkCreateComputePipelines failed (%d)", (int)result);
+}
+
 static bt_status_t make_pipeline(void) {
   VkDescriptorSetLayoutBinding bindings[3];
   for (int i = 0; i < 3; ++i) {
@@ -70,20 +86,9 @@ static bt_status_t make_pipeline(void) {
                                      .pushConstantRangeCount = 1, .pPushConstantRanges = &pc };
   VKCHECK(vkCreatePipelineLayout(g_vk.device, &pli, NULL, &g_vk.pipeline_layout));
 
-  VkShaderModuleCreateInfo sci = { .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
-                                   .codeSize = elementwise_spv_bytes,
-                                   .pCode = elementwise_spv };
-  VkShaderModule module;
-  VKCHECK(vkCreateShaderModule(g_vk.device, &sci, NULL, &module));
-
-  VkPipelineShaderStageCreateInfo stage = { .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-                                            .stage = VK_SHADER_STAGE_COMPUTE_BIT,
-                                            .module = module, .pName = "main" };
-  VkComputePipelineCreateInfo cpi = { .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
-                                      .stage = stage, .layout = g_vk.pipeline_layout };
-  VKCHECK(vkCreateComputePipelines(g_vk.device, VK_NULL_HANDLE, 1, &cpi, NULL, &g_vk.pipeline));
-  vkDestroyShaderModule(g_vk.device, module, NULL); // the pipeline owns the code
-  return BT_OK;
+  bt_status_t status;
+  if ((status = pipeline_from_spv(elementwise_spv, elementwise_spv_bytes, &g_vk.pipeline))) return status;
+  return pipeline_from_spv(matmul_spv, matmul_spv_bytes, &g_vk.matmul_pipeline);
 }
 
 bt_status_t bt_vk_init(void) {
@@ -132,6 +137,7 @@ void bt_vk_shutdown(void) {
   bt_vk_allocator_shutdown();
   vkDeviceWaitIdle(g_vk.device);
   vkDestroyPipeline(g_vk.device, g_vk.pipeline, NULL);
+  vkDestroyPipeline(g_vk.device, g_vk.matmul_pipeline, NULL);
   vkDestroyPipelineLayout(g_vk.device, g_vk.pipeline_layout, NULL);
   vkDestroyDescriptorPool(g_vk.device, g_vk.descriptor_pool, NULL);
   vkDestroyDescriptorSetLayout(g_vk.device, g_vk.set_layout, NULL);

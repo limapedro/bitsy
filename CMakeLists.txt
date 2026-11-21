@@ -19,8 +19,9 @@ endif()
 set(BT_SOURCES
   src/core/error.c src/core/dtype.c src/core/device.c src/core/shape.c
   src/core/storage.c src/core/tensor.c src/core/dispatcher.c src/core/init.c
-  src/backends/cpu_ref/elementwise.c src/backends/cpu_ref/register.c
-  src/ops/elementwise.c)
+  src/backends/cpu_ref/elementwise.c src/backends/cpu_ref/matmul.c
+  src/backends/cpu_ref/register.c
+  src/ops/elementwise.c src/ops/matmul.c)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include(BitsyShader)
@@ -29,22 +30,26 @@ if(BT_ENABLE_VULKAN)
   find_package(Vulkan REQUIRED)
   find_package(Python3 COMPONENTS Interpreter REQUIRED)
 
-  set(SHADER_SRC ${CMAKE_CURRENT_SOURCE_DIR}/src/backends/vulkan/shaders/elementwise.comp)
-  set(SHADER_SPV ${CMAKE_BINARY_DIR}/generated/elementwise.spv)
-  set(SHADER_HEADER ${CMAKE_BINARY_DIR}/generated/elementwise.spv.h)
-  add_custom_command(OUTPUT ${SHADER_SPV} ${SHADER_HEADER}
-    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/generated
-    COMMAND ${BT_GLSLC} --target-env=vulkan1.2 -O -o ${SHADER_SPV} ${SHADER_SRC}
-    COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/spv_to_header.py ${SHADER_SPV} ${SHADER_HEADER}
-    DEPENDS ${SHADER_SRC} ${CMAKE_CURRENT_SOURCE_DIR}/tools/spv_to_header.py
-    COMMENT "Compiling elementwise.comp to SPIR-V and embedding it"
-    VERBATIM)
+  set(SHADER_HEADERS "")
+  foreach(SHADER elementwise matmul)
+    set(SHADER_SRC ${CMAKE_CURRENT_SOURCE_DIR}/src/backends/vulkan/shaders/${SHADER}.comp)
+    set(SHADER_SPV ${CMAKE_BINARY_DIR}/generated/${SHADER}.spv)
+    set(SHADER_HEADER ${CMAKE_BINARY_DIR}/generated/${SHADER}.spv.h)
+    add_custom_command(OUTPUT ${SHADER_SPV} ${SHADER_HEADER}
+      COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/generated
+      COMMAND ${BT_GLSLC} --target-env=vulkan1.2 -O -o ${SHADER_SPV} ${SHADER_SRC}
+      COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/spv_to_header.py ${SHADER_SPV} ${SHADER_HEADER}
+      DEPENDS ${SHADER_SRC} ${CMAKE_CURRENT_SOURCE_DIR}/tools/spv_to_header.py
+      COMMENT "Compiling ${SHADER}.comp to SPIR-V and embedding it"
+      VERBATIM)
+    list(APPEND SHADER_HEADERS ${SHADER_HEADER})
+  endforeach()
 
   list(APPEND BT_SOURCES
     src/backends/vulkan/vk_device.c
     src/backends/vulkan/vk_allocator.c
     src/backends/vulkan/vk_ops.c
-    ${SHADER_HEADER})
+    ${SHADER_HEADERS})
 endif()
 
 add_library(bitsy SHARED ${BT_SOURCES})

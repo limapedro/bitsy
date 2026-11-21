@@ -41,3 +41,4 @@ bt_status_t bt_relu(const bt_tensor_t* a, bt_tensor_t** out) { return unary(a, o
 bt_status_t bt_sigmoid(const bt_tensor_t* a, bt_tensor_t** out) { return unary(a, out, BT_OP_SIGMOID); }
 bt_status_t bt_tanh(const bt_tensor_t* a, bt_tensor_t** out) { return unary(a, out, BT_OP_TANH); }
 bt_status_t bt_exp(const bt_tensor_t* a, bt_tensor_t** out) { return unary(a, out, BT_OP_EXP); }
+bt_status_t bt_log(const bt_tensor_t* a, bt_tensor_t** out) { return unary(a, out, BT_OP_LOG); }

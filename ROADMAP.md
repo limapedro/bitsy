@@ -12,10 +12,10 @@ Status legend: **done** / **in progress** / **planned**.
 | M1 | Ingot | Tensor core on `cpu_ref`: storage, views, strides, broadcasting, creation, elementwise, reductions, full parity | planned |
 | M2 | Forge | Vulkan bring-up: device, allocator, streams, pipelines, shader build, transfers, first elementwise kernels | **in progress** |
 | M3 | Quench | Core op coverage on Vulkan: reductions, indexing, movement, sorting, cumulative, RNG parity | planned |
-| M4 | Strike | Autograd: graph, engine, backward formulas, hooks, `no_grad`, version counters, gradcheck | planned |
-| M5 | Temper | GEMM: naive → tiled → register-blocked, batched, FP16-storage, fused epilogues | planned |
+| M4 | Strike | Autograd: graph, engine, backward formulas, hooks, `no_grad`, version counters, gradcheck | **in progress** (interim Python graph + gradcheck passing) |
+| M5 | Temper | GEMM: naive → tiled → register-blocked, batched, FP16-storage, fused epilogues | **in progress** (naive kernel + parity done; tuning pending) |
 | M6 | Blade | Python library: CPython extension, full `Tensor` surface, NumPy/DLPack interop, wheels | planned |
-| M7 | Whetstone | `nn` and `optim`: modules, layers, losses, init, optimizers, schedulers, fused updates | planned |
+| M7 | Whetstone | `nn` and `optim`: modules, layers, losses, init, optimizers, schedulers, fused updates | **in progress** (minimal Linear/Sequential/SGD/CE done) |
 | M8 | Edge | Convolution and pooling: direct, im2col+GEMM, Winograd/FFT, small CNN | planned |
 | M9 | Grain | Normalization, attention, sequence models, small transformer | planned |
 | M10 | Hamon | Fusion and overhead: pointwise fusion, launch reduction, allocator tuning | planned |
@@ -56,3 +56,13 @@ name `bitsy` was preserved as `limapedro/bitsy-legacy-2023`, not deleted.
 - [ ] M2 status report and tagged release
 
 Performance targets are not met; see `experiments/exp_001/FINDINGS.md`.
+
+## Current work: M4/M5/M7 — GEMM, gradients, MNIST
+
+- [x] `bt_matmul` / `bt_transpose` on cpu_ref and Vulkan, 3 parity cases
+- [x] `bt_log` on both backends for cross-entropy
+- [x] 40/40 parity cases across 10 ops and both backends
+- [x] Gradient parity vs PyTorch CUDA: loss diff 1.2e-7, W grad 6.0e-8 (`tests/parity/reports/gradcheck.json`)
+- [x] MNIST MLP: 10 epochs, loss curves and accuracy identical to PyTorch CUDA, final W1 diff 1.5e-7 (`benchmarks/results/mnist_mlp_parity.json`)
+- [ ] Move autograd into C; replace unbroadcast CPU roundtrip with a reduction kernel
+- [ ] Tiled/autotuned GEMM experiment; CIFAR/text/GAN/quantization parity

@@ -5,11 +5,12 @@ used by the parity harness. M6 replaces them with the CPython extension and the
 full PyTorch-compatible ``bt.Tensor`` surface.
 """
 
+from . import autograd, nn, optim
 from ._ctypes import (BitsyError, Tensor, add, sub, mul, div, relu, sigmoid,
-                      tanh, exp, device, dtype_size, has_vulkan, last_error,
-                      shutdown, version)
+                      tanh, exp, log, matmul, mm, transpose, device, dtype_size, has_vulkan,
+                      last_error, shutdown, version)
 
 __version__ = "0.2.0-bitsy"
 __all__ = ["BitsyError", "Tensor", "add", "sub", "mul", "div", "relu", "sigmoid",
-           "tanh", "exp", "device", "dtype_size", "has_vulkan", "last_error",
-           "shutdown", "version", "__version__"]
+           "tanh", "exp", "log", "matmul", "mm", "transpose", "device", "dtype_size", "has_vulkan",
+           "last_error", "shutdown", "version", "__version__"]

@@ -19,6 +19,7 @@ typedef struct {
   VkDescriptorSet set;
   VkPipelineLayout pipeline_layout;
   VkPipeline pipeline;
+  VkPipeline matmul_pipeline;
   VkPhysicalDeviceProperties props;
   int ready;
 } vk_ctx_t;

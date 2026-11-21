@@ -6,6 +6,17 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added (M4/M5/M7 in progress)
+
+- `bt_matmul`, `bt_transpose` and `bt_log` on cpu_ref and Vulkan; 40/40 parity
+  cases across ten ops and both backends.
+- Interim Python autograd/nn/optim surface with device-native compute:
+  `Tensor.backward`, `Linear`, `Tanh`, `Sequential`, `mse_loss`,
+  `cross_entropy`, `SGD`.
+- Committed gradient parity (`tests/parity/reports/gradcheck.json`) and MNIST
+  training parity (`benchmarks/results/mnist_mlp_parity.json`): 10 epochs with
+  loss curves and accuracy matching PyTorch CUDA.
+
 ### Added (M2 in progress)
 
 - Vulkan compute backend on the GTX 1660 Super: device selection, embedded

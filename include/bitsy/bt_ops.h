@@ -22,6 +22,15 @@ BT_API bt_status_t bt_relu(const bt_tensor_t* a, bt_tensor_t** out);
 BT_API bt_status_t bt_sigmoid(const bt_tensor_t* a, bt_tensor_t** out);
 BT_API bt_status_t bt_tanh(const bt_tensor_t* a, bt_tensor_t** out);
 BT_API bt_status_t bt_exp(const bt_tensor_t* a, bt_tensor_t** out);
+BT_API bt_status_t bt_log(const bt_tensor_t* a, bt_tensor_t** out);
+
+/* Row-major 2D matrix multiply: (M,K) x (K,N) -> (M,N).
+ * FP32 accumulate; output allocated by the caller of the C API. */
+BT_API bt_status_t bt_matmul(const bt_tensor_t* a, const bt_tensor_t* b,
+                             bt_tensor_t** out);
+
+/* 2D transpose: (M,N) -> (N,M). Used by matmul backward. */
+BT_API bt_status_t bt_transpose(const bt_tensor_t* a, bt_tensor_t** out);
 
 #ifdef __cplusplus
 }
