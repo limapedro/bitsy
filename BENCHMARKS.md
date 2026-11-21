@@ -26,6 +26,22 @@ overhead on small tensors and shader/bandwidth efficiency on large ones. Raw
 results: `benchmarks/results/elementwise.json`,
 `experiments/exp_001/before.json`, `experiments/exp_001/after.json`.
 
+## M5 GEMM results (2026-11-21)
+
+`python benchmarks/ops/gemm.py`, same GTX 1660 Super, median of 30 iterations
+after 5 warm-ups, sync per iteration. Select the kernel with `BT_GEMM_TILED`.
+
+| n | kernel | Bitsy ms | PyTorch ms | ratio (target >= 0.80) | Bitsy GFLOPS |
+|---:|---|---:|---:|---:|---:|
+| 256 | naive | 0.237 | 0.043 | 0.18 | 141 |
+| 256 | tiled | 0.146 | 0.046 | 0.31 | 229 |
+| 1024 | naive | 10.224 | 0.908 | 0.09 | 210 |
+| 1024 | tiled | 4.337 | 0.961 | 0.22 | 495 |
+
+**GEMM target missed** (0.22 vs >= 0.80). The tiled kernel is 2.36x faster than
+naive at n=1024; see `experiments/exp_002/` for the hypothesis, raw before/after
+JSON and findings. Both kernels pass 40/40 parity cases.
+
 ## Comparison target
 
 PyTorch CUDA on the **same** GTX 1660 Super, in the same machine, with warm-up,

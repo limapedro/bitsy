@@ -1,0 +1,84 @@
+#version 450
+
+/* One shader handles conv forward and all three backward modes. Mode is a
+ * uniform push constant, so no lane diverges on the branch. NCHW layout. */
+layout(local_size_x = 256) in;
+
+layout(std430, binding = 0) readonly buffer A { float a[]; };
+layout(std430, binding = 1) readonly buffer B { float b[]; };
+layout(std430, binding = 2) writeonly buffer O { float o[]; };
+layout(std430, binding = 3) readonly buffer BI { float bias[]; };
+
+layout(push_constant) uniform PC {
+  uint mode, n;
+  int N, C, H, W, Och, kH, kW, pad, stride, OH, OW;
+  int sa[4], sw[4], sd[4], so[4];
+  int has_bias;
+} pc;
+
+int at4(int base, int s0, int s1, int s2, int s3, int n, int c, int y, int x) {
+  return base + n * s0 + c * s1 + y * s2 + x * s3;
+}
+
+void main() {
+  uint idx = gl_GlobalInvocationID.x;
+  if (idx >= pc.n) return;
+
+  if (pc.mode == 0u) {
+    int n = int(idx / uint(pc.Och * pc.OH * pc.OW));
+    int oc = int(idx / uint(pc.OH * pc.OW)) % pc.Och;
+    int y = int(idx / uint(pc.OW)) % pc.OH;
+    int x = int(idx) % pc.OW;
+    float sum = pc.has_bias == 1 ? bias[oc] : 0.0;
+    for (int c = 0; c < pc.C; ++c)
+      for (int ky = 0; ky < pc.kH; ++ky)
+        for (int kx = 0; kx < pc.kW; ++kx) {
+          int yy = y * pc.stride - pc.pad + ky, xx = x * pc.stride - pc.pad + kx;
+          if (yy < 0 || xx < 0 || yy >= pc.H || xx >= pc.W) continue;
+          sum += a[at4(0, pc.sa[0], pc.sa[1], pc.sa[2], pc.sa[3], n, c, yy, xx)] *
+                 b[at4(0, pc.sw[0], pc.sw[1], pc.sw[2], pc.sw[3], oc, c, ky, kx)];
+        }
+    o[at4(0, pc.so[0], pc.so[1], pc.so[2], pc.so[3], n, oc, y, x)] = sum;
+  } else if (pc.mode == 1u) {
+    int n = int(idx / uint(pc.C * pc.H * pc.W));
+    int c = int(idx / uint(pc.H * pc.W)) % pc.C;
+    int y = int(idx / uint(pc.W)) % pc.H;
+    int x = int(idx) % pc.W;
+    float sum = 0.0;
+    for (int oc = 0; oc < pc.Och; ++oc)
+      for (int ky = 0; ky < pc.kH; ++ky)
+        for (int kx = 0; kx < pc.kW; ++kx) {
+          int ty = y + pc.pad - ky, tx = x + pc.pad - kx;
+          if (ty < 0 || tx < 0) continue;
+          if (pc.stride > 1 && (ty % pc.stride != 0 || tx % pc.stride != 0)) continue;
+          int oy = ty / pc.stride, ox = tx / pc.stride;
+          if (oy >= pc.OH || ox >= pc.OW) continue;
+          sum += a[at4(0, pc.sd[0], pc.sd[1], pc.sd[2], pc.sd[3], n, oc, oy, ox)] *
+                 b[at4(0, pc.sw[0], pc.sw[1], pc.sw[2], pc.sw[3], oc, c, ky, kx)];
+        }
+    o[at4(0, pc.so[0], pc.so[1], pc.so[2], pc.so[3], n, c, y, x)] = sum;
+  } else if (pc.mode == 2u) {
+    int oc = int(idx / uint(pc.C * pc.kH * pc.kW));
+    int c = int(idx / uint(pc.kH * pc.kW)) % pc.C;
+    int ky = int(idx / uint(pc.kW)) % pc.kH;
+    int kx = int(idx) % pc.kW;
+    float sum = 0.0;
+    for (int n = 0; n < pc.N; ++n)
+      for (int y = 0; y < pc.OH; ++y)
+        for (int x = 0; x < pc.OW; ++x) {
+          int yy = y * pc.stride - pc.pad + ky, xx = x * pc.stride - pc.pad + kx;
+          if (yy < 0 || xx < 0 || yy >= pc.H || xx >= pc.W) continue;
+          sum += b[at4(0, pc.sd[0], pc.sd[1], pc.sd[2], pc.sd[3], n, oc, y, x)] *
+                 a[at4(0, pc.sa[0], pc.sa[1], pc.sa[2], pc.sa[3], n, c, yy, xx)];
+        }
+    o[at4(0, pc.so[0], pc.so[1], pc.so[2], pc.so[3], oc, c, ky, kx)] = sum;
+  } else {
+    int oc = int(idx);
+    float sum = 0.0;
+    for (int n = 0; n < pc.N; ++n)
+      for (int y = 0; y < pc.OH; ++y)
+        for (int x = 0; x < pc.OW; ++x)
+          sum += a[at4(0, pc.sa[0], pc.sa[1], pc.sa[2], pc.sa[3], n, oc, y, x)];
+    o[oc] = sum;
+  }
+}

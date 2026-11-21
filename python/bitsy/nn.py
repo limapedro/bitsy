@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 
+from . import _ctypes as C
 from .autograd import Tensor
 
 class Parameter(Tensor):
@@ -35,6 +36,25 @@ class Linear(Module):
     if n not in self._ones:
       self._ones[n] = Tensor.from_numpy(np.ones((n, 1), np.float32), x.device)
     return x @ self.W + self._ones[n] @ self.b
+
+class Conv2d(Module):
+  """NCHW 3x3 convolution with pad/stride; gradients run on the same device."""
+  def __init__(self, in_ch:int, out_ch:int, rng, device:str="cpu", pad:int=1, stride:int=1) -> None:
+    w = (rng.standard_normal((out_ch, in_ch, 3, 3)) * 0.1).astype(np.float32)
+    self.W = Parameter(Tensor.from_numpy(w, device))
+    self.b = Parameter(Tensor.from_numpy(np.zeros((out_ch,), np.float32), device))
+    self.pad, self.stride = pad, stride
+
+  def forward(self, x:Tensor) -> Tensor:
+    ct = C.conv2d(x._t, self.W._t, self.b._t, self.pad, self.stride)
+    def back(g):
+      dx = C.conv2d_backward_x(g._t, self.W._t, x.shape, self.pad, self.stride)
+      dw = C.conv2d_backward_w(x._t, g._t, self.W.shape, self.pad, self.stride)
+      db = C.conv2d_backward_b(g._t, self.b.shape[0])
+      return (Tensor(dx, device=x.device), Tensor(dw, device=x.device),
+              Tensor(db, device=x.device))
+    ctx = (back, (x, self.W, self.b))
+    return Tensor(ct, True, x.device, ctx)
 
 class Tanh(Module):
   def forward(self, x:Tensor) -> Tensor: return x.tanh()

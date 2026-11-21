@@ -1,7 +1,9 @@
 #include "vk_internal.h"
 
 #include <stdint.h>
+#include <stdlib.h>
 
+#include "../../core/conv_dispatch_internal.h"
 #include "../../core/dispatcher_internal.h"
 #include "../../core/error_internal.h"
 #include "../../core/storage_internal.h"
@@ -23,11 +25,11 @@ static int32_t stride_at(const bt_tensor_t* t, int64_t out_dim, int64_t out_ndim
 }
 
 /* One descriptor set is enough: every dispatch is serialized by the fence. */
-static bt_status_t dispatch(VkPipeline pipeline, VkBuffer buffers[3],
+static bt_status_t dispatch(VkPipeline pipeline, VkBuffer buffers[4],
                             const void* pc, size_t pc_size, uint32_t gx, uint32_t gy) {
-  VkDescriptorBufferInfo info[3];
-  VkWriteDescriptorSet writes[3];
-  for (int i = 0; i < 3; ++i) {
+  VkDescriptorBufferInfo info[4];
+  VkWriteDescriptorSet writes[4];
+  for (int i = 0; i < 4; ++i) {
     info[i] = (VkDescriptorBufferInfo){ .buffer = buffers[i], .offset = 0, .range = VK_WHOLE_SIZE };
     writes[i] = (VkWriteDescriptorSet){
       .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, .dstSet = g_vk.set,
@@ -35,7 +37,7 @@ static bt_status_t dispatch(VkPipeline pipeline, VkBuffer buffers[3],
       .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, .pBufferInfo = &info[i],
     };
   }
-  vkUpdateDescriptorSets(g_vk.device, 3, writes, 0, NULL);
+  vkUpdateDescriptorSets(g_vk.device, 4, writes, 0, NULL);
 
   bt_vk_begin_cmd();
   vkCmdBindPipeline(g_vk.cmd, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline);
@@ -65,10 +67,11 @@ bt_status_t bt_vk_elementwise(const bt_tensor_t* a, const bt_tensor_t* b,
     pc.so[d] = (int32_t)out->strides[d];
   }
 
-  VkBuffer buffers[3] = {
+  VkBuffer buffers[4] = {
     bt_vk_buffer_of(a->storage->gpu),
     bt_vk_buffer_of(b->storage->gpu),
     bt_vk_buffer_of(out->storage->gpu),
+    bt_vk_buffer_of(a->storage->gpu),
   };
   // 256 lanes per workgroup; a single bounded dispatch keeps TDR out of the picture.
   bt_status_t status = dispatch(g_vk.pipeline, buffers, &pc, sizeof(pc),
@@ -94,12 +97,19 @@ static bt_status_t matmul_kernel(const bt_tensor_t* a, const bt_tensor_t* b, bt_
     .offa = (int32_t)a->offset, .offb = (int32_t)b->offset,
     .offc = (int32_t)out->offset,
   };
-  VkBuffer buffers[3] = {
+  VkBuffer buffers[4] = {
     bt_vk_buffer_of(a->storage->gpu), bt_vk_buffer_of(b->storage->gpu),
-    bt_vk_buffer_of(out->storage->gpu),
+    bt_vk_buffer_of(out->storage->gpu), bt_vk_buffer_of(a->storage->gpu),
   };
-  bt_status_t status = dispatch(g_vk.matmul_pipeline, buffers, &pc, sizeof(pc),
-                                (pc.N + 7) / 8, (pc.M + 7) / 8);
+  static int tiled = -1;
+  if (tiled < 0) {
+    const char* env = getenv("BT_GEMM_TILED");
+    tiled = env && atoi(env) ? 1 : 0;
+  }
+  VkPipeline pipeline = tiled ? g_vk.gemm_tiled_pipeline : g_vk.matmul_pipeline;
+  uint32_t tile = tiled ? 16 : 8;
+  bt_status_t status = dispatch(pipeline, buffers, &pc, sizeof(pc),
+                                (pc.N + tile - 1) / tile, (pc.M + tile - 1) / tile);
   if (status == BT_OK) bt_storage_bump_version(out->storage);
   return status;
 }
@@ -116,10 +126,60 @@ static bt_status_t transpose_kernel(const bt_tensor_t* a, const bt_tensor_t* b, 
   pc.sa[1] = (int32_t)a->strides[0];
   pc.so[0] = (int32_t)out->strides[0];
   pc.so[1] = (int32_t)out->strides[1];
-  VkBuffer buffers[3] = { bt_vk_buffer_of(a->storage->gpu),
+  VkBuffer buffers[4] = { bt_vk_buffer_of(a->storage->gpu),
                           bt_vk_buffer_of(a->storage->gpu),
-                          bt_vk_buffer_of(out->storage->gpu) };
+                          bt_vk_buffer_of(out->storage->gpu),
+                          bt_vk_buffer_of(a->storage->gpu) };
   bt_status_t status = dispatch(g_vk.pipeline, buffers, &pc, sizeof(pc),
+                                (uint32_t)((pc.n + 255) / 256), 1);
+  if (status == BT_OK) bt_storage_bump_version(out->storage);
+  return status;
+}
+
+/* *** convolution *** */
+
+typedef struct {
+  uint32_t mode, n;
+  int32_t N, C, H, W, O, kH, kW, pad, stride, OH, OW;
+  int32_t sa[4], sw[4], sd[4], so[4];
+  int32_t has_bias;
+} conv_pc_t;
+
+static bt_status_t conv_kernel(const bt_tensor_t* a, const bt_tensor_t* b,
+                               const bt_tensor_t* c, bt_conv_params_t params,
+                               bt_conv_kind_t kind, bt_tensor_t* out) {
+  if (!g_vk.ready) return bt_fail(BT_ERR_BACKEND, "bt_vk_conv: Vulkan not ready");
+  conv_pc_t pc = { .mode = (uint32_t)kind, .n = (uint32_t)bt_shape_numel(&out->shape),
+                   .N = (int32_t)a->shape.dims[0],
+                   .O = (int32_t)(kind == BT_CONV_DB ? out->shape.dims[0] : b->shape.dims[0]),
+                   .pad = params.pad, .stride = params.stride,
+                   .has_bias = kind == BT_CONV_FORWARD ? 1 : 0 };
+  pc.C = (int32_t)(kind == BT_CONV_DX ? b->shape.dims[1] : a->shape.dims[1]);
+  pc.H = (int32_t)(kind == BT_CONV_DX ? out->shape.dims[2] : a->shape.dims[2]);
+  pc.W = (int32_t)(kind == BT_CONV_DX ? out->shape.dims[3] : a->shape.dims[3]);
+  // DX/forward receive weights in `b`; DW receives dy, so take kernel size
+  // from the dW output shape instead.
+  int has_weights = kind == BT_CONV_FORWARD || kind == BT_CONV_DX;
+  pc.kH = (int32_t)(has_weights ? b->shape.dims[2] : out->shape.dims[2]);
+  pc.kW = (int32_t)(has_weights ? b->shape.dims[3] : out->shape.dims[3]);
+  const bt_shape_t* dy_shape = kind == BT_CONV_DW ? &b->shape : &a->shape;
+  const bt_shape_t* os = kind == BT_CONV_FORWARD ? &out->shape : dy_shape;
+  pc.OH = (int32_t)os->dims[2];
+  pc.OW = (int32_t)os->dims[3];
+  for (int i = 0; i < 4; ++i) {
+    pc.sa[i] = (int32_t)a->strides[i];
+    pc.sw[i] = b ? (int32_t)b->strides[i] : pc.sa[i];
+    pc.so[i] = (int32_t)out->strides[i];
+    const bt_tensor_t* dy = kind == BT_CONV_DW ? b : a;
+    pc.sd[i] = (int32_t)dy->strides[i];
+  }
+  VkBuffer buffers[4] = {
+    bt_vk_buffer_of(a->storage->gpu),
+    bt_vk_buffer_of(b ? b->storage->gpu : a->storage->gpu),
+    bt_vk_buffer_of(out->storage->gpu),
+    bt_vk_buffer_of(c ? c->storage->gpu : a->storage->gpu),
+  };
+  bt_status_t status = dispatch(g_vk.conv_pipeline, buffers, &pc, sizeof(pc),
                                 (uint32_t)((pc.n + 255) / 256), 1);
   if (status == BT_OK) bt_storage_bump_version(out->storage);
   return status;
@@ -155,5 +215,10 @@ bt_status_t bt_vk_register(void) {
   if ((s = REG(BT_OP_EXP, op_exp))) return s;
   if ((s = REG(BT_OP_LOG, op_log))) return s;
   if ((s = REG(BT_OP_MATMUL, matmul_kernel))) return s;
-  return REG(BT_OP_TRANSPOSE, transpose_kernel);
+  if ((s = REG(BT_OP_TRANSPOSE, transpose_kernel))) return s;
+  for (int k = 0; k < BT_CONV_KIND_COUNT; ++k) {
+    s = bt_register_conv((bt_conv_kind_t)k, BT_BACKEND_VULKAN, BT_FLOAT32, conv_kernel);
+    if (s != BT_OK) return s;
+  }
+  return BT_OK;
 }

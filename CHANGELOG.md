@@ -6,6 +6,23 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added (M5 experiment)
+
+- `experiments/exp_002`: hypothesis-first 16x16x16 shared-memory tiled SGEMM.
+  Measured 2.36x faster at n=1024 (210 -> 495 GFLOPS); ratio 0.09 -> 0.22,
+  still below the GEMM target. Raw before/after snapshots and findings included.
+- `benchmarks/ops/gemm.py` with published results in `BENCHMARKS.md`.
+
+### Added (M8 in progress)
+
+- NCHW `Conv2d` with dX/dW/dB kernels on cpu_ref and Vulkan, a separate conv
+  dispatcher, and a committed conv gradcheck (`tests/parity/conv_check.py`).
+- CIFAR-10 CNN parity script and result: 3 epochs with loss curves and accuracy
+  matching PyTorch CUDA, final conv1 weight diff 7e-7, logit diff 1.2e-5.
+- `tools/export_cifar.py` regenerates the gitignored HF CIFAR subset.
+- Known issue recorded: intermittent large-batch Vulkan eval anomaly; chunked
+  evaluation is used and the anomaly is not claimed fixed.
+
 ### Added (M4/M5/M7 in progress)
 
 - `bt_matmul`, `bt_transpose` and `bt_log` on cpu_ref and Vulkan; 40/40 parity

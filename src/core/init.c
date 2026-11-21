@@ -1,5 +1,6 @@
 #include <bitsy/bitsy.h>
 
+#include "conv_dispatch_internal.h"
 #include "dispatcher_internal.h"
 #include "error_internal.h"
 
@@ -15,6 +16,7 @@ bt_status_t bt_cpu_ref_register(void);
 bt_status_t bt_init(void) {
   bt_clear_error();
   bt_dispatcher_reset();
+  bt_conv_dispatcher_reset();
   bt_status_t status = bt_cpu_ref_register();
   if (status != BT_OK) return status;
 #ifdef BT_ENABLE_VULKAN
@@ -31,6 +33,7 @@ bt_status_t bt_shutdown(void) {
   bt_vk_shutdown();
 #endif
   bt_dispatcher_reset();
+  bt_conv_dispatcher_reset();
   return BT_OK;
 }
 

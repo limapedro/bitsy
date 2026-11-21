@@ -91,6 +91,29 @@ uint64_t bt_tensor_version(const bt_tensor_t* tensor) {
 
 /* *** host transfer *** */
 
+bt_status_t bt_tensor_view(const bt_tensor_t* tensor, const int64_t* dims,
+                           int64_t ndim, bt_tensor_t** out) {
+  if (!tensor || !dims || !out) return bt_fail(BT_ERR_INVALID_ARGUMENT, "bt_tensor_view: NULL");
+  if (!bt_tensor_is_contiguous(tensor))
+    return bt_fail(BT_ERR_NOT_IMPLEMENTED, "bt_tensor_view: only contiguous views yet");
+  bt_shape_t shape;
+  bt_status_t status = bt_shape_make(dims, ndim, &shape);
+  if (status != BT_OK) return status;
+  if (bt_shape_numel(&shape) != bt_tensor_numel(tensor))
+    return bt_fail(BT_ERR_SHAPE_MISMATCH, "bt_tensor_view: element count changed");
+  bt_tensor_t* view = calloc(1, sizeof(*view));
+  if (!view) return bt_fail(BT_ERR_OUT_OF_MEMORY, "bt_tensor_view: OOM");
+  view->storage = bt_storage_retain(tensor->storage);
+  view->offset = tensor->offset;
+  view->shape = shape;
+  (void)bt_shape_contiguous_strides(&shape, view->strides);
+  view->dtype = tensor->dtype;
+  view->device = tensor->device;
+  view->refcount = 1;
+  *out = view;
+  return BT_OK;
+}
+
 bt_status_t bt_tensor_copy_to_host(const bt_tensor_t* tensor, void* dst, size_t dst_bytes) {
   if (!tensor || !dst) return bt_fail(BT_ERR_INVALID_ARGUMENT, "bt_tensor_copy_to_host: NULL");
   // Strided copy is a separate op; claiming contiguous-only here avoids wrong data.

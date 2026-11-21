@@ -20,6 +20,8 @@ typedef struct {
   VkPipelineLayout pipeline_layout;
   VkPipeline pipeline;
   VkPipeline matmul_pipeline;
+  VkPipeline conv_pipeline;
+  VkPipeline gemm_tiled_pipeline;
   VkPhysicalDeviceProperties props;
   int ready;
 } vk_ctx_t;

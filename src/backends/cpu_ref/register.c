@@ -2,6 +2,8 @@
 
 #include "../../core/dispatcher_internal.h"
 
+bt_status_t bt_cpu_ref_register_conv(void);
+
 /* Thin adapters: the dispatcher's kernel signature has no op argument. */
 #define KERNEL(name, op) \
   static bt_status_t name(const bt_tensor_t* a, const bt_tensor_t* b, bt_tensor_t* out) { \
@@ -32,5 +34,11 @@ bt_status_t bt_cpu_ref_register(void) {
   if ((status = REG(BT_OP_EXP, op_exp))) return status;
   if ((status = REG(BT_OP_LOG, op_log))) return status;
   if ((status = REG(BT_OP_MATMUL, bt_cpu_ref_matmul))) return status;
-  return REG(BT_OP_TRANSPOSE, bt_cpu_ref_transpose);
+  if ((status = REG(BT_OP_TRANSPOSE, bt_cpu_ref_transpose))) return status;
+  for (int k = 0; k < BT_CONV_KIND_COUNT; ++k) {
+    status = bt_register_conv((bt_conv_kind_t)k, BT_BACKEND_CPU_REF,
+                              BT_FLOAT32, bt_cpu_ref_conv);
+    if (status != BT_OK) return status;
+  }
+  return BT_OK;
 }

@@ -7,10 +7,11 @@ full PyTorch-compatible ``bt.Tensor`` surface.
 
 from . import autograd, nn, optim
 from ._ctypes import (BitsyError, Tensor, add, sub, mul, div, relu, sigmoid,
-                      tanh, exp, log, matmul, mm, transpose, device, dtype_size, has_vulkan,
-                      last_error, shutdown, version)
+                      tanh, exp, log, matmul, mm, transpose, view, conv2d,
+                      conv2d_backward_x, conv2d_backward_w, conv2d_backward_b,
+                      device, dtype_size, has_vulkan, last_error, shutdown, version)
 
 __version__ = "0.2.0-bitsy"
 __all__ = ["BitsyError", "Tensor", "add", "sub", "mul", "div", "relu", "sigmoid",
-           "tanh", "exp", "log", "matmul", "mm", "transpose", "device", "dtype_size", "has_vulkan",
+           "tanh", "exp", "log", "matmul", "mm", "transpose", "view", "conv2d", "device", "dtype_size", "has_vulkan",
            "last_error", "shutdown", "version", "__version__"]

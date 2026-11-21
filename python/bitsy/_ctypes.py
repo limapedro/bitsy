@@ -10,8 +10,9 @@ from pathlib import Path
 from typing import Any
 
 __all__ = ["BitsyError", "Tensor", "add", "sub", "mul", "div", "relu", "sigmoid",
-           "tanh", "exp", "log", "matmul", "mm", "transpose", "device",
-           "dtype_size", "has_vulkan", "last_error", "shutdown", "version"]
+           "tanh", "exp", "log", "matmul", "mm", "transpose", "view",
+           "conv2d", "conv2d_backward_x", "conv2d_backward_w", "conv2d_backward_b",
+           "device", "dtype_size", "has_vulkan", "last_error", "shutdown", "version"]
 
 # *** errors and ctypes structs ***
 
@@ -22,6 +23,12 @@ class BitsyError(RuntimeError):
 
 class _Device(ctypes.Structure): _fields_ = [("type", ctypes.c_int), ("index", ctypes.c_int)]
 class _Shape(ctypes.Structure): _fields_ = [("ndim", ctypes.c_int64), ("dims", ctypes.c_int64 * 8)]
+class _ConvParams(ctypes.Structure): _fields_ = [("pad", ctypes.c_int), ("stride", ctypes.c_int)]
+
+def _shape_struct(shape:tuple[int, ...]) -> _Shape:
+  arr = (ctypes.c_int64 * 8)(*([0] * 8))
+  for i, d in enumerate(shape): arr[i] = d
+  return _Shape(len(shape), arr)
 
 # *** load and sign the C ABI ***
 
@@ -60,6 +67,11 @@ for _name in ("relu", "sigmoid", "tanh", "exp", "log"):
   _fn(f"bt_{_name}", [_ptr, ctypes.POINTER(_ptr)], ctypes.c_int)
 _fn("bt_matmul", [_ptr, _ptr, ctypes.POINTER(_ptr)], ctypes.c_int)
 _fn("bt_transpose", [_ptr, ctypes.POINTER(_ptr)], ctypes.c_int)
+_fn("bt_tensor_view", [_ptr, _i64p, ctypes.c_int64, ctypes.POINTER(_ptr)], ctypes.c_int)
+_fn("bt_conv2d", [_ptr, _ptr, _ptr, _ConvParams, ctypes.POINTER(_ptr)], ctypes.c_int)
+_fn("bt_conv2d_backward_x", [_ptr, _ptr, _Shape, _ConvParams, ctypes.POINTER(_ptr)], ctypes.c_int)
+_fn("bt_conv2d_backward_w", [_ptr, _ptr, _Shape, _ConvParams, ctypes.POINTER(_ptr)], ctypes.c_int)
+_fn("bt_conv2d_backward_b", [_ptr, ctypes.c_int64, ctypes.POINTER(_ptr)], ctypes.c_int)
 
 def _check(status:int) -> None:
   if not status: return
@@ -142,6 +154,40 @@ def exp(a:Tensor) -> Tensor: return _op("exp", a)
 def log(a:Tensor) -> Tensor: return _op("log", a)
 def matmul(a:Tensor, b:Tensor) -> Tensor: return _op("matmul", a, b)
 mm = matmul
+
+def _from_handle(handle, dev) -> Tensor:
+  shape = _lib.bt_tensor_shape(handle)
+  dims = tuple(int(shape.contents.dims[i]) for i in range(int(shape.contents.ndim)))
+  return Tensor(handle.value, dims, dev)
+
+def view(a:Tensor, shape:tuple[int, ...]) -> Tensor:
+  out = _ptr()
+  dims = (ctypes.c_int64 * len(shape))(*shape)
+  _check(_lib.bt_tensor_view(_ptr(a._ptr), dims, len(shape), ctypes.byref(out)))
+  return _from_handle(out, a._device)
+
+def conv2d(x:Tensor, w:Tensor, b:Tensor, pad:int=1, stride:int=1) -> Tensor:
+  out = _ptr()
+  _check(_lib.bt_conv2d(_ptr(x._ptr), _ptr(w._ptr), _ptr(b._ptr),
+                        _ConvParams(pad, stride), ctypes.byref(out)))
+  return _from_handle(out, x._device)
+
+def conv2d_backward_x(dy:Tensor, w:Tensor, x_shape:tuple[int,...], pad:int=1, stride:int=1) -> Tensor:
+  out = _ptr()
+  _check(_lib.bt_conv2d_backward_x(_ptr(dy._ptr), _ptr(w._ptr), _shape_struct(x_shape),
+                                   _ConvParams(pad, stride), ctypes.byref(out)))
+  return _from_handle(out, dy._device)
+
+def conv2d_backward_w(x:Tensor, dy:Tensor, w_shape:tuple[int,...], pad:int=1, stride:int=1) -> Tensor:
+  out = _ptr()
+  _check(_lib.bt_conv2d_backward_w(_ptr(x._ptr), _ptr(dy._ptr), _shape_struct(w_shape),
+                                   _ConvParams(pad, stride), ctypes.byref(out)))
+  return _from_handle(out, x._device)
+
+def conv2d_backward_b(dy:Tensor, out_channels:int) -> Tensor:
+  out = _ptr()
+  _check(_lib.bt_conv2d_backward_b(_ptr(dy._ptr), out_channels, ctypes.byref(out)))
+  return _from_handle(out, dy._device)
 
 def transpose(a:Tensor) -> Tensor:
   out = _ptr()
