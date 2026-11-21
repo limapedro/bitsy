@@ -1,0 +1,21 @@
+#version 450
+/* 16 independent accumulators; 16x64 = 1024 FMAs per lane. */
+layout(local_size_x = 256) in;
+layout(std430, binding = 0) readonly buffer In { float src[]; };
+layout(std430, binding = 1) writeonly buffer Out { float dst[]; };
+layout(push_constant) uniform PC { uint n, loops; } pc;
+void main() {
+  uint gid = gl_GlobalInvocationID.x;
+  if (gid >= pc.n) return;
+  float a[8], s[16];
+  for (int i = 0; i < 8; ++i) { a[i] = src[(gid * 8u + uint(i)) & 1023u]; s[i] = a[i]; s[i + 8] = a[i]; }
+  for (uint k = 0; k < pc.loops; ++k) {
+    for (int i = 0; i < 8; ++i) {
+      s[i] = fma(s[i], 1.000001 + float(i) * 0.000001, a[i]);
+      s[i + 8] = fma(s[i + 8], 1.000009 + float(i) * 0.000001, a[i]);
+    }
+  }
+  float acc = 0.0;
+  for (int i = 0; i < 16; ++i) acc += s[i];
+  dst[gid] = acc;
+}

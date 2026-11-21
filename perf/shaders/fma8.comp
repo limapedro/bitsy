@@ -1,0 +1,21 @@
+#version 450
+/* 8 independent accumulators hide FMA latency; 8x128 = 1024 FMAs per lane. */
+layout(local_size_x = 256) in;
+layout(std430, binding = 0) readonly buffer In { float src[]; };
+layout(std430, binding = 1) writeonly buffer Out { float dst[]; };
+layout(push_constant) uniform PC { uint n, loops; } pc;
+void main() {
+  uint gid = gl_GlobalInvocationID.x;
+  if (gid >= pc.n) return;
+  float a0 = src[(gid * 8u) & 1023u], a1 = src[(gid * 8u + 1u) & 1023u];
+  float a2 = src[(gid * 8u + 2u) & 1023u], a3 = src[(gid * 8u + 3u) & 1023u];
+  float s0 = a0, s1 = a1, s2 = a2, s3 = a3;
+  float s4 = a0, s5 = a1, s6 = a2, s7 = a3;
+  for (uint k = 0; k < pc.loops; ++k) {
+    s0 = fma(s0, 1.000001, a0); s1 = fma(s1, 1.000002, a1);
+    s2 = fma(s2, 1.000003, a2); s3 = fma(s3, 1.000004, a3);
+    s4 = fma(s4, 1.000005, a0); s5 = fma(s5, 1.000006, a1);
+    s6 = fma(s6, 1.000007, a2); s7 = fma(s7, 1.000008, a3);
+  }
+  dst[gid] = s0 + s1 + s2 + s3 + s4 + s5 + s6 + s7;
+}

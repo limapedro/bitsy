@@ -1,0 +1,13 @@
+#version 450
+/* Pseudo-random fill so memory compression cannot inflate bandwidth numbers. */
+layout(local_size_x = 256) in;
+layout(std430, binding = 0) writeonly buffer Out { vec4 dst[]; };
+layout(push_constant) uniform PC { uint n; } pc;
+void main() {
+  uint i = gl_GlobalInvocationID.x;
+  if (i >= pc.n) return;
+  uint h = i * 747796405u + 2891336453u;
+  h ^= h >> 15u;
+  dst[i] = vec4(float(h & 0xffffu), float((h >> 8u) & 0xffffu),
+                float((h >> 16u) & 0xffffu), float((h >> 24u) & 0xffffu));
+}

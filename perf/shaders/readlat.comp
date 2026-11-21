@@ -1,0 +1,15 @@
+#version 450
+/* Linear streaming read; no runtime modulo in the hot loop. */
+layout(local_size_x = 256) in;
+layout(std430, binding = 0) readonly buffer In { float src[]; };
+layout(std430, binding = 1) writeonly buffer Out { float dst[]; };
+layout(push_constant) uniform PC { uint n, stride; } pc;
+void main() {
+  uint gid = gl_GlobalInvocationID.x;
+  float acc = 0.0;
+  for (uint k = 0; k < 64u; ++k) {
+    uint idx = gid + k * pc.stride;
+    if (idx < pc.n) acc += src[idx];
+  }
+  dst[gid] = acc;
+}
