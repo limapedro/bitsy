@@ -253,6 +253,23 @@ Conclusion: the remaining elementwise gap is bandwidth/kernel-bound
   remaining GEMM rungs / a stride-audited autograd rewrite. The 43-case gate
   remains mandatory.
 
+## Phase 6 update (exp_024) — end-to-end target MET
+
+- Fused GEMM+bias epilogue for `nn.Linear.forward` (tiled/vec4 shape selection,
+  CPU fallback) with a custom backward reproducing the same gradients.
+  Dispatches/step 41 → **35**.
+- **Eager end-to-end training throughput 0.60 → 0.95–0.97 of PyTorch CUDA —
+  the ≥0.85 target is MET** (first time with the ordinary API). Eager step
+  1.75 → 1.065–1.145 ms. Removing the redundant `ones @ b` GEMM and add per
+  Linear was worth ~1.6×.
+- Captured graph: 0.224 → 0.186–0.199 ms, ratio 0.30 → 0.34–0.37 (improved,
+  still far below 0.85). Standalone GEMM 0.72 and elementwise ≤0.54 remain
+  missed; those are the next ranked gaps.
+- Two bugs caught during implementation and fixed before merge: a `self._op`
+  reference to the `Linear` module instead of a Tensor, and a stale
+  `*out = result` in the fallback that returned zeros for unaligned shapes.
+  The 43-case gate stayed green throughout.
+
 ## Honesty
 
 - Timestamp GPU time is a proxy, not the 1000-repeat isolated kernel time the

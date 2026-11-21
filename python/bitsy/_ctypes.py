@@ -84,6 +84,7 @@ _fn("bt_reduce_sum", [_ptr, ctypes.c_uint32, ctypes.c_int, ctypes.POINTER(_ptr)]
 _fn("bt_tanh_backward", [_ptr, _ptr, ctypes.POINTER(_ptr)], ctypes.c_int)
 _fn("bt_broadcast_grad", [_ptr, ctypes.POINTER(ctypes.c_int64), ctypes.c_int64, ctypes.POINTER(_ptr)], ctypes.c_int)
 _fn("bt_dual_mul", [_ptr, _ptr, _ptr, ctypes.POINTER(_ptr)], ctypes.c_int)
+_fn("bt_matmul_bias", [_ptr, _ptr, _ptr, ctypes.POINTER(_ptr)], ctypes.c_int)
 _fn("bt_tensor_offset_view", [_ptr, ctypes.c_int64, ctypes.POINTER(ctypes.c_int64), ctypes.c_int64, ctypes.POINTER(_ptr)], ctypes.c_int)
 _fn("bt_tensor_view", [_ptr, _i64p, ctypes.c_int64, ctypes.POINTER(_ptr)], ctypes.c_int)
 _fn("bt_conv2d", [_ptr, _ptr, _ptr, _ConvParams, ctypes.POINTER(_ptr)], ctypes.c_int)
@@ -217,6 +218,14 @@ def conv2d_backward_b(dy:Tensor, out_channels:int) -> Tensor:
   out = _ptr()
   _check(_lib.bt_conv2d_backward_b(_ptr(dy._ptr), out_channels, ctypes.byref(out)))
   return _from_handle(out, dy._device)
+
+def matmul_bias(a:Tensor, b:Tensor, bias:Tensor) -> Tensor:
+  """Fused a @ b + bias (bias shape (1,N)), one dispatch when aligned."""
+  out = _ptr()
+  _check(_lib.bt_matmul_bias(_ptr(a._ptr), _ptr(b._ptr), _ptr(bias._ptr), ctypes.byref(out)))
+  shape = _lib.bt_tensor_shape(out)
+  dims = tuple(int(shape.contents.dims[i]) for i in range(int(shape.contents.ndim)))
+  return Tensor(out.value, dims, a._device)
 
 def dual_mul(g:Tensor, a:Tensor, b:Tensor, shape:tuple[int, ...]) -> tuple[Tensor, Tensor]:
   """Fused g*a and g*b into one packed buffer; returns two tensors sharing it."""
