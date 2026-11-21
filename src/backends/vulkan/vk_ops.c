@@ -1,14 +1,29 @@
 #include "vk_internal.h"
 
+#ifdef _WIN32
+#include <windows.h>
+#endif
 #include <stdint.h>
 #include <stdlib.h>
 
 #include "../../core/conv_dispatch_internal.h"
 #include "../../core/dispatcher_internal.h"
+#include <bitsy/bt_profiler.h>
 #include "../../core/error_internal.h"
 #include "../../core/storage_internal.h"
 #include "../../core/tensor_internal.h"
 #include "vk_device_internal.h"
+
+static double prof_now_us(void) {
+#ifdef _WIN32
+  static LARGE_INTEGER freq;
+  if (freq.QuadPart == 0) QueryPerformanceFrequency(&freq);
+  LARGE_INTEGER t; QueryPerformanceCounter(&t);
+  return (double)t.QuadPart * 1e6 / (double)freq.QuadPart;
+#else
+  return 0.0;
+#endif
+}
 
 /* Push constants mirror the GLSL PC block exactly (120 bytes). */
 typedef struct {
@@ -26,7 +41,9 @@ static int32_t stride_at(const bt_tensor_t* t, int64_t out_dim, int64_t out_ndim
 
 /* Record a dispatch into the current batch. Submission happens at flush time. */
 static bt_status_t dispatch(VkPipeline pipeline, VkBuffer buffers[4],
-                            const void* pc, size_t pc_size, uint32_t gx, uint32_t gy) {
+                            const void* pc, size_t pc_size, uint32_t gx, uint32_t gy,
+                            const char* name, double bytes, double flops) {
+  double t0 = prof_now_us();
   VkDescriptorSet set = bt_vk_next_set(); // may flush when the batch is full
   VkDescriptorBufferInfo info[4];
   VkWriteDescriptorSet writes[4];
@@ -47,9 +64,21 @@ static bt_status_t dispatch(VkPipeline pipeline, VkBuffer buffers[4],
   vkCmdPushConstants(g_vk.cmd, g_vk.pipeline_layout, VK_SHADER_STAGE_COMPUTE_BIT,
                      0, (uint32_t)pc_size, pc);
   bt_vk_timestamp_start();
+  int qi = -1;
+  if (bt_profiler_enabled() && g_vk.have_timestamps &&
+      g_vk.profiler_query_count < 2048) {
+    qi = (int)g_vk.profiler_query_count++;
+    vkCmdWriteTimestamp(g_vk.cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                        g_vk.profiler_pool, (uint32_t)(2 * qi));
+  }
   vkCmdDispatch(g_vk.cmd, gx, gy, 1);
+  if (qi >= 0)
+    vkCmdWriteTimestamp(g_vk.cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                        g_vk.profiler_pool, (uint32_t)(2 * qi + 1));
   bt_vk_timestamp_end();
   bt_vk_barrier();
+  int event_index = bt_profiler_record(name, t0, prof_now_us(), bytes, flops, qi);
+  if (qi >= 0) g_vk.profiler_events[qi] = event_index;
   // Experiment toggle: BT_VK_NO_BATCH=1 restores the old submit-per-op path.
   static int no_batch = -1;
   if (no_batch < 0) {
@@ -84,7 +113,8 @@ bt_status_t bt_vk_elementwise(const bt_tensor_t* a, const bt_tensor_t* b,
   };
   // 256 lanes per workgroup; a single bounded dispatch keeps TDR out of the picture.
   bt_status_t status = dispatch(g_vk.pipeline, buffers, &pc, sizeof(pc),
-                                (uint32_t)((total + 255) / 256), 1);
+                                (uint32_t)((total + 255) / 256), 1,
+                                "elementwise", 3.0 * total * 4.0, 2.0 * total);
   if (status == BT_OK) bt_storage_bump_version(out->storage);
   return status;
 }
@@ -107,7 +137,8 @@ static bt_status_t add_relu_kernel(const bt_tensor_t* a, const bt_tensor_t* b, b
     bt_vk_buffer_of(out->storage->gpu), bt_vk_buffer_of(a->storage->gpu),
   };
   bt_status_t status = dispatch(g_vk.fused_pipeline, buffers, &pc, sizeof(pc),
-                                (uint32_t)((total + 255) / 256), 1);
+                                (uint32_t)((total + 255) / 256), 1,
+                                "add_relu", 3.0 * total * 4.0, 2.0 * total);
   if (status == BT_OK) bt_storage_bump_version(out->storage);
   return status;
 }
@@ -140,8 +171,11 @@ static bt_status_t matmul_kernel(const bt_tensor_t* a, const bt_tensor_t* b, bt_
   }
   VkPipeline pipeline = tiled ? g_vk.gemm_tiled_pipeline : g_vk.matmul_pipeline;
   uint32_t tile = tiled ? 16 : 8;
+  double m = pc.M, n = pc.N, k = pc.K;
   bt_status_t status = dispatch(pipeline, buffers, &pc, sizeof(pc),
-                                (pc.N + tile - 1) / tile, (pc.M + tile - 1) / tile);
+                                (pc.N + tile - 1) / tile, (pc.M + tile - 1) / tile,
+                                tiled ? "gemm_tiled" : "gemm_naive",
+                                (m * k + k * n + m * n) * 4.0, 2.0 * m * n * k);
   if (status == BT_OK) bt_storage_bump_version(out->storage);
   return status;
 }
@@ -163,7 +197,8 @@ static bt_status_t transpose_kernel(const bt_tensor_t* a, const bt_tensor_t* b, 
                           bt_vk_buffer_of(out->storage->gpu),
                           bt_vk_buffer_of(a->storage->gpu) };
   bt_status_t status = dispatch(g_vk.pipeline, buffers, &pc, sizeof(pc),
-                                (uint32_t)((pc.n + 255) / 256), 1);
+                                (uint32_t)((pc.n + 255) / 256), 1,
+                                "transpose", 2.0 * pc.n * 4.0, 0.0);
   if (status == BT_OK) bt_storage_bump_version(out->storage);
   return status;
 }
@@ -212,7 +247,9 @@ static bt_status_t conv_kernel(const bt_tensor_t* a, const bt_tensor_t* b,
     bt_vk_buffer_of(c ? c->storage->gpu : a->storage->gpu),
   };
   bt_status_t status = dispatch(g_vk.conv_pipeline, buffers, &pc, sizeof(pc),
-                                (uint32_t)((pc.n + 255) / 256), 1);
+                                (uint32_t)((pc.n + 255) / 256), 1,
+                                "conv", 3.0 * pc.n * 4.0,
+                                2.0 * pc.n * pc.C * pc.kH * pc.kW);
   if (status == BT_OK) bt_storage_bump_version(out->storage);
   return status;
 }

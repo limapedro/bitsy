@@ -11,6 +11,7 @@
 #include <bitsy/bt_storage.h>
 #include <bitsy/bt_tensor.h>
 #include <bitsy/bt_ops.h>
+#include <bitsy/bt_profiler.h>
 #include <bitsy/bt_conv.h>
 
 #ifdef __cplusplus

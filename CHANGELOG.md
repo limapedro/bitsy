@@ -6,6 +6,16 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added (TOGISHI Phase 2, exp_007)
+
+- Opt-in `hg.profiler`: per-dispatch GPU timestamps, CPU enqueue time,
+  bytes/FLOPs versus calibrated ceilings, Chrome-trace JSON, and counters for
+  dispatches/barriers/submits/allocations.
+- Three-way timing and PyTorch kernel profiling scripts plus ranked
+  `GAP_LEDGER.md`. Top gap: GEMM 155.5 µs (3.7% of FP32 peak) versus cuBLAS
+  `volta_sgemm_128x32_nn` + split-K.
+- No framework optimization in this phase; parity re-verified at 42/42.
+
 ### Added (M10 experiment, exp_004)
 
 - Timeline-semaphore async submission: `bt_vulkan_flush()` no longer waits;

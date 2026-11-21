@@ -22,7 +22,7 @@ set(BT_SOURCES
   src/backends/cpu_ref/elementwise.c src/backends/cpu_ref/matmul.c
   src/backends/cpu_ref/register.c
   src/ops/elementwise.c src/ops/matmul.c src/ops/conv.c
-  src/core/conv_dispatch.c src/backends/cpu_ref/conv.c)
+  src/core/conv_dispatch.c src/core/profiler.c src/backends/cpu_ref/conv.c)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include(BitsyShader)

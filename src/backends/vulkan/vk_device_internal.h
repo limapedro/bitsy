@@ -34,6 +34,9 @@ typedef struct {
   VkPipeline gemm_tiled_pipeline;
   VkPipeline fused_pipeline;
   VkQueryPool timestamp_pool;
+  VkQueryPool profiler_pool;
+  uint32_t profiler_query_count;
+  int profiler_events[2048];
   int query_index;
   int have_timestamps;
   double device_time_ms;

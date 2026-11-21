@@ -120,6 +120,7 @@ rules and the tinygrad sources they came from are recorded in
 - [ARCHITECTURE_LOG.md](ARCHITECTURE_LOG.md) — locked architectural decisions
 - [DEVIATIONS.md](DEVIATIONS.md) — intentional differences from PyTorch
 - [BENCHMARKS.md](BENCHMARKS.md) — performance results and methodology
+- [GAP_LEDGER.md](GAP_LEDGER.md) — ranked microseconds-lost ledger from TOGISHI Phase 2
 - [NOTICE](NOTICE) — attribution to the PyTorch project
 
 ## License
