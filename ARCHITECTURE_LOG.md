@@ -1046,3 +1046,26 @@ removed entirely rather than leave a wrong kernel selectable; no tolerance was
 relaxed. The tree equals exp_029 after re-verification (43/43, CTest 1/1).
 The GEMM ladder is now comprehensively measured with no variant reaching the
 ≥0.80 standalone target on TU116.
+
+---
+
+## 2026-11-21 — Elementwise three-way timing (exp_031)
+
+**Context.** The GEMM ladder was exhausted and the elementwise wall ratios
+(0.17–0.47) were still reported as a kernel gap, but the per-op-sync benchmark
+did not follow the campaign's own captured three-way methodology.
+
+**Options considered.** (1) More elementwise kernel tuning, (2) measure the
+gap properly with captured execution on both sides before deciding.
+
+**Decision.** Option 2: added `benchmarks/ops/elementwise_graph.py`, no kernel
+or autograd change, recorded in `experiments/exp_031/HYPOTHESIS.md`.
+
+**Consequences.** At 1M elements captured Bitsy ops reach 0.88–1.03× of
+PyTorch CUDA graphs; eager remains 0.17–0.47×. The elementwise gap is
+**host submit/fence overhead**, not kernel bandwidth, so no kernel change was
+made. Small tensors (4096) retain a 0.71–0.85× captured residual (~10 µs/op
+graph-replay launch cost). Parity 43/43 incl. gradient gate, CTest both builds.
+This locks in the decision that further elementwise kernel work is not
+justified; the remaining classes are eager submit cost, standalone GEMM and
+captured full-step graph.
