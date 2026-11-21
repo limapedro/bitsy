@@ -105,19 +105,22 @@ inside the timed region. Deferred transfers are now the default;
 | baseline (`=0`) | 1530 MHz | 9.575 | 1.215 | 0.127 | 0 (old path) |
 | deferred (default, exp_014) | 1530 MHz | 3.220 | 1.200 | 0.373 | **0** |
 | deferred + device unbroadcast (exp_016) | 1530 MHz | 2.626–2.911 | 1.078–1.080 | 0.37–0.41 | **0** |
-| + fused transpose views / SGD (exp_017) | 1530 MHz | **2.460–2.469** | 1.010–1.143 | **0.41–0.47** | **0** |
+| + fused transpose views / SGD (exp_017) | 1530 MHz | 2.460–2.469 | 1.010–1.143 | 0.41–0.47 | **0** |
+| + dedicated reduction kernel (exp_018) | 1530 MHz | **1.898–1.955** | 1.065–1.071 | **0.55–0.56** | **0** |
 
 Deferred transfer was **2.97× faster** than the synchronous baseline at matched
 clock; exp_016's device-side unbroadcast reduction removed a host sync from
 every backward and improved the default step a further **1.1–1.2×**; exp_017's
 zero-dispatch transpose views and fused SGD step brought it to 2.46 ms
 (ratio **0.41–0.47**, the best yet), with zero staging allocations throughout.
-**The ≥0.85 end-to-end target is still missed**: the remaining ~2.5 ms/step is
-per-op Python/ctypes dispatch and autograd construction. Numeric parity is
-unchanged — MNIST/CIFAR loss curves match at reported precision (see
-`experiments/exp_014`, `exp_016`, `exp_017/FINDINGS.md`).
+**The ≥0.85 end-to-end target is still missed**: the remaining ~1.9 ms/step is
+per-op Python/ctypes dispatch and autograd construction. exp_018 replaced
+ones-vector GEMM reductions with a dedicated kernel, cutting the eager step
+from 2.46 to ~1.93 ms (1.26–1.30×, ratio 0.55–0.56 — best yet). Numeric parity
+is unchanged — MNIST report identical, CIFAR W diff 6.4e-07 (see
+`experiments/exp_014`, `exp_016`–`exp_018/FINDINGS.md`).
 
-## Captured full training step (updated 2026-11-21, exp_015/016/017)
+## Captured full training step (updated 2026-11-21, exp_015–018)
 
 `python benchmarks/models/graph_step_bench.py`: the whole MLP step (forward +
 backward + SGD) captured and replayed 100× per trial, 10 trials, median of
@@ -129,18 +132,19 @@ output is bit-identical to eager (abs diff 0.0).
 | Bitsy eager (default API, exp_014) | 3.220 | 1530 MHz |
 | Bitsy captured + replayed (exp_015) | 0.294–0.355 | 1732–1935 MHz |
 | Bitsy captured + replayed (exp_016, single chunk) | 0.296–0.334 | 1658–1732 MHz |
-| Bitsy captured + replayed (exp_017, fused) | **0.257** | 1732 MHz |
+| Bitsy captured + replayed (exp_017, fused) | 0.257 | 1732 MHz |
+| Bitsy captured + replayed (exp_018, reductions) | **0.234–0.246** | 1732 MHz |
 | PyTorch eager | 1.20 | 1530 MHz |
 | PyTorch CUDA graph | **0.067–0.068** | 1732–1935 MHz |
 
-Capture is **~10–13× faster than eager Bitsy**, but **graph throughput is only
-0.26× PyTorch** — the ≥0.85 end-to-end target and the ≥0.80 intermediate gate
-are both **missed**. exp_016 removed the mid-backward CPU gradient readback
-(single-chunk capture); exp_017 cut dispatches from **66 to 46** using
-zero-dispatch transpose views and a fused SGD step, taking the captured step
-0.296–0.334 → **0.257 ms** (1.15–1.30×) and the graph ratio 0.20–0.23 → 0.259.
-The ≥0.28 graph-ratio prediction was still missed; the remaining cost is spread
-over 46 small dispatches. See `experiments/exp_015/016/017/FINDINGS.md`.
+Capture is **~8–10× faster than eager Bitsy**, but **graph throughput is only
+0.28× PyTorch** — the ≥0.85 end-to-end target and the ≥0.80 intermediate gate
+are both **missed**. exp_016 removed the mid-backward CPU gradient readback;
+exp_017 cut dispatches 66 → 46 (transpose views + fused SGD) taking the step
+to 0.257 ms; exp_018 replaced ones-vector GEMM reductions with a dedicated
+kernel, taking it to **0.234–0.246 ms** and the graph ratio to 0.277–0.287.
+The ≥0.29 stretch ratio was just missed. Remaining cost: ~19 scalar elementwise
+and 10 GEMM dispatches. See `experiments/exp_015`–`exp_018/FINDINGS.md`.
 
 ## Comparison target
 

@@ -40,6 +40,11 @@ BT_API bt_status_t bt_transpose(const bt_tensor_t* a, bt_tensor_t** out);
 BT_API bt_status_t bt_sgd_step(const bt_tensor_t* w, const bt_tensor_t* grad,
                                float lr, bt_tensor_t** out);
 
+/* exp_018: 2D axis reduction sum; axis 0 reduces rows, axis 1 reduces columns.
+ * `keepdim` selects (1,N)/(M,1) vs (N,)/(M,) output shapes. */
+BT_API bt_status_t bt_reduce_sum(const bt_tensor_t* a, uint32_t axis, int keepdim,
+                                 bt_tensor_t** out);
+
 #ifdef __cplusplus
 }
 #endif

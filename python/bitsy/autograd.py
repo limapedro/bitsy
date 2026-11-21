@@ -26,20 +26,27 @@ def _unbroadcast_device(g:"Tensor", shape:tuple[int, ...]) -> "Tensor" | None:
     if out.shape[0] == 1:
       out = out.reshape(*out.shape[1:])
     else:
-      ones = Tensor.from_numpy(np.ones((1, out.shape[0]), np.float32), out.device)
-      out = ones @ out
-      out = out.reshape(*out.shape[1:])
+      out = reduce_sum_op(out, 0, False)
   for axis, (got, want) in enumerate(zip(out.shape, shape)):
     if want == 1 and got != 1:
       if axis == len(out.shape) - 1:
-        ones = Tensor.from_numpy(np.ones((got, 1), np.float32), out.device)
-        out = out @ ones
+        out = reduce_sum_op(out, 1, True)
       elif axis == 0:
-        ones = Tensor.from_numpy(np.ones((1, got), np.float32), out.device)
-        out = ones @ out
+        out = reduce_sum_op(out, 0, True)
       else:
         return None
   return out if out.shape == shape else None
+
+def reduce_sum_op(t:"Tensor", axis:int, keepdim:bool) -> "Tensor":
+  """Autograd-aware 2D reduction via the exp_018 dedicated kernel."""
+  out = C.reduce_sum(t._t, axis, keepdim)
+  def back(g):
+    shp = list(t.shape)
+    shp[axis] = 1
+    gg = g.reshape(*shp)
+    ones = Tensor.from_numpy(np.ones(t.shape, np.float32), t.device)
+    return (ones * gg,)
+  return t._op(out, (t,), back)
 
 def _unbroadcast(g:"Tensor", shape:tuple[int, ...]) -> "Tensor":
   """Sum a gradient back to a parent's shape (2D on device, CPU fallback)."""
@@ -128,8 +135,8 @@ class Tensor:
   def sum(self) -> "Tensor":
     n = 1
     for d in self.shape: n *= d
-    col = Tensor.from_numpy(np.ones((n, 1), np.float32), self.device)
-    return self.reshape(1, n) @ col
+    # exp_018: dedicated reduction instead of a ones-vector GEMM.
+    return reduce_sum_op(self.reshape(1, n), 1, True)
 
   def reshape(self, *shape) -> "Tensor":
     ct = C.view(self._t, tuple(shape))

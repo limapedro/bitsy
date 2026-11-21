@@ -758,3 +758,26 @@ were not reliably met and are recorded as misses. Eager step 2.626 → 2.46 ms,
 ratio 0.41–0.47 — the best eager result so far. Parity holds (42/42, CTest
 both builds, MNIST/CIFAR drift < 2e-7). The remaining ~20 tiled-GEMM
 dispatches (many tiny reduction matmuls) are the next target.
+
+---
+
+## 2026-11-21 — Dedicated reduction kernel (exp_018)
+
+**Context.** exp_017 left ~20 tiled GEMM dispatches, many of them tiny
+ones-vector reductions implementing `sum`, `log_softmax`, `cross_entropy`,
+`mse_loss` and `_unbroadcast`.
+
+**Options considered.** (1) Keep GEMM reductions, (2) add a dedicated 2D axis
+reduction shader (single workgroup, sequential sum) with an autograd-aware
+backward that broadcasts the upstream gradient.
+
+**Decision.** Option 2, recorded in `experiments/exp_018/HYPOTHESIS.md`.
+No tolerance change; >2D keeps the CPU fallback.
+
+**Consequences.** Tiled GEMMs per step 20 → 10; total dispatches 46 → 43.
+Eager step 2.46 → 1.898–1.955 ms (1.26–1.30×; ratio 0.55–0.56, best yet).
+Captured step 0.257 → 0.234–0.246 ms; graph ratio 0.259 → 0.277–0.287, just
+short of the ≥0.29 stretch goal (recorded as a narrow miss). Parity holds
+(42/42, CTest both builds, MNIST identical, CIFAR W diff 6.4e-07, captured
+step bit-identical to eager). The dominant remaining cost is now ~19 scalar
+elementwise dispatches; a general fused elementwise-chain kernel is next.
