@@ -1,1 +1,1 @@
-"""Hagane test suite."""
+"""Bitsy test suite."""

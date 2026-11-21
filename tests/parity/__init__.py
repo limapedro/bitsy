@@ -1,1 +1,1 @@
-"""Hagane-vs-PyTorch numeric parity harness."""
+"""Bitsy-vs-PyTorch numeric parity harness."""

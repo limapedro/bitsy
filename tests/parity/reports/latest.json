@@ -1,10 +1,10 @@
 {
-  "generated_at": "2026-11-21T10:31:38.806035+00:00",
+  "generated_at": "2026-11-21T10:52:08.771754+00:00",
   "environment": {
     "platform": "Windows-10-10.0.26300-SP0",
     "python": "3.10.11",
     "torch": "2.11.0+cu126",
-    "hagane": "0.1.0-m0",
+    "bitsy": "0.2.0-bitsy",
     "cuda_available": true,
     "cuda_version": "12.6",
     "gpu": "NVIDIA GeForce GTX 1660 SUPER"
@@ -31,7 +31,7 @@
       "shape": [],
       "dtype": "float32",
       "value_set": "normal",
-      "hagane_vs_torch_cpu": {
+      "bitsy_vs_torch_cpu": {
         "passed": true,
         "mode": "exact",
         "elements": 1,
@@ -43,7 +43,7 @@
         "elements": 1,
         "mismatches": 0
       },
-      "hagane_vs_torch_cuda": {
+      "bitsy_vs_torch_cuda": {
         "passed": true,
         "mode": "exact",
         "elements": 1,
@@ -59,7 +59,7 @@
       ],
       "dtype": "float32",
       "value_set": "normal",
-      "hagane_vs_torch_cpu": {
+      "bitsy_vs_torch_cpu": {
         "passed": true,
         "mode": "exact",
         "elements": 3,
@@ -71,7 +71,7 @@
         "elements": 3,
         "mismatches": 0
       },
-      "hagane_vs_torch_cuda": {
+      "bitsy_vs_torch_cuda": {
         "passed": true,
         "mode": "exact",
         "elements": 3,
@@ -87,7 +87,7 @@
       ],
       "dtype": "float32",
       "value_set": "special",
-      "hagane_vs_torch_cpu": {
+      "bitsy_vs_torch_cpu": {
         "passed": true,
         "mode": "exact",
         "elements": 8,
@@ -99,7 +99,7 @@
         "elements": 8,
         "mismatches": 0
       },
-      "hagane_vs_torch_cuda": {
+      "bitsy_vs_torch_cuda": {
         "passed": true,
         "mode": "exact",
         "elements": 8,
@@ -115,7 +115,7 @@
       ],
       "dtype": "float32",
       "value_set": "large_small",
-      "hagane_vs_torch_cpu": {
+      "bitsy_vs_torch_cpu": {
         "passed": true,
         "mode": "exact",
         "elements": 8,
@@ -127,7 +127,7 @@
         "elements": 8,
         "mismatches": 0
       },
-      "hagane_vs_torch_cuda": {
+      "bitsy_vs_torch_cuda": {
         "passed": true,
         "mode": "exact",
         "elements": 8,
@@ -144,7 +144,7 @@
       ],
       "dtype": "float32",
       "value_set": "normal",
-      "hagane_vs_torch_cpu": {
+      "bitsy_vs_torch_cpu": {
         "passed": true,
         "mode": "exact",
         "elements": 6,
@@ -156,7 +156,7 @@
         "elements": 6,
         "mismatches": 0
       },
-      "hagane_vs_torch_cuda": {
+      "bitsy_vs_torch_cuda": {
         "passed": true,
         "mode": "exact",
         "elements": 6,
@@ -174,7 +174,7 @@
       ],
       "dtype": "float32",
       "value_set": "normal",
-      "hagane_vs_torch_cpu": {
+      "bitsy_vs_torch_cpu": {
         "passed": true,
         "mode": "exact",
         "elements": 24,
@@ -186,7 +186,7 @@
         "elements": 24,
         "mismatches": 0
       },
-      "hagane_vs_torch_cuda": {
+      "bitsy_vs_torch_cuda": {
         "passed": true,
         "mode": "exact",
         "elements": 24,
@@ -203,7 +203,7 @@
       ],
       "dtype": "float32",
       "value_set": "normal",
-      "hagane_vs_torch_cpu": {
+      "bitsy_vs_torch_cpu": {
         "passed": true,
         "mode": "exact",
         "elements": 4,
@@ -215,7 +215,7 @@
         "elements": 4,
         "mismatches": 0
       },
-      "hagane_vs_torch_cuda": {
+      "bitsy_vs_torch_cuda": {
         "passed": true,
         "mode": "exact",
         "elements": 4,
@@ -231,7 +231,7 @@
       ],
       "dtype": "float32",
       "value_set": "normal",
-      "hagane_vs_torch_cpu": {
+      "bitsy_vs_torch_cpu": {
         "passed": true,
         "mode": "exact",
         "elements": 5,
@@ -243,7 +243,7 @@
         "elements": 5,
         "mismatches": 0
       },
-      "hagane_vs_torch_cuda": {
+      "bitsy_vs_torch_cuda": {
         "passed": true,
         "mode": "exact",
         "elements": 5,
@@ -260,7 +260,7 @@
       ],
       "dtype": "float32",
       "value_set": "normal",
-      "hagane_vs_torch_cpu": {
+      "bitsy_vs_torch_cpu": {
         "passed": true,
         "mode": "exact",
         "elements": 0,
@@ -272,7 +272,7 @@
         "elements": 0,
         "mismatches": 0
       },
-      "hagane_vs_torch_cuda": {
+      "bitsy_vs_torch_cuda": {
         "passed": true,
         "mode": "exact",
         "elements": 0,
@@ -289,7 +289,7 @@
       ],
       "dtype": "float32",
       "value_set": "normal",
-      "hagane_vs_torch_cpu": {
+      "bitsy_vs_torch_cpu": {
         "passed": true,
         "mode": "exact",
         "elements": 91,
@@ -301,7 +301,7 @@
         "elements": 91,
         "mismatches": 0
       },
-      "hagane_vs_torch_cuda": {
+      "bitsy_vs_torch_cuda": {
         "passed": true,
         "mode": "exact",
         "elements": 91,
@@ -317,7 +317,7 @@
       ],
       "dtype": "float32",
       "value_set": "normal",
-      "hagane_vs_torch_cpu": {
+      "bitsy_vs_torch_cpu": {
         "passed": true,
         "mode": "exact",
         "elements": 4096,
@@ -329,7 +329,7 @@
         "elements": 4096,
         "mismatches": 0
       },
-      "hagane_vs_torch_cuda": {
+      "bitsy_vs_torch_cuda": {
         "passed": true,
         "mode": "exact",
         "elements": 4096,
@@ -346,7 +346,7 @@
       ],
       "dtype": "float32",
       "value_set": "special",
-      "hagane_vs_torch_cpu": {
+      "bitsy_vs_torch_cpu": {
         "passed": true,
         "mode": "exact",
         "elements": 16,
@@ -358,7 +358,7 @@
         "elements": 16,
         "mismatches": 0
       },
-      "hagane_vs_torch_cuda": {
+      "bitsy_vs_torch_cuda": {
         "passed": true,
         "mode": "exact",
         "elements": 16,
@@ -372,8 +372,8 @@
       "dtype": "float32",
       "expect_error": true,
       "torch_raised": true,
-      "hagane_raised": true,
-      "hagane_message": "HG_ERR_SHAPE_MISMATCH: hg_broadcast_shapes: sizes 3 and 4 at dim 1 are not broadcastable (status 6)",
+      "bitsy_raised": true,
+      "bitsy_message": "BT_ERR_SHAPE_MISMATCH: bt_broadcast_shapes: 3 and 4 at dim 1 are not broadcastable (status 6)",
       "passed": true
     }
   ]

@@ -13,7 +13,7 @@ launch and dispatch overhead) are reported.
 
 ## Targets
 
-Ratio = Hagane throughput ÷ PyTorch CUDA throughput (higher is better).
+Ratio = Bitsy throughput ÷ PyTorch CUDA throughput (higher is better).
 
 | Class | Examples | Target |
 |---|---|---|
@@ -31,7 +31,7 @@ Ratio = Hagane throughput ÷ PyTorch CUDA throughput (higher is better).
 - Never cherry-pick shapes, bench only favorable sizes, inflate numbers through
   unfair setup, or disable the competition's optimizations.
 - Report achieved fraction of hardware peak alongside the ratio versus PyTorch.
-- Where Hagane is below target, say so and link the experiment explaining it.
+- Where Bitsy is below target, say so and link the experiment explaining it.
 - Without tensor cores on this GPU, PyTorch's CUDA path also uses regular CUDA
   cores; results are not extrapolated to matrix-hardware GPUs.
 

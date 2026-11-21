@@ -8,7 +8,7 @@ Status legend: **done** / **in progress** / **planned**.
 
 | # | Name | Focus | Status |
 |---|---|---|---|
-| M0 | Anvil | Repository, CMake, CI, conventions, empty Python package, parity harness skeleton, first `add` on `cpu_ref` | **done** (`v0.1.0-m0`) |
+| M0 | Anvil | Repository, CMake, CI, conventions, empty Python package, parity harness skeleton, first `add` on `cpu_ref`; renamed to Bitsy and restyled | **done** (`v0.2.0-bitsy`, supersedes `v0.1.0-m0`) |
 | M1 | Ingot | Tensor core on `cpu_ref`: storage, views, strides, broadcasting, creation, elementwise, reductions, full parity | planned |
 | M2 | Forge | Vulkan bring-up: device, allocator, streams, pipelines, shader build, transfers, first elementwise kernels | planned |
 | M3 | Quench | Core op coverage on Vulkan: reductions, indexing, movement, sorting, cumulative, RNG parity | planned |
@@ -31,10 +31,14 @@ Exit criteria:
 - [x] CMake + Ninja build for Windows and Linux
 - [x] CI workflow running on Windows and Linux
 - [x] C unit-test harness wired into CTest
-- [x] Empty `hagane` Python package imports
+- [x] Empty `bitsy` Python package imports
 - [x] Dataclass-configured parity harness skeleton
 - [x] Tolerance table with recorded reasoning
 - [x] `add` implemented on `cpu_ref` and matching PyTorch (forward) — 13/13 cases, bit-exact
 - [x] M0 status report and tag `v0.1.0-m0`
+- [x] Rename Hagane → Bitsy everywhere (repo, docs, headers, C ABI, Python import)
+- [x] tinygrad/geohot style refactor with explanatory comments
+- [x] Re-verify after rename + restyle: CTest 1/1, parity 13/13, tag `v0.2.0-bitsy`
 
-See `docs/m0_status.md` for the evidence and known limitations.
+See `docs/m0_status.md` for the evidence and known limitations. The prior exact
+name `bitsy` was preserved as `limapedro/bitsy-legacy-2023`, not deleted.
