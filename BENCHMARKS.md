@@ -36,14 +36,16 @@ register-blocked+split-K; the default is an autotuned shape threshold.
 
 | n | kernel | Bitsy ms | PyTorch ms | Bitsy device ms | ratio (target ≥ 0.80) | Bitsy GFLOPS |
 |---:|---|---:|---:|---:|---:|---:|
-| 256 | tiled (autotune) | 0.164 | 0.063 | 0.070 | 0.38 | 205 |
-| 1024 | register-blocked (autotune) | 1.224 | 0.942 | 1.064 | **0.77** | 1754 |
+| 256 | tiled (autotune) | 0.134 | 0.042 | 0.070 | 0.31 | 250 |
+| 1024 | register-blocked vec4 + double buffer (autotune) | 1.178 | 0.913 | 1.024 | **0.78** | 1823 |
 
 Before exp_008 (16×16 tiled): 0.177 ms / 0.27 at 256² and 4.329 ms / 0.22 at
-1024². Register blocking is **3.54× faster** at 1024² (496 → 1754 GFLOPS).
-Split-K was slower (1.558 ms, ratio 0.57) and is kept as a documented negative
-result. **GEMM target still missed** (0.77 vs ≥ 0.80). Raw variant and
-before/after snapshots: `experiments/exp_008/`.
+1024². exp_008 register blocking was 3.54× faster at 1024² (496 → 1754
+GFLOPS). exp_009 vec4 + double buffering added another 1.04× (1754 → 1823
+GFLOPS) but did not meet its ≥1.08× prediction. Split-K was slower (1.558 ms,
+ratio 0.57) and is kept as a documented negative result. **GEMM target still
+missed** (0.78 vs ≥ 0.80). Raw snapshots: `experiments/exp_008/` and
+`experiments/exp_009/`.
 
 ## Batched and async submissions
 

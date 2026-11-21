@@ -171,11 +171,13 @@ static bt_status_t matmul_kernel(const bt_tensor_t* a, const bt_tensor_t* b, bt_
     const char* env = getenv("BT_GEMM_VARIANT");
     variant = env ? atoi(env) : -1; // -1 = autotuned selection by shape
   }
+  int vec4_ok = a->strides[1] == 1 && b->strides[1] == 1 &&
+                a->strides[0] % 4 == 0 && b->strides[0] % 4 == 0;
   int chosen = variant;
-  // Measured autotune (exp_008): tiled wins at small sizes, register-blocked
-  // at large sizes; split-K currently loses because the reduce costs more than
-  // the extra occupancy on 22 SMs.
-  if (chosen < 0) chosen = (pc.M <= 512 && pc.N <= 512) ? 1 : 2;
+  // Measured autotune (exp_008/009): tiled at small sizes, vec4 register-blocked
+  // at large sizes when strides are 4-float aligned, scalar rb otherwise.
+  if (chosen < 0) chosen = (pc.M <= 512 && pc.N <= 512) ? 1 : (vec4_ok ? 4 : 2);
+  if (chosen == 4 && !vec4_ok) chosen = 2;
 
   double m = pc.M, n = pc.N, k = pc.K;
   double gemm_bytes = (m * k + k * n + m * n) * 4.0;
@@ -192,6 +194,10 @@ static bt_status_t matmul_kernel(const bt_tensor_t* a, const bt_tensor_t* b, bt_
     status = dispatch(g_vk.gemm_rb_pipeline, buffers, &pc, sizeof(pc),
                       (pc.N + 127) / 128, (pc.M + 127) / 128,
                       "gemm_rb", gemm_bytes, gemm_flops);
+  } else if (chosen == 4) {
+    status = dispatch(g_vk.gemm_rb_vec4_pipeline, buffers, &pc, sizeof(pc),
+                      (pc.N + 127) / 128, (pc.M + 127) / 128,
+                      "gemm_rb_vec4", gemm_bytes, gemm_flops);
   } else {
     const uint32_t splits = 4;
     size_t partial_bytes = (size_t)splits * pc.M * pc.N * sizeof(float);

@@ -6,6 +6,14 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added (TOGISHI Phase 6, exp_009)
+
+- vec4 global loads and double-buffered shared tiles for the register-blocked
+  GEMM, with stride checks and a safe scalar fallback (`BT_GEMM_VARIANT=4`).
+- 1024² GEMM 1.224 → 1.178 ms (1754 → 1823 GFLOPS, ratio 0.77 → 0.78). The
+  ≥1.08× prediction and ≥0.80 target are recorded as missed in
+  `experiments/exp_009/FINDINGS.md`. Parity 42/42.
+
 ### Added (TOGISHI Phase 6, exp_008)
 
 - GEMM ladder: register-blocked 128×128×8 kernel, conflict-free shared memory,

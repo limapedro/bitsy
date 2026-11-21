@@ -12,6 +12,7 @@
 #include "conv.spv.h"
 #include "gemm_tiled.spv.h"
 #include "gemm_rb.spv.h"
+#include "gemm_rb_vec4.spv.h"
 #include "splitk_reduce.spv.h"
 #include "fused.spv.h"
 
@@ -106,6 +107,8 @@ static bt_status_t make_pipeline(void) {
                                   &g_vk.gemm_tiled_pipeline))) return status;
   if ((status = pipeline_from_spv(fused_spv, fused_spv_bytes, &g_vk.fused_pipeline))) return status;
   if ((status = pipeline_from_spv(gemm_rb_spv, gemm_rb_spv_bytes, &g_vk.gemm_rb_pipeline))) return status;
+  if ((status = pipeline_from_spv(gemm_rb_vec4_spv, gemm_rb_vec4_spv_bytes,
+                                  &g_vk.gemm_rb_vec4_pipeline))) return status;
   return pipeline_from_spv(splitk_reduce_spv, splitk_reduce_spv_bytes,
                            &g_vk.splitk_reduce_pipeline);
 }
@@ -183,6 +186,7 @@ void bt_vk_shutdown(void) {
   vkDestroyPipeline(g_vk.device, g_vk.gemm_tiled_pipeline, NULL);
   vkDestroyPipeline(g_vk.device, g_vk.fused_pipeline, NULL);
   vkDestroyPipeline(g_vk.device, g_vk.gemm_rb_pipeline, NULL);
+  vkDestroyPipeline(g_vk.device, g_vk.gemm_rb_vec4_pipeline, NULL);
   vkDestroyPipeline(g_vk.device, g_vk.splitk_reduce_pipeline, NULL);
   vkDestroyPipelineLayout(g_vk.device, g_vk.pipeline_layout, NULL);
   if (g_vk.have_timestamps) {
