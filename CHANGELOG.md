@@ -6,6 +6,13 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added (TOGISHI Phase 2, exp_035)
+
+- `docs/PERFORMANCE_CEILING.md`: evidence-backed, conditional conclusion for the
+  GTX 1660 Super / Vulkan stack — final ratios, per-gap mechanism classification,
+  34-experiment outcome ledger, and what would be required to improve further.
+  No kernel change; 44/44 parity holds. Details in `experiments/exp_035/FINDINGS.md`.
+
 ### Added (TOGISHI Phase 2, exp_034)
 
 - Required training-scale gradient parity case (`tests/parity/train_scale.py`,

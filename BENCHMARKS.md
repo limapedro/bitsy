@@ -1,5 +1,9 @@
 # Benchmarks
 
+**Final assessment:** `docs/PERFORMANCE_CEILING.md` (exp_035) consolidates the
+measured gaps, their limiting mechanisms, and what would be needed to improve
+further. Targets still missed are stated plainly below.
+
 For function-by-function status, numeric differences and the same ratios in a
 tracker form, see [docs/PROGRESS.md](docs/PROGRESS.md). The full API inventory is
 [docs/FEATURE_INVENTORY.md](docs/FEATURE_INVENTORY.md).

@@ -1,0 +1,36 @@
+{
+  "generated_at": "2026-11-21T22:27:29.653206+00:00",
+  "gpu_clock_mhz": 1530.0,
+  "environment": {
+    "torch": "2.11.0+cu126",
+    "gpu": "NVIDIA GeForce GTX 1660 SUPER",
+    "bitsy": "0.2.0-bitsy"
+  },
+  "config": {
+    "in_features": 784,
+    "hidden": 64,
+    "out_features": 10,
+    "batch": 64,
+    "iters": 200,
+    "warmup": 20,
+    "lr": 0.1,
+    "seed": 0,
+    "deferred": true,
+    "result_path": "E:\\__PROJECTS__\\Hagane\\benchmarks\\results\\train_step_deferred.json"
+  },
+  "bitsy": {
+    "median_ms": 0.8252500119851902,
+    "stdev_ms": 0.19080493355179365,
+    "p10_ms": 0.7324999896809459,
+    "p90_ms": 1.1331000132486224
+  },
+  "torch": {
+    "median_ms": 0.982600002316758,
+    "stdev_ms": 0.15556627032992815,
+    "p10_ms": 0.8707999950274825,
+    "p90_ms": 1.2126999790780246
+  },
+  "throughput_ratio_torch_over_bitsy": 1.1906694796078252,
+  "bitsy_stage_allocs_during_timed_steps": 0,
+  "note": "wall time includes one completion wait per step on each side; stage_allocs is the host-visible staging allocation count during the 200 timed steps (after warmup)"
+}
