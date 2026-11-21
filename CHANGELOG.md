@@ -6,6 +6,16 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Rejected (TOGISHI Phase 5/6, exp_023)
+
+- Zero-dispatch stride-0 broadcast views were retried after the exp_022 offset
+  fix. Isolated 42 op cases passed but the mandatory gradient gate failed
+  (42/43, identical loss, wrong parameter gradients), so the change was
+  reverted and the API removed again with a header warning. The offset fix was
+  not the root cause. Final tree unchanged from exp_022: captured 0.224 ms /
+  ratio 0.300, eager 1.75 ms / ratio 0.604, parity 43/43. Details in
+  `experiments/exp_023/FINDINGS.md`.
+
 ### Fixed (TOGISHI Phase 5/6, exp_022)
 
 - `bt_tensor_copy_to_host` and the fused `sgd_step`/`reduce_sum`/

@@ -158,8 +158,8 @@ bt_status_t bt_tensor_offset_view(const bt_tensor_t* tensor, int64_t offset,
   return BT_OK;
 }
 
-/* exp_019: bt_tensor_broadcast_view was removed after it broke end-to-end
- * training gradients while isolated 42-case parity stayed green. */
+/* exp_019/023: bt_tensor_broadcast_view was tried twice and broke the
+ * end-to-end gradient gate both times; it is not exposed. */
 
 bt_status_t bt_tensor_copy_to_host(const bt_tensor_t* tensor, void* dst, size_t dst_bytes) {
   if (!tensor || !dst) return bt_fail(BT_ERR_INVALID_ARGUMENT, "bt_tensor_copy_to_host: NULL");

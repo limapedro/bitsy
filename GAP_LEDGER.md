@@ -240,6 +240,19 @@ Conclusion: the remaining elementwise gap is bandwidth/kernel-bound
 - Next: retry zero-dispatch views now that offsets are honoured, or pursue
   another fusion/GEMM rung. All changes must pass the 43-case gate.
 
+## Phase 5/6 update (exp_023)
+
+- Zero-dispatch stride-0 broadcast views retried after the exp_022 view-offset
+  fix. Isolated 42 op cases passed but the mandatory gradient gate FAILED
+  (42/43, identical loss, wrong parameter gradients) — the second rejection.
+  Reverted immediately; API removed with a header warning. exp_022's offset fix
+  was not the root cause; some other stride-blind consumer remains.
+- Final tree unchanged: captured 0.224 ms / ratio 0.300, eager 1.75 ms / ratio
+  0.604, elementwise 0.42–0.69, GEMM 1024² 0.72, parity 43/43.
+- Next: find the remaining non-contiguous-view consumer, or pursue the
+  remaining GEMM rungs / a stride-audited autograd rewrite. The 43-case gate
+  remains mandatory.
+
 ## Honesty
 
 - Timestamp GPU time is a proxy, not the 1000-repeat isolated kernel time the

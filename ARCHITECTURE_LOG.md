@@ -869,8 +869,29 @@ gate failed with identical loss and wrong parameter gradients; the fused path
 was reverted (kernel kept as a negative-result variant). Debugging found a
 genuine correctness defect: `bt_tensor_copy_to_host` and four fused shaders
 ignored `tensor->offset`, reading non-zero-offset views from element 0. Fixed
-with `bt_vk_readback_offset()` and offset push constants — the likely root
-cause of exp_019's broadcast-view failure. No performance change (captured
-0.220 ms / ratio 0.303, eager 1.56 ms / ratio 0.627); parity 43/43. Next:
-retry zero-dispatch views now that offsets are honoured, or another fusion
-rung; the 43-case gate remains mandatory.
+with `bt_vk_readback_offset()` and offset push constants. No performance change
+(captured 0.220 ms / ratio 0.303, eager 1.56 ms / ratio 0.627); parity 43/43.
+Next: retry zero-dispatch views now that offsets are honoured, or another
+fusion rung; the 43-case gate remains mandatory.
+
+---
+
+## 2026-11-21 — Broadcast views rejected a second time (exp_023)
+
+**Context.** exp_022 fixed view-offset handling, the most likely cause of
+exp_019's broadcast-view gradient corruption.
+
+**Options considered.** (1) Keep the dedicated `broadcast_grad` kernel,
+(2) retry zero-dispatch stride-0 views for reduction gradients.
+
+**Decision.** Option 2 was implemented, recorded in
+`experiments/exp_023/HYPOTHESIS.md`, and gated immediately by `run.py`.
+
+**Consequences.** The isolated 42 op cases passed but the end-to-end gradient
+gate failed (42/43 overall, loss identical, parameter gradients wrong) — the
+same signature as exp_019. The offset fix was therefore not the root cause.
+The change was reverted at once; the API is removed again with a warning in the
+header. Final tree equals exp_022 (captured 0.224 ms / ratio 0.300, eager
+1.75 ms / ratio 0.604, parity 43/43). Stride-0 views are now rejected twice
+with evidence; further work needs the remaining stride-blind consumer found or
+abandoned. The 43-case gate remains a hard requirement.
