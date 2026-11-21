@@ -44,6 +44,7 @@ typedef struct {
   VkPipeline gemm_rb_pipeline;
   VkPipeline gemm_rb_vec4_pipeline;
   VkPipeline gemm_rb_vec4_k16_pipeline;
+  VkPipeline gemm_rb_vec4_swz_pipeline;
   VkPipeline splitk_reduce_pipeline;
   VkPipeline sgd_step_pipeline;
   VkPipeline reduce_sum_pipeline;

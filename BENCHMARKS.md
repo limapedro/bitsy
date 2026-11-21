@@ -161,6 +161,15 @@ step 0.240 → **0.219 ms**, graph ratio 0.278 → **0.304**, eager step 1.669 �
 replacement); the graph ≥0.31 stretch ratio was narrowly missed. See
 `experiments/exp_020/FINDINGS.md`.
 
+## exp_021 — GEMM L2 swizzle (negative result, kept for honesty)
+
+A 4×4 group-swizzled tile order (`BT_GEMM_VARIANT=6`) was measured against the
+current vec4 winner in one controlled tuner run: 256² 0.227 vs **0.172** ms and
+1024² 1.193 vs **0.985** ms — **1.21–1.32× slower**. The autotune cache keeps
+variant 4; the swizzled kernel is retained only as a measured negative result.
+The 1024² ratio remains 0.68–0.76 across clock-varying runs, still below 0.80.
+See `experiments/exp_021/FINDINGS.md`.
+
 ## exp_019 — negative result (kept for honesty)
 
 A zero-dispatch broadcast view for reduction gradients was tried. It improved

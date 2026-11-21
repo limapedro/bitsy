@@ -6,6 +6,14 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added (TOGISHI Phase 6, exp_021)
+
+- `gemm_rb_vec4_swz` (variant 6): 4×4 group-swizzled tile order, measured and
+  **rejected** — 1.32× slower at 256², 1.21× slower at 1024² than the current
+  vec4 winner. Kept as a negative-result variant; autotune still selects
+  variant 4. 1024² GEMM ratio remains 0.68–0.76 vs ≥0.80. Parity 43/43 incl.
+  gradient gate, CTest both builds. Details in `experiments/exp_021/FINDINGS.md`.
+
 ### Added (TOGISHI Phase 2/6, exp_020)
 
 - **Required end-to-end gradient-flow gate** (`tests/parity/grad_flow.py`) in

@@ -17,7 +17,7 @@ from gemm import bench, CONFIG as GEMM_CONFIG  # noqa: E402
 
 @dataclass(frozen=True, slots=True)
 class TuneConfig:
-  variants:tuple = (0, 1, 2, 4, 5)
+  variants:tuple = (0, 1, 2, 4, 5, 6)
   result_path:Path = ROOT / "benchmarks" / "results" / "gemm_tune.json"
   cache_path:Path = ROOT / "benchmarks" / "results" / "gemm_autotune.txt"
 
