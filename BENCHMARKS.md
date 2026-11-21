@@ -1,5 +1,9 @@
 # Benchmarks
 
+For function-by-function status, numeric differences and the same ratios in a
+tracker form, see [docs/PROGRESS.md](docs/PROGRESS.md). The full API inventory is
+[docs/FEATURE_INVENTORY.md](docs/FEATURE_INVENTORY.md).
+
 ## M2 elementwise results (2026-11-21)
 
 Measured with `python benchmarks/ops/elementwise.py` on the GTX 1660 Super,

@@ -207,6 +207,26 @@ static void matmul_test(void) {
   }
 }
 
+/* Contiguous reshape shares storage; 2D transpose matches PyTorch's .t(). */
+static void view_transpose(void) {
+  int64_t ad[2] = { 2, 3 }, flat[1] = { 6 }, td[2] = { 3, 2 };
+  float av[6] = { 1.f, 2.f, 3.f, 4.f, 5.f, 6.f }, out[6], trans[6];
+  bt_tensor_t* a = bt_tensor_create(ad, 2, BT_FLOAT32, bt_device_cpu(), av);
+  bt_tensor_t* v = NULL;
+  check_status(bt_tensor_view(a, flat, 1, &v), BT_OK, "view");
+  CHECK(v && bt_tensor_numel(v) == 6 && bt_tensor_shape(v)->ndim == 1);
+  CHECK(bt_tensor_copy_to_host(v, out, sizeof(out)) == BT_OK && !memcmp(out, av, sizeof(out)));
+  bt_tensor_release(v);
+
+  check_status(bt_transpose(a, &v), BT_OK, "transpose");
+  CHECK(v && bt_tensor_shape(v)->ndim == 2);
+  CHECK(bt_tensor_shape(v)->dims[0] == td[0] && bt_tensor_shape(v)->dims[1] == td[1]);
+  CHECK(bt_tensor_copy_to_host(v, trans, sizeof(trans)) == BT_OK);
+  CHECK(trans[0] == 1.f && trans[1] == 4.f && trans[5] == 6.f);
+  bt_tensor_release(v);
+  bt_tensor_release(a);
+}
+
 /* *** suite *** */
 
 typedef void (*test_fn)(void);
@@ -215,7 +235,8 @@ int main(void) {
   check_status(bt_init(), BT_OK, "bt_init");
   const test_fn tests[] = {
     dtypes, devices, shapes, storage, tensor_creation,
-    add_basic, add_broadcast, add_scalar, add_empty, add_errors, vulkan_add, matmul_test
+    add_basic, add_broadcast, add_scalar, add_empty, add_errors, vulkan_add,
+    matmul_test, view_transpose
   };
   const size_t count = sizeof(tests) / sizeof(tests[0]);
   for (size_t i = 0; i < count; ++i) tests[i]();
