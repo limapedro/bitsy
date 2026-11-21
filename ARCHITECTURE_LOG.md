@@ -429,3 +429,31 @@ CPU roundtrip for gradient shape alignment; this is a correctness-first stopgap.
 eventually move into C (M4/M6), and the CPU roundtrip must be replaced by a
 reduction kernel. No PyTorch is imported by the runtime package; torch appears
 only in the parity/training scripts.
+
+---
+
+## 2026-11-21 — Conv2d on both backends, and a large-batch eval instability
+
+**Context.** CIFAR-10 needs convolution and its backward. cuDNN is the PyTorch
+oracle. During the first CIFAR run, per-epoch losses matched PyTorch CUDA to
+~1e-7, but evaluating all 512 test samples in one Vulkan call intermittently
+produced a handful of completely wrong logits (one sample: 4.54 vs -0.32).
+Evaluating the same sample alone, or in 64-sample chunks, matched PyTorch.
+
+**Options considered.** (1) Report the divergence as a model bug, (2) treat it
+as a suspected large-batch Vulkan hazard, chunk evaluation, and record the
+observation without claiming the root cause is fixed, (3) loosen accuracy
+tolerance and hide it.
+
+**Decision.** Option 2. `Conv2d` and its three backward kernels (dX, dW, dB)
+run on both cpu_ref and Vulkan through a separate conv dispatcher; stride and
+padding are push constants. The CIFAR script evaluates in 64-sample chunks,
+matching the training batch size. `tests/parity/conv_check.py` records forward
+and gradient differences (< 1e-5) on both backends. The large-batch anomaly is
+recorded here as an open correctness issue, not silently ignored.
+
+**Consequences.** CIFAR-10 loss curves, accuracy and final weights now match
+PyTorch CUDA (`benchmarks/results/cifar_cnn_parity.json`). The intermittent
+full-batch eval anomaly still needs a dedicated Vulkan synchronization/race
+investigation; only the chunked path is claimed correct. No tolerance was
+loosened.

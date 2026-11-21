@@ -26,6 +26,15 @@ them. Anything not listed here is intended to match PyTorch's semantics.
   gradient to NumPy to sum broadcast dimensions. Correct but not device-native;
   a reduction kernel will replace it.
 
+## Temporary (open correctness issue)
+
+- **Large-batch Vulkan evaluation is not yet trustworthy.** Evaluating hundreds
+  of samples in a single Vulkan call intermittently produced wrong logits for a
+  few samples during CIFAR-10 evaluation. Chunked evaluation (64 samples, the
+  training batch size) matches PyTorch CUDA exactly and is used by the CIFAR
+  script. Root cause is under investigation; see `ARCHITECTURE_LOG.md`
+  (2026-11-21 conv entry).
+
 ## Permanent / hardware-driven
 
 - **No C++ in the core.** PyTorch's ATen is C++; Bitsy mirrors its design in

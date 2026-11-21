@@ -16,7 +16,7 @@ Status legend: **done** / **in progress** / **planned**.
 | M5 | Temper | GEMM: naive → tiled → register-blocked, batched, FP16-storage, fused epilogues | **in progress** (naive kernel + parity done; tuning pending) |
 | M6 | Blade | Python library: CPython extension, full `Tensor` surface, NumPy/DLPack interop, wheels | planned |
 | M7 | Whetstone | `nn` and `optim`: modules, layers, losses, init, optimizers, schedulers, fused updates | **in progress** (minimal Linear/Sequential/SGD/CE done) |
-| M8 | Edge | Convolution and pooling: direct, im2col+GEMM, Winograd/FFT, small CNN | planned |
+| M8 | Edge | Convolution and pooling: direct, im2col+GEMM, Winograd/FFT, small CNN | **in progress** (direct conv + CIFAR CNN parity done) |
 | M9 | Grain | Normalization, attention, sequence models, small transformer | planned |
 | M10 | Hamon | Fusion and overhead: pointwise fusion, launch reduction, allocator tuning | planned |
 | M11 | Temper II | Checkpoint compatibility, safetensors, DLPack, autocast, gradient checkpointing | planned |
@@ -65,4 +65,8 @@ Performance targets are not met; see `experiments/exp_001/FINDINGS.md`.
 - [x] Gradient parity vs PyTorch CUDA: loss diff 1.2e-7, W grad 6.0e-8 (`tests/parity/reports/gradcheck.json`)
 - [x] MNIST MLP: 10 epochs, loss curves and accuracy identical to PyTorch CUDA, final W1 diff 1.5e-7 (`benchmarks/results/mnist_mlp_parity.json`)
 - [ ] Move autograd into C; replace unbroadcast CPU roundtrip with a reduction kernel
-- [ ] Tiled/autotuned GEMM experiment; CIFAR/text/GAN/quantization parity
+- [x] Conv2d + 3 backward kernels on both backends; conv gradcheck < 1e-5
+- [x] CIFAR-10 CNN: 3 epochs, identical loss curves and accuracy, logits diff 1.2e-5
+- [ ] Investigate intermittent large-batch Vulkan eval anomaly (chunked path is correct)
+- [x] exp_002 tiled SGEMM: 2.36x faster at n=1024 (495 GFLOPS, ratio 0.22 — target still missed)
+- [ ] Register-blocked/vectorized GEMM, autotuning; text/GAN/quantization parity

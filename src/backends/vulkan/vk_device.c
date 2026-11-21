@@ -7,6 +7,8 @@
 #include "vk_device_internal.h"
 #include "elementwise.spv.h"
 #include "matmul.spv.h"
+#include "conv.spv.h"
+#include "gemm_tiled.spv.h"
 
 vk_ctx_t g_vk;
 
@@ -59,18 +61,18 @@ static bt_status_t pipeline_from_spv(const uint32_t* code, size_t bytes, VkPipel
 }
 
 static bt_status_t make_pipeline(void) {
-  VkDescriptorSetLayoutBinding bindings[3];
-  for (int i = 0; i < 3; ++i) {
+  VkDescriptorSetLayoutBinding bindings[4];
+  for (int i = 0; i < 4; ++i) {
     bindings[i] = (VkDescriptorSetLayoutBinding){
       .binding = (uint32_t)i, .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
       .descriptorCount = 1, .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
     };
   }
   VkDescriptorSetLayoutCreateInfo dli = { .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-                                          .bindingCount = 3, .pBindings = bindings };
+                                          .bindingCount = 4, .pBindings = bindings };
   VKCHECK(vkCreateDescriptorSetLayout(g_vk.device, &dli, NULL, &g_vk.set_layout));
 
-  VkDescriptorPoolSize size = { .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, .descriptorCount = 3 };
+  VkDescriptorPoolSize size = { .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, .descriptorCount = 4 };
   VkDescriptorPoolCreateInfo dpi = { .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
                                      .maxSets = 1, .poolSizeCount = 1, .pPoolSizes = &size };
   VKCHECK(vkCreateDescriptorPool(g_vk.device, &dpi, NULL, &g_vk.descriptor_pool));
@@ -88,7 +90,9 @@ static bt_status_t make_pipeline(void) {
 
   bt_status_t status;
   if ((status = pipeline_from_spv(elementwise_spv, elementwise_spv_bytes, &g_vk.pipeline))) return status;
-  return pipeline_from_spv(matmul_spv, matmul_spv_bytes, &g_vk.matmul_pipeline);
+  if ((status = pipeline_from_spv(matmul_spv, matmul_spv_bytes, &g_vk.matmul_pipeline))) return status;
+  if ((status = pipeline_from_spv(conv_spv, conv_spv_bytes, &g_vk.conv_pipeline))) return status;
+  return pipeline_from_spv(gemm_tiled_spv, gemm_tiled_spv_bytes, &g_vk.gemm_tiled_pipeline);
 }
 
 bt_status_t bt_vk_init(void) {
@@ -138,6 +142,8 @@ void bt_vk_shutdown(void) {
   vkDeviceWaitIdle(g_vk.device);
   vkDestroyPipeline(g_vk.device, g_vk.pipeline, NULL);
   vkDestroyPipeline(g_vk.device, g_vk.matmul_pipeline, NULL);
+  vkDestroyPipeline(g_vk.device, g_vk.conv_pipeline, NULL);
+  vkDestroyPipeline(g_vk.device, g_vk.gemm_tiled_pipeline, NULL);
   vkDestroyPipelineLayout(g_vk.device, g_vk.pipeline_layout, NULL);
   vkDestroyDescriptorPool(g_vk.device, g_vk.descriptor_pool, NULL);
   vkDestroyDescriptorSetLayout(g_vk.device, g_vk.set_layout, NULL);

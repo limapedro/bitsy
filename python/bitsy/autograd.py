@@ -93,6 +93,16 @@ class Tensor:
       return (self._op(C.mul(g._t, d._t), (), None),)
     return self._op(out, (self,), back)
 
+  def sum(self) -> "Tensor":
+    n = 1
+    for d in self.shape: n *= d
+    col = Tensor.from_numpy(np.ones((n, 1), np.float32), self.device)
+    return self.reshape(1, n) @ col
+
+  def reshape(self, *shape) -> "Tensor":
+    ct = C.view(self._t, tuple(shape))
+    return self._op(ct, (self,), lambda g: (self._op(C.view(g._t, self.shape), (), None),))
+
   def exp(self) -> "Tensor":
     out = C.exp(self._t)
     return self._op(out, (self,), lambda g: (self._op(C.mul(g._t, out), (), None),))

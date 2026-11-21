@@ -59,6 +59,10 @@ BT_API uint64_t bt_tensor_version(const bt_tensor_t* tensor);
 BT_API bt_status_t bt_tensor_copy_to_host(const bt_tensor_t* tensor, void* dst,
                                           size_t dst_bytes);
 
+/* Contiguous reshape: shares storage, no copy, no Vulkan dispatch. */
+BT_API bt_status_t bt_tensor_view(const bt_tensor_t* tensor, const int64_t* dims,
+                                  int64_t ndim, bt_tensor_t** out);
+
 #ifdef __cplusplus
 }
 #endif
