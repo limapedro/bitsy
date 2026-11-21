@@ -103,16 +103,18 @@ inside the timed region. Deferred transfers are now the default;
 | mode | clock | Bitsy ms/step | PyTorch ms/step | PyTorch/Bitsy throughput | stage allocs / 200 steps |
 |---|---:|---:|---:|---:|---:|
 | baseline (`=0`) | 1530 MHz | 9.575 | 1.215 | 0.127 | 0 (old path) |
-| deferred (default) | 1530 MHz | 3.220 | 1.200 | **0.373** | **0** |
+| deferred (default, exp_014) | 1530 MHz | 3.220 | 1.200 | 0.373 | **0** |
+| deferred + device unbroadcast (exp_016) | 1530 MHz | **2.626–2.911** | 1.078–1.080 | **0.37–0.41** | **0** |
 
-**2.97× faster** at matched clock (a second pair gave 2.83× at a lower deferred
-clock), and zero staging allocations during the timed steps. **The ≥0.85
-end-to-end target is still missed (0.34–0.37)**: the remaining ~3.1 ms/step is
-per-op Python/ctypes dispatch and autograd construction, not transfer sync.
-Numeric parity is unchanged — MNIST/CIFAR bitsy losses are bit-identical
-between modes (see `experiments/exp_014/FINDINGS.md`).
+Deferred transfer was **2.97× faster** than the synchronous baseline at matched
+clock; exp_016's device-side unbroadcast reduction removed a host sync from
+every backward and improved the default step a further **1.1–1.2×**, with zero
+staging allocations throughout. **The ≥0.85 end-to-end target is still missed
+(0.37–0.41)**: the remaining ~2.7 ms/step is per-op Python/ctypes dispatch and
+autograd construction. Numeric parity is unchanged — MNIST report identical,
+CIFAR unchanged (see `experiments/exp_014` and `exp_016/FINDINGS.md`).
 
-## Captured full training step (updated 2026-11-21, exp_015)
+## Captured full training step (updated 2026-11-21, exp_015/016)
 
 `python benchmarks/models/graph_step_bench.py`: the whole MLP step (forward +
 backward + SGD) captured and replayed 100× per trial, 10 trials, median of
@@ -122,16 +124,19 @@ output is bit-identical to eager (abs diff 0.0).
 | path | ms/step | clock |
 |---|---:|---:|
 | Bitsy eager (default API, exp_014) | 3.220 | 1530 MHz |
-| Bitsy captured + replayed | **0.294–0.355** | 1732–1935 MHz |
+| Bitsy captured + replayed (exp_015) | 0.294–0.355 | 1732–1935 MHz |
+| Bitsy captured + replayed (exp_016, single chunk) | 0.296–0.334 | 1658–1732 MHz |
 | PyTorch eager | 1.20 | 1530 MHz |
 | PyTorch CUDA graph | **0.067–0.068** | 1732–1935 MHz |
 
 Capture is **~9–11× faster than eager Bitsy**, but **graph throughput is only
-0.19–0.23× PyTorch** — the ≥0.85 end-to-end target and the ≥0.80 intermediate
-gate are both **missed**. Each replay issues two command-buffer submits
-(one extra because the interim autograd reads bias gradients back to the CPU
-mid-backward) plus many small dispatches. Details and the capture-lifetime
-limitation are in `experiments/exp_015/FINDINGS.md`.
+0.20–0.23× PyTorch** — the ≥0.85 end-to-end target and the ≥0.80 intermediate
+gate are both **missed**. exp_016 removed the mid-backward CPU gradient
+readback, reducing capture from two command-buffer chunks to one and dropping
+the capture-phase submit count 2 → 1, but graph-step time did **not** improve:
+saving one shared-wait submit is negligible against ~66 small dispatches per
+step. Details in `experiments/exp_015/FINDINGS.md` and
+`experiments/exp_016/FINDINGS.md`.
 
 ## Comparison target
 

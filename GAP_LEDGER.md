@@ -134,6 +134,23 @@ Conclusion: the remaining elementwise gap is bandwidth/kernel-bound
   produced bit-wrong replays; fixed by pinning resources until the final wait.
   Replaying a capture after that wait is now documented as invalid.
 
+## Phase 6 update (exp_016)
+
+- Device-side unbroadcast reductions (2D) removed the CPU gradient readback
+  from every backward. Capture-phase submit count dropped 2 → 1 (single-chunk
+  capture for the MLP step); the eager step improved 3.220 → 2.626–2.911 ms
+  (1.1–1.2×), ratio vs PyTorch 0.34–0.37 → 0.37–0.41.
+- **Captured graph throughput did not improve** (0.20–0.23 vs PyTorch CUDA
+  graph, same as exp_015): the ≥0.28 prediction was missed. One fewer shared-
+  wait submit saves only a few µs, and the extra reduction dispatches offset it.
+- Numeric drift from the device reduction is 1.07e-7 relative (1e-5 tolerance);
+  MNIST report identical, CIFAR unchanged, parity 42/42. >2D gradients still
+  use the CPU fallback.
+- Ranked remaining cause is now clearer: **~66 small Vulkan dispatches plus
+  barriers per step** dominate the captured graph. Next: fuse backward/
+  optimizer op chains (or a fused step kernel) to cut dispatch count, then
+  re-measure with full parity verification.
+
 ## Honesty
 
 - Timestamp GPU time is a proxy, not the 1000-repeat isolated kernel time the

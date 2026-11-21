@@ -710,3 +710,27 @@ end-to-end targets; recorded as a negative result. The remaining causes are the
 extra submit per replay imposed by the CPU readback and the many small
 dispatches from the Python autograd. Next: device-side reductions to remove the
 readback and obtain a single-chunk capture.
+
+---
+
+## 2026-11-21 — Device-side unbroadcast reductions (exp_016)
+
+**Context.** exp_015's capture needed two chunks because `_unbroadcast()` read
+bias gradients back to the CPU mid-backward, forcing an extra submit per replay.
+
+**Options considered.** (1) Keep the chunked capture, (2) replace the 2D
+unbroadcast CPU roundtrip with device matmul/view reductions, keeping a CPU
+fallback for >2D.
+
+**Decision.** Option 2, recorded in `experiments/exp_016/HYPOTHESIS.md`. No
+kernel, tolerance or benchmark-method change. The 1.07e-7 relative fp32 drift
+from changing reduction order is measured and accepted inside the 1e-5 gate.
+
+**Consequences.** Capture-phase submit count drops 2 → 1, confirming a
+single-chunk MLP capture. The eager step improves 3.220 → 2.626–2.911 ms
+(1.1–1.2×; ratio 0.37–0.41), but **captured graph throughput does not improve**
+(0.20–0.23 vs PyTorch CUDA graph); the ≥1.3× / ≥0.28 graph prediction is
+recorded as a miss. The dominant remaining cost is now clearly the ~66 small
+dispatches and barriers per step, not submit count. Next: fuse backward/
+optimizer chains to cut dispatch count. Parity stays 42/42; MNIST identical,
+CIFAR unchanged.

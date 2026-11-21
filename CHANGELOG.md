@@ -6,6 +6,17 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed (TOGISHI Phase 6, exp_016)
+
+- Device-side unbroadcast reductions for 2D gradients replace the CPU roundtrip
+  in backward (CPU fallback retained for >2D). Capture-phase submit count drops
+  2 → 1 (single-chunk MLP capture); the default eager step improves 3.220 →
+  2.626–2.911 ms (1.1–1.2×, ratio 0.37–0.41). Captured graph throughput does
+  NOT improve (0.20–0.23 vs PyTorch CUDA graphs; ≥0.28 prediction missed) —
+  ~66 small dispatches per step now dominate. Parity 42/42, MNIST identical,
+  CIFAR unchanged; reduction drift 1.07e-7 relative. Details in
+  `experiments/exp_016/FINDINGS.md`.
+
 ### Added (TOGISHI Phase 5, exp_015)
 
 - Full training-step capture/replay: captures are split into command-buffer
