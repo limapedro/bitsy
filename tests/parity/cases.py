@@ -9,7 +9,7 @@ import torch
 
 ValueGenerator = Callable[[tuple[int, ...], torch.dtype, int], torch.Tensor]
 BINARY = ("add", "sub", "mul", "div")
-UNARY = ("relu", "sigmoid", "tanh", "exp")
+UNARY = ("relu", "sigmoid", "tanh", "exp", "log")
 
 # *** value sets ***
 
@@ -26,10 +26,14 @@ def normal(shape:tuple[int, ...], dtype:torch.dtype, seed:int) -> torch.Tensor:
 def large_small(shape:tuple[int, ...], dtype:torch.dtype, seed:int) -> torch.Tensor:
   return _tile([1e20, -1e20, 1e-20, -1e-20, 1e30, -1e30, 3.14159265, 1.0/3.0], shape, dtype)
 
+def positive(shape:tuple[int, ...], dtype:torch.dtype, seed:int) -> torch.Tensor:
+  return normal(shape, dtype, seed).abs() + 0.1
+
 def special(shape:tuple[int, ...], dtype:torch.dtype, seed:int) -> torch.Tensor:
   return _tile([float("inf"), float("-inf"), float("nan"), 0.0, -0.0, 1.0, -1.0, 2.5], shape, dtype)
 
-VALUE_SETS = {"normal": normal, "large_small": large_small, "special": special}
+VALUE_SETS = {"normal": normal, "large_small": large_small, "special": special,
+              "positive": positive}
 
 # *** cases ***
 
@@ -69,4 +73,9 @@ CASES:tuple[ParityCase, ...] = (
   ParityCase("add_special_vulkan", "add", (8,), (8,), "special", device="vulkan"),
   ParityCase("add_large_vulkan", "add", (4096,), (4096,), "normal", device="vulkan"),
   ParityCase("add_empty_vulkan", "add", (0, 2), (1, 2), "normal", device="vulkan"),
+  ParityCase("log_cpu", "log", (7, 13), (7, 13), "positive"),
+  ParityCase("log_vulkan", "log", (7, 13), (7, 13), "positive", device="vulkan"),
+  ParityCase("matmul_cpu", "matmul", (4, 5), (5, 6), "normal"),
+  ParityCase("matmul_vulkan", "matmul", (4, 5), (5, 6), "normal", device="vulkan"),
+  ParityCase("matmul_large_vulkan", "matmul", (32, 64), (64, 32), "normal", device="vulkan"),
 ) + _op_cases("cpu") + _op_cases("vulkan")

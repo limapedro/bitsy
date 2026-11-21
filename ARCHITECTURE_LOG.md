@@ -382,3 +382,50 @@ the mismatch.
 division is slower than the fp32 path, so it should be replaced later by a
 documented correctly-rounded fp32 sequence if an experiment proves one exists
 on this driver. No tolerance was loosened.
+
+---
+
+## 2026-11-21 — GEMM and transpose: naive first, optimization later
+
+**Context.** Training an MLP needs `matmul` and its transpose-based backward.
+cuBLAS is heavily tuned, so a parity-first kernel is more valuable than an
+unverified fast one.
+
+**Options considered.** (1) Tiled shared-memory SGEMM immediately, (2) naive
+one-lane-per-output dot products with correct strides, then optimize with an
+experiment, (3) CPU fallback for matmul.
+
+**Decision.** Option 2. `bt_matmul` and `bt_transpose` are registered on both
+backends; the Vulkan GEMM shader uses an 8x8 workgroup and an fp32 accumulator.
+Transpose reuses the elementwise shader with swapped strides (op code 8), so no
+extra pipeline is needed. Tolerance for matmul is rtol/atol 1e-5 because
+accumulation order legitimately differs from cuBLAS.
+
+**Consequences.** 40 parity cases now pass, including 3 matmul cases with zero
+mismatches. Performance is not claimed; tiling/register blocking becomes its own
+`exp_NNN` with before/after numbers, following the M5 plan.
+
+---
+
+## 2026-11-21 — Interim Python-side autograd, nn and optim
+
+**Context.** End-to-end training parity needs gradients, parameters and an
+optimizer. The full C autograd engine (M4) and CPython extension (M6) are still
+ahead of this work.
+
+**Options considered.** (1) Build the C autograd engine first, (2) implement a
+small dynamic graph in the Python front end that delegates every forward and
+backward *compute* op to the C/Vulkan dispatcher, (3) skip training until M6.
+
+**Decision.** Option 2, explicitly interim and recorded in `DEVIATIONS.md`.
+`bitsy.autograd.Tensor` records `(backward, parents)` and runs `add/sub/mul/div/
+matmul/transpose/exp/log/tanh/sigmoid/relu` through the C core; `bitsy.nn`
+provides Parameter, Linear, activations, Sequential, MSE and cross-entropy;
+`bitsy.optim.SGD` updates parameters with C ops. Gradients are Bitsy tensors,
+so all compute stays on the selected backend. `_unbroadcast` currently uses a
+CPU roundtrip for gradient shape alignment; this is a correctness-first stopgap.
+
+**Consequences.** Training parity can be verified now. The graph engine must
+eventually move into C (M4/M6), and the CPU roundtrip must be replaced by a
+reduction kernel. No PyTorch is imported by the runtime package; torch appears
+only in the parity/training scripts.

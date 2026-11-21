@@ -9,7 +9,8 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 
 @dataclass(frozen=True, slots=True)
 class ParityConfig:
-  ops:tuple[str, ...] = ("add", "sub", "mul", "div", "relu", "sigmoid", "tanh", "exp")
+  ops:tuple[str, ...] = ("add", "sub", "mul", "div", "relu", "sigmoid", "tanh", "exp",
+                         "log", "matmul")
   backends:tuple[str, ...] = ("cpu_ref",)
   include_cuda:bool = True
   seed:int = 1234

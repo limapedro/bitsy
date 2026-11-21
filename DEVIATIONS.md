@@ -15,6 +15,17 @@ them. Anything not listed here is intended to match PyTorch's semantics.
   the full surface arrives in M1/M2. Unsupported combinations return
   `BT_ERR_NOT_IMPLEMENTED` rather than producing wrong answers.
 
+## Temporary (interim training stack)
+
+- **Autograd is Python-side (M0–M5, C engine planned).** `bitsy.autograd`
+  records a dynamic graph in Python; every forward and backward *compute* op
+  runs through the C dispatcher on the selected backend. This is not the C
+  autograd engine required by the long-term design; see `ARCHITECTURE_LOG.md`
+  (2026-11-21 entry).
+- **Gradient unbroadcast uses a CPU roundtrip.** `_unbroadcast` copies a
+  gradient to NumPy to sum broadcast dimensions. Correct but not device-native;
+  a reduction kernel will replace it.
+
 ## Permanent / hardware-driven
 
 - **No C++ in the core.** PyTorch's ATen is C++; Bitsy mirrors its design in

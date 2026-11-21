@@ -24,6 +24,7 @@ static float apply(int op, float a, float b) {
     case BT_OP_SIGMOID: return 1.f / (1.f + expf(-a));
     case BT_OP_TANH: return tanhf(a);
     case BT_OP_EXP: return expf(a);
+    case BT_OP_LOG: return logf(a);
     default: return NAN;
   }
 }

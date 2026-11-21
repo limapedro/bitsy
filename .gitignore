@@ -1,3 +1,6 @@
+# Downloaded datasets (regenerate with torchvision)
+data/
+
 # Build trees
 build/
 build-*/

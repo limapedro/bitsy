@@ -62,7 +62,7 @@ def success_case(case:ParityCase, config:ParityConfig) -> dict[str, Any]:
     "bitsy_vs_torch": compare(got, expected.cpu(), tolerance),
   }
   if not on_gpu and config.include_cuda and torch.cuda.is_available():
-    cuda_expected = torch_op(lhs.cuda(), rhs.cuda()) if case.op in BINARY else torch_op(lhs.cuda())
+    cuda_expected = torch_op(lhs.cuda()) if case.op in UNARY else torch_op(lhs.cuda(), rhs.cuda())
     result["torch_cuda_vs_torch_cpu"] = compare(cuda_expected.cpu(), expected, tolerance)
     result["bitsy_vs_torch_cuda"] = compare(got, cuda_expected.cpu(), tolerance)
   result["passed"] = all(v["passed"] for v in result.values()

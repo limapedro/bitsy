@@ -10,8 +10,8 @@ from pathlib import Path
 from typing import Any
 
 __all__ = ["BitsyError", "Tensor", "add", "sub", "mul", "div", "relu", "sigmoid",
-           "tanh", "exp", "device", "dtype_size", "has_vulkan", "last_error",
-           "shutdown", "version"]
+           "tanh", "exp", "log", "matmul", "mm", "transpose", "device",
+           "dtype_size", "has_vulkan", "last_error", "shutdown", "version"]
 
 # *** errors and ctypes structs ***
 
@@ -56,8 +56,10 @@ _fn("bt_tensor_release", [_ptr], None)
 _fn("bt_tensor_copy_to_host", [_ptr, _ptr, ctypes.c_size_t], ctypes.c_int)
 for _name in ("add", "sub", "mul", "div"):
   _fn(f"bt_{_name}", [_ptr, _ptr, ctypes.POINTER(_ptr)], ctypes.c_int)
-for _name in ("relu", "sigmoid", "tanh", "exp"):
+for _name in ("relu", "sigmoid", "tanh", "exp", "log"):
   _fn(f"bt_{_name}", [_ptr, ctypes.POINTER(_ptr)], ctypes.c_int)
+_fn("bt_matmul", [_ptr, _ptr, ctypes.POINTER(_ptr)], ctypes.c_int)
+_fn("bt_transpose", [_ptr, ctypes.POINTER(_ptr)], ctypes.c_int)
 
 def _check(status:int) -> None:
   if not status: return
@@ -114,6 +116,7 @@ class Tensor:
     return out
 
   def __del__(self) -> None:
+    if _lib is None: return  # module globals are cleared at interpreter exit
     if (ptr := getattr(self, "_ptr", 0)): _lib.bt_tensor_release(ctypes.c_void_p(ptr))
     self._ptr = 0
 
@@ -136,3 +139,13 @@ def relu(a:Tensor) -> Tensor: return _op("relu", a)
 def sigmoid(a:Tensor) -> Tensor: return _op("sigmoid", a)
 def tanh(a:Tensor) -> Tensor: return _op("tanh", a)
 def exp(a:Tensor) -> Tensor: return _op("exp", a)
+def log(a:Tensor) -> Tensor: return _op("log", a)
+def matmul(a:Tensor, b:Tensor) -> Tensor: return _op("matmul", a, b)
+mm = matmul
+
+def transpose(a:Tensor) -> Tensor:
+  out = _ptr()
+  _check(_lib.bt_transpose(_ptr(a._ptr), ctypes.byref(out)))
+  shape = _lib.bt_tensor_shape(out)
+  dims = tuple(int(shape.contents.dims[i]) for i in range(int(shape.contents.ndim)))
+  return Tensor(out.value, dims, a._device)
