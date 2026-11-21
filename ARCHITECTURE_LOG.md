@@ -606,3 +606,28 @@ persistence is blocked by driver 621.01 (`vkGetPipelineCacheData` crashes with
 NULL pData and returns `VK_INCOMPLETE` up to 64 MiB), so only the validated
 load path remains. All negative results are in `experiments/exp_011/FINDINGS.md`;
 parity stays 42/42.
+
+---
+
+## 2026-11-21 — vec4 aligned elementwise fast path (exp_012)
+
+**Context.** exp_011 showed elementwise wall ratios 0.34–0.54 and identified
+memory-transaction inefficiency and runtime div/mod indexing as likely causes.
+PyTorch's profiler showed `vectorized_elementwise_kernel<4>`.
+
+**Options considered.** (1) Keep the scalar shader, (2) add a vec4 shader with
+linear indexing enabled only for contiguous equal-shaped aligned tensors,
+falling back to the scalar path otherwise.
+
+**Decision.** Option 2, recorded in `experiments/exp_012/HYPOTHESIS.md`. The
+fast path preserves the existing numeric semantics, including the fp64 division
+intermediate and transcendental functions. Broadcast, strided, scalar, and
+odd-sized cases keep the proven scalar kernel.
+
+**Consequences.** Large-tensor device-time bandwidth is now 269–284 GB/s, and a
+20-add chain reaches 293 GB/s = 96% of the measured DRAM ceiling. Wall ratios
+only improve to 0.43–0.49 because ~36 µs/op submit+fence dominates. The ≥1.3×
+speed prediction was not met overall (1.06–1.29×), recorded in
+`experiments/exp_012/FINDINGS.md`. Parity stays 42/42. This locks in the
+decision that further elementwise work should not chase bandwidth; the next
+target is submission overhead.

@@ -78,6 +78,17 @@ per iteration remains because the benchmark explicitly waits each iteration.
 Conclusion: the remaining elementwise gap is bandwidth/kernel-bound
 (86% of measured DRAM ceiling in the chain), not launch/sync-bound.
 
+## Phase 6 update (exp_012)
+
+- vec4 aligned elementwise kernel: 20-add chain device time 0.858 ms for
+  240 MiB = **293 GB/s (96% of measured DRAM ceiling)**, up from 86% in exp_011.
+  Single-op device-time bandwidth is 269–284 GB/s; wall-time bandwidth remains
+  89–111 GB/s because submit+fence is ~36 µs per op.
+- Wall ratios versus PyTorch remain 0.43–0.49 at 1M. The elementwise gap is now
+  **launch/sync-bound**, not bandwidth-bound. Next priority is submission
+  overhead (timeline semaphore without per-op host wait in the real API,
+  record-once command buffers), not more elementwise tuning.
+
 ## Honesty
 
 - Timestamp GPU time is a proxy, not the 1000-repeat isolated kernel time the

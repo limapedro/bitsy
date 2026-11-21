@@ -15,17 +15,19 @@ is not measured, so only wall time is compared.
 
 | op | elements | Bitsy ms | PyTorch ms | Bitsy device ms | clock MHz | ratio (target ≥ 0.95) | Bitsy GiB/s | PyTorch GiB/s |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
-| add | 4096 | 0.0694 | 0.0255 | 0.0019 | 1530 | 0.37 | 0.7 | 1.8 |
-| mul | 4096 | 0.0678 | 0.0364 | 0.0020 | 1530 | 0.54 | 0.7 | 1.3 |
-| relu | 4096 | 0.0616 | 0.0279 | 0.0020 | 1530 | 0.45 | 0.5 | 1.1 |
-| add | 1,048,576 | 0.1162 | 0.0572 | 0.0476 | 1530 | 0.49 | 100.8 | 204.9 |
-| mul | 1,048,576 | 0.1156 | 0.0524 | 0.0515 | 1530 | 0.45 | 101.4 | 223.6 |
-| relu | 1,048,576 | 0.1140 | 0.0385 | 0.0488 | 1530 | 0.34 | 68.5 | 202.7 |
+| add | 4096 | 0.0678 | 0.0290 | 0.0018 | 1530 | 0.43 | 0.7 | 1.6 |
+| mul | 4096 | 0.0741 | 0.0325 | 0.0020 | 1530 | 0.44 | 0.6 | 1.4 |
+| relu | 4096 | 0.0600 | 0.0253 | 0.0018 | 1530 | 0.42 | 0.5 | 1.2 |
+| add | 1,048,576 | 0.1059 | 0.0522 | 0.0423 | 1530 | 0.49 | 110.7 | 224.5 |
+| mul | 1,048,576 | 0.1091 | 0.0520 | 0.0431 | 1530 | 0.48 | 107.5 | 225.4 |
+| relu | 1,048,576 | 0.0883 | 0.0391 | 0.0297 | 1530 | 0.44 | 88.5 | 199.6 |
 
-**Targets are missed** (best ratio 0.54 vs ≥ 0.95). Every result in this table
-was measured at 1530 MHz and now logs its clock; the earlier 0.23–0.87 spread
-was partly clock variance. exp_011 hazard-tracked barriers and host-overlap
-experiments did not close the gap (see `experiments/exp_011/FINDINGS.md`).
+**Targets are missed** (best ratio 0.49 vs ≥ 0.95). Every result in this table
+was measured at 1530 MHz and logs its clock. exp_012 added a vec4 aligned fast
+path: a 20-add chain now moves 240 MiB in 0.858 ms device time = **293 GB/s,
+96% of the measured 304 GB/s ceiling**, while single-op wall ratios stay
+0.43–0.49 because ~36 µs/op of submit+fence overhead dominates. See
+`experiments/exp_012/FINDINGS.md`.
 
 ## GEMM results (updated 2026-11-21, exp_008)
 

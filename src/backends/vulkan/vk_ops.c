@@ -169,10 +169,26 @@ bt_status_t bt_vk_elementwise(const bt_tensor_t* a, const bt_tensor_t* b,
     bt_vk_buffer_of(out->storage->gpu),
     bt_vk_buffer_of(a->storage->gpu),
   };
+  int64_t last = out->shape.ndim - 1;
+  int vec4_ok = last >= 0 && out->shape.dims[last] % 4 == 0 &&
+                a->offset % 4 == 0 && b->offset % 4 == 0 && out->offset % 4 == 0 &&
+                bt_tensor_is_contiguous(a) && bt_tensor_is_contiguous(b) &&
+                bt_tensor_is_contiguous(out) &&
+                bt_shape_equal(&a->shape, &out->shape) &&
+                bt_shape_equal(&b->shape, &out->shape);
+  VkPipeline pipeline = g_vk.pipeline;
+  uint32_t dispatch_n = (uint32_t)total;
+  const char* name = "elementwise";
+  if (vec4_ok) {
+    pipeline = g_vk.elementwise_vec4_pipeline;
+    dispatch_n = (uint32_t)(total / 4); // one lane handles four floats
+    pc.n = dispatch_n;
+    name = "elementwise_vec4";
+  }
   // 256 lanes per workgroup; a single bounded dispatch keeps TDR out of the picture.
-  bt_status_t status = dispatch(g_vk.pipeline, buffers, &pc, sizeof(pc),
-                                (uint32_t)((total + 255) / 256), 1,
-                                "elementwise", 3.0 * total * 4.0, 2.0 * total);
+  bt_status_t status = dispatch(pipeline, buffers, &pc, sizeof(pc),
+                                (dispatch_n + 255) / 256, 1,
+                                name, 3.0 * total * 4.0, 2.0 * total);
   if (status == BT_OK) bt_storage_bump_version(out->storage);
   return status;
 }
