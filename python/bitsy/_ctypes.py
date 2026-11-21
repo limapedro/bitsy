@@ -9,7 +9,7 @@ import ctypes, os
 from pathlib import Path
 from typing import Any
 
-__all__ = ["BitsyError", "Tensor", "add", "sub", "mul", "div", "relu", "sigmoid", "flush", "device_time_ms",
+__all__ = ["BitsyError", "Tensor", "add", "add_relu", "sub", "mul", "div", "relu", "sigmoid", "flush", "wait", "device_time_ms",
            "tanh", "exp", "log", "matmul", "mm", "transpose", "view",
            "conv2d", "conv2d_backward_x", "conv2d_backward_w", "conv2d_backward_b",
            "device", "dtype_size", "has_vulkan", "last_error", "shutdown", "version"]
@@ -56,6 +56,7 @@ _fn("bt_status_name", [ctypes.c_int], ctypes.c_char_p)
 _fn("bt_dtype_size", [ctypes.c_int], ctypes.c_size_t)
 _fn("bt_has_vulkan", [], ctypes.c_int)
 _fn("bt_vulkan_flush", [], ctypes.c_int)
+_fn("bt_vulkan_wait", [], ctypes.c_int)
 _fn("bt_vulkan_device_time_ms", [], ctypes.c_double)
 _fn("bt_device_cpu", [], _Device)
 _fn("bt_device_from_string", [ctypes.c_char_p, ctypes.POINTER(_Device)], ctypes.c_int)
@@ -63,7 +64,7 @@ _fn("bt_tensor_create", [_i64p, ctypes.c_int64, ctypes.c_int, _Device, _ptr], _p
 _fn("bt_tensor_shape", [_ptr], ctypes.POINTER(_Shape))
 _fn("bt_tensor_release", [_ptr], None)
 _fn("bt_tensor_copy_to_host", [_ptr, _ptr, ctypes.c_size_t], ctypes.c_int)
-for _name in ("add", "sub", "mul", "div"):
+for _name in ("add", "sub", "mul", "div", "add_relu"):
   _fn(f"bt_{_name}", [_ptr, _ptr, ctypes.POINTER(_ptr)], ctypes.c_int)
 for _name in ("relu", "sigmoid", "tanh", "exp", "log"):
   _fn(f"bt_{_name}", [_ptr, ctypes.POINTER(_ptr)], ctypes.c_int)
@@ -90,6 +91,7 @@ def last_error() -> str: return (_lib.bt_get_last_error() or b"").decode()
 def dtype_size(dtype:int) -> int: return int(_lib.bt_dtype_size(dtype))
 def has_vulkan() -> bool: return bool(_lib.bt_has_vulkan())
 def flush() -> None: _check(_lib.bt_vulkan_flush())
+def wait() -> None: _check(_lib.bt_vulkan_wait())
 def device_time_ms() -> float: return float(_lib.bt_vulkan_device_time_ms())
 def shutdown() -> None: _check(_lib.bt_shutdown())
 
@@ -148,6 +150,7 @@ def _op(name:str, a:Tensor, b:Tensor|None=None) -> Tensor:
   return Tensor(out.value, dims, a._device)
 
 def add(a:Tensor, b:Tensor) -> Tensor: return _op("add", a, b)
+def add_relu(a:Tensor, b:Tensor) -> Tensor: return _op("add_relu", a, b)
 def sub(a:Tensor, b:Tensor) -> Tensor: return _op("sub", a, b)
 def mul(a:Tensor, b:Tensor) -> Tensor: return _op("mul", a, b)
 def div(a:Tensor, b:Tensor) -> Tensor: return _op("div", a, b)

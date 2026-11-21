@@ -89,6 +89,29 @@ bt_status_t bt_vk_elementwise(const bt_tensor_t* a, const bt_tensor_t* b,
   return status;
 }
 
+/* Fused pointwise: reuse the elementwise push-constant layout and odometer. */
+static bt_status_t add_relu_kernel(const bt_tensor_t* a, const bt_tensor_t* b, bt_tensor_t* out) {
+  int64_t total = bt_shape_numel(&out->shape);
+  if (!total) return BT_OK;
+  vk_pc_t pc = { .n = (uint32_t)total, .ndim = (uint32_t)out->shape.ndim,
+                 .op = BT_OP_FUSED_ADD_RELU, .offo = (int32_t)out->offset,
+                 .offa = (int32_t)a->offset, .offb = (int32_t)b->offset };
+  for (int64_t d = 0; d < out->shape.ndim; ++d) {
+    pc.dims[d] = (int32_t)out->shape.dims[d];
+    pc.sa[d] = stride_at(a, d, out->shape.ndim);
+    pc.sb[d] = stride_at(b, d, out->shape.ndim);
+    pc.so[d] = (int32_t)out->strides[d];
+  }
+  VkBuffer buffers[4] = {
+    bt_vk_buffer_of(a->storage->gpu), bt_vk_buffer_of(b->storage->gpu),
+    bt_vk_buffer_of(out->storage->gpu), bt_vk_buffer_of(a->storage->gpu),
+  };
+  bt_status_t status = dispatch(g_vk.fused_pipeline, buffers, &pc, sizeof(pc),
+                                (uint32_t)((total + 255) / 256), 1);
+  if (status == BT_OK) bt_storage_bump_version(out->storage);
+  return status;
+}
+
 typedef struct {
   uint32_t M, N, K;
   int32_t sa0, sa1, sb0, sb1, sc0, sc1;
@@ -223,6 +246,7 @@ bt_status_t bt_vk_register(void) {
   if ((s = REG(BT_OP_TANH, op_tanh))) return s;
   if ((s = REG(BT_OP_EXP, op_exp))) return s;
   if ((s = REG(BT_OP_LOG, op_log))) return s;
+  if ((s = REG(BT_OP_FUSED_ADD_RELU, add_relu_kernel))) return s;
   if ((s = REG(BT_OP_MATMUL, matmul_kernel))) return s;
   if ((s = REG(BT_OP_TRANSPOSE, transpose_kernel))) return s;
   for (int k = 0; k < BT_CONV_KIND_COUNT; ++k) {

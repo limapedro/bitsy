@@ -65,3 +65,13 @@ bt_status_t bt_cpu_ref_elementwise(const bt_tensor_t* a, const bt_tensor_t* b,
   bt_storage_bump_version(out->storage);
   return BT_OK;
 }
+
+/* First fused pointwise kernel: add into the output, then clamp in place. */
+bt_status_t bt_cpu_ref_add_relu(const bt_tensor_t* a, const bt_tensor_t* b, bt_tensor_t* out) {
+  bt_status_t status = bt_cpu_ref_elementwise(a, b, out, BT_OP_ADD);
+  if (status != BT_OK) return status;
+  float* data = (float*)bt_storage_data(out->storage) + out->offset;
+  for (int64_t i = 0; i < bt_shape_numel(&out->shape); ++i)
+    if (data[i] < 0.f) data[i] = 0.f;
+  return BT_OK;
+}

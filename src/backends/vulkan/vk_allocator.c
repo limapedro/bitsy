@@ -133,6 +133,7 @@ bt_status_t bt_vk_upload(void* handle, const void* host, size_t nbytes) {
   vkCmdCopyBuffer(g_vk.cmd, stage.buffer, dst->buffer, 1, &copy);
   bt_vk_barrier();
   status = bt_vk_flush();
+  if (status == BT_OK) status = bt_vk_wait(); // staging dies after this
   destroy_buffer(&stage);
   return status;
 }
@@ -150,6 +151,7 @@ bt_status_t bt_vk_readback(void* handle, void* host, size_t nbytes) {
   vkCmdCopyBuffer(g_vk.cmd, src->buffer, stage.buffer, 1, &copy);
   bt_vk_barrier();
   status = bt_vk_flush();
+  if (status == BT_OK) status = bt_vk_wait(); // host maps the staging buffer
   if (status != BT_OK) { destroy_buffer(&stage); return status; }
 
   void* mapped = NULL;

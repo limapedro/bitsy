@@ -1,0 +1,31 @@
+#version 450
+
+/* First pointwise fusion: relu(a + b) in one dispatch and one barrier.
+ * Push constants match elementwise.comp so the host path can be reused. */
+layout(local_size_x = 256) in;
+
+layout(std430, binding = 0) readonly buffer A { float a[]; };
+layout(std430, binding = 1) readonly buffer B { float b[]; };
+layout(std430, binding = 2) writeonly buffer O { float o[]; };
+
+layout(push_constant) uniform PC {
+  uint n, ndim, op;
+  int dims[8];
+  int sa[8], sb[8], so[8];
+  int offa, offb, offo;
+} pc;
+
+void main() {
+  uint idx = gl_GlobalInvocationID.x;
+  if (idx >= pc.n) return;
+  int ia = pc.offa, ib = pc.offb, io = pc.offo;
+  int rem = int(idx);
+  for (int d = int(pc.ndim) - 1; d >= 0; --d) {
+    int c = rem % pc.dims[d];
+    rem /= pc.dims[d];
+    ia += c * pc.sa[d];
+    ib += c * pc.sb[d];
+    io += c * pc.so[d];
+  }
+  o[io] = max(a[ia] + b[ib], 0.0);
+}

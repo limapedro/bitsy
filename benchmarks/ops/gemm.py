@@ -33,6 +33,7 @@ def _timed(fn, iters:int):
     start = time.perf_counter()
     fn()
     bt.flush()
+    bt.wait()
     torch.cuda.synchronize()
     out.append((time.perf_counter() - start) * 1e3)
     device.append(bt.device_time_ms())
@@ -45,7 +46,7 @@ def bench(n:int, config:GemmConfig) -> dict:
   bb = bt.Tensor.from_numpy(tb.cpu().numpy(), "vulkan")
   for _ in range(config.warmup):
     torch.mm(ta, tb); torch.cuda.synchronize()
-    bt.matmul(ba, bb); bt.flush()
+    bt.matmul(ba, bb); bt.flush(); bt.wait()
   tt, _ = _timed(lambda: torch.mm(ta, tb), config.iters)
   bt_times, dev = _timed(lambda: bt.matmul(ba, bb), config.iters)
   tm, bm = statistics.median(tt), statistics.median(bt_times)

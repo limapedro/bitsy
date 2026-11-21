@@ -8,7 +8,7 @@ from typing import Callable
 import torch
 
 ValueGenerator = Callable[[tuple[int, ...], torch.dtype, int], torch.Tensor]
-BINARY = ("add", "sub", "mul", "div")
+BINARY = ("add", "add_relu", "sub", "mul", "div")
 UNARY = ("relu", "sigmoid", "tanh", "exp", "log")
 
 # *** value sets ***

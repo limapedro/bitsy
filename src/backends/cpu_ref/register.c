@@ -33,6 +33,7 @@ bt_status_t bt_cpu_ref_register(void) {
   if ((status = REG(BT_OP_TANH, op_tanh))) return status;
   if ((status = REG(BT_OP_EXP, op_exp))) return status;
   if ((status = REG(BT_OP_LOG, op_log))) return status;
+  if ((status = REG(BT_OP_FUSED_ADD_RELU, bt_cpu_ref_add_relu))) return status;
   if ((status = REG(BT_OP_MATMUL, bt_cpu_ref_matmul))) return status;
   if ((status = REG(BT_OP_TRANSPOSE, bt_cpu_ref_transpose))) return status;
   for (int k = 0; k < BT_CONV_KIND_COUNT; ++k) {

@@ -38,6 +38,7 @@ def run(config:ChainConfig = CONFIG) -> int:
     x = a
     for _ in range(config.ops): x = bt.add(x, b)
     bt.flush()
+    bt.wait()
 
   for _ in range(config.warmup): chain()
   times, device = [], []

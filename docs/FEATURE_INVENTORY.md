@@ -118,6 +118,7 @@ Per-function numeric and performance evidence lives in [PROGRESS.md](PROGRESS.md
 | Representative API | Status |
 |---|---|
 | `relu`, `sigmoid`, `tanh`, `softmax` (via `log_softmax` internally) | partial |
+| fused `add + relu` pointwise kernel | done |
 | `gelu`, `silu`, `mish`, `leaky_relu`, `elu`, `selu`, `softplus`, `log_softmax`, `glu` | missing |
 | `mse_loss`, `cross_entropy` | done |
 | `nll_loss`, `l1_loss`, `smooth_l1_loss`/`huber_loss`, `bce_loss`, `bce_with_logits_loss` | missing |
@@ -152,7 +153,8 @@ Per-function numeric and performance evidence lives in [PROGRESS.md](PROGRESS.md
 | Representative API | Status |
 |---|---|
 | `device`, `cpu`, `vulkan`, `torch.cuda.synchronize` equivalent | partial (device strings, `bt_vulkan_flush()`, fence waits) |
-| `Stream`, `Event`, timeline semaphores, async scheduler | missing |
+| `Stream`, `Event`, async scheduler | missing |
+| timeline semaphore submission (`bt_vulkan_flush` / `bt_vulkan_wait`) | partial |
 | `autocast`, `GradScaler`, AMP, mixed precision | missing |
 | `torch.compile`, `torch.profiler`, `torch.utils.benchmark` | missing |
 | GPU timestamp queries | done (`bt_vulkan_device_time_ms()`) |

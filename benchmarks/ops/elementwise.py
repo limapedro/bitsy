@@ -34,7 +34,8 @@ def _timed(fn, iters:int):
   for _ in range(iters):
     start = time.perf_counter()
     fn()
-    bt.flush()                 # submit + fence wait for Bitsy
+    bt.flush()                 # async submit with timeline signal
+    bt.wait()                  # host completion point = fair wall time
     torch.cuda.synchronize()   # equivalent sync for PyTorch
     times.append((time.perf_counter() - start) * 1e3)
     device_times.append(bt.device_time_ms())
@@ -52,7 +53,7 @@ def bench_one(op:str, n:int, config:BenchConfig) -> dict:
 
   for _ in range(config.warmup):
     torch_call(); torch.cuda.synchronize()
-    bitsy_call(); bt.flush()
+    bitsy_call(); bt.flush(); bt.wait()
   t_torch, _ = _timed(torch_call, config.iters)
   t_bitsy, dev = _timed(bitsy_call, config.iters)
   tm, bm = statistics.median(t_torch), statistics.median(t_bitsy)

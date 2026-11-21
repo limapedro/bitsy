@@ -12,6 +12,7 @@ bt_status_t bt_cpu_ref_register(void);
 /* Naive broadcasting elementwise kernel shared by all registered ops. */
 bt_status_t bt_cpu_ref_elementwise(const bt_tensor_t* a, const bt_tensor_t* b,
                                    bt_tensor_t* out, int op);
+bt_status_t bt_cpu_ref_add_relu(const bt_tensor_t* a, const bt_tensor_t* b, bt_tensor_t* out);
 
 bt_status_t bt_cpu_ref_matmul(const bt_tensor_t* a, const bt_tensor_t* b, bt_tensor_t* out);
 bt_status_t bt_cpu_ref_transpose(const bt_tensor_t* a, const bt_tensor_t* b, bt_tensor_t* out);
