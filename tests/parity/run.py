@@ -17,6 +17,7 @@ import bitsy as bt  # noqa: E402
 from tests.parity.cases import BINARY, CASES, ParityCase, UNARY, VALUE_SETS  # noqa: E402
 from tests.parity.compare import compare  # noqa: E402
 from tests.parity.config import CONFIG, ParityConfig  # noqa: E402
+from tests.parity.grad_flow import CONFIG as GF_CONFIG, compare as grad_flow_compare  # noqa: E402
 from tests.parity.tolerances import tolerance_for  # noqa: E402
 
 # *** environment ***
@@ -99,6 +100,12 @@ def run(config:ParityConfig = CONFIG) -> int:
     results.append(result)
     print(f"[{'PASS' if result['passed'] else 'FAIL'}] {case.name}")
     if not result["passed"] and config.fail_fast: break
+
+  # exp_020: end-to-end gradient-flow gate (42 isolated cases are not enough).
+  gf = grad_flow_compare(GF_CONFIG)
+  results.append({"name": "end_to_end_gradient_flow", "grad_flow": gf,
+                  "passed": gf["passed"]})
+  print(f"[{'PASS' if gf['passed'] else 'FAIL'}] end_to_end_gradient_flow")
 
   passed = sum(r["passed"] for r in results)
   report = {

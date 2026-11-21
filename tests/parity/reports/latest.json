@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-21T18:34:28.040564+00:00",
+  "generated_at": "2026-11-21T18:46:59.130577+00:00",
   "environment": {
     "platform": "Windows-10-10.0.26300-SP0",
     "python": "3.10.11",
@@ -31,8 +31,8 @@
     "seed": 1234
   },
   "summary": {
-    "total": 42,
-    "passed": 42,
+    "total": 43,
+    "passed": 43,
     "failed": 0,
     "skipped": []
   },
@@ -1061,6 +1061,44 @@
         "mode": "rtol_atol",
         "elements": 91,
         "mismatches": 0
+      },
+      "passed": true
+    },
+    {
+      "name": "end_to_end_gradient_flow",
+      "grad_flow": {
+        "generated_at": "2026-11-21T18:46:59.129576+00:00",
+        "environment": {
+          "torch": "2.11.0+cu126",
+          "torch_device": "cuda",
+          "bitsy_vulkan": true
+        },
+        "config": {
+          "in_features": 32,
+          "hidden": 16,
+          "out_features": 8,
+          "batch": 8,
+          "lr": 0.1,
+          "seed": 0,
+          "rtol": 0.0001,
+          "atol": 1e-05,
+          "report_path": "E:\\__PROJECTS__\\Hagane\\tests\\parity\\reports\\grad_flow.json"
+        },
+        "bitsy_loss": 2.0995962619781494,
+        "torch_loss": 2.0995962619781494,
+        "checks": {
+          "loss": true,
+          "grad_w1": true,
+          "param_w1": true,
+          "grad_b1": true,
+          "param_b1": true,
+          "grad_w2": true,
+          "param_w2": true,
+          "grad_b2": true,
+          "param_b2": true
+        },
+        "passed": true,
+        "error": null
       },
       "passed": true
     }

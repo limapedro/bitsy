@@ -201,6 +201,21 @@ Conclusion: the remaining elementwise gap is bandwidth/kernel-bound
   /view changes. Next: a safe full-shape contiguous gradient kernel or a fully
   stride-audited tensor stack, then re-measure.
 
+## Phase 2/6 update (exp_020)
+
+- **Required gate added:** `tests/parity/grad_flow.py` compares loss, all
+  parameter gradients and post-step parameters for a full MLP step in Bitsy vs
+  PyTorch; wired into `run.py` (43/43) and both CI jobs. Proven to FAIL on a
+  corrupted gradient with unchanged loss — exp_019's blind spot is closed.
+- Safe broadcast elimination: a dedicated `broadcast_grad` kernel writes a
+  contiguous full-shape gradient, replacing `ones * grad` without stride-0
+  views. Captured 0.240 → **0.219 ms** (~1.10×), graph ratio 0.278 → **0.304**
+  (≥0.31 just missed), eager 1.669 → **1.57 ms**, ratio 0.62. Dispatch count
+  stays 41 (1:1 replacement). Parity 43/43 + training curves.
+- Ranked remaining cost: ~15 scalar elementwise + 10 tiled GEMM dispatches.
+  Next: multi-stage elementwise fusion or the GEMM class; all changes must pass
+  the new gradient gate.
+
 ## Honesty
 
 - Timestamp GPU time is a proxy, not the 1000-repeat isolated kernel time the

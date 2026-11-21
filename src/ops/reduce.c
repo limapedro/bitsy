@@ -2,12 +2,12 @@
 
 #include <stdlib.h>
 
-#include "../core/error_internal.h"
-#include "../core/dispatcher_internal.h"
-
 #ifdef BT_ENABLE_VULKAN
 #include "../backends/vulkan/vk_internal.h"
 #endif
+
+#include "../core/error_internal.h"
+#include "../core/dispatcher_internal.h"
 
 /* exp_018: dedicated 2D reduction. The CPU path loops in the same order as
  * the shader so Vulkan and CPU parity stay consistent. */
@@ -73,6 +73,47 @@ bt_status_t bt_reduce_sum(const bt_tensor_t* a, uint32_t axis, int keepdim,
   free(sums);
   free(host);
   if (!result) return bt_fail(BT_ERR_OUT_OF_MEMORY, "bt_reduce_sum: result OOM");
+  *out = result;
+  return BT_OK;
+}
+
+bt_status_t bt_broadcast_grad(const bt_tensor_t* g, const int64_t* dims,
+                              int64_t ndim, bt_tensor_t** out) {
+  bt_clear_error();
+  if (!g || !dims || !out) return bt_fail(BT_ERR_INVALID_ARGUMENT, "bt_broadcast_grad: NULL");
+  if (ndim != 2 || bt_tensor_shape(g)->ndim != 2)
+    return bt_fail(BT_ERR_SHAPE_MISMATCH, "bt_broadcast_grad: 2D only");
+  for (int i = 0; i < 2; ++i)
+    if (bt_tensor_shape(g)->dims[i] != 1 && bt_tensor_shape(g)->dims[i] != dims[i])
+      return bt_fail(BT_ERR_SHAPE_MISMATCH, "bt_broadcast_grad: incompatible dims");
+  bt_device_t device = bt_tensor_device(g);
+  if (bt_backend_for_device(device) == BT_BACKEND_VULKAN) {
+#ifdef BT_ENABLE_VULKAN
+    bt_tensor_t* result = bt_tensor_empty(dims, ndim, BT_FLOAT32, device);
+    if (!result) return bt_fail(BT_ERR_OUT_OF_MEMORY, "bt_broadcast_grad: allocation failed");
+    bt_status_t status = bt_vk_broadcast_grad(g, result);
+    if (status != BT_OK) { bt_tensor_release(result); return status; }
+    *out = result;
+    return BT_OK;
+#else
+    return bt_fail(BT_ERR_NOT_IMPLEMENTED, "bt_broadcast_grad: Vulkan unavailable");
+#endif
+  }
+  int64_t M = dims[0], N = dims[1];
+  int64_t gM = bt_tensor_shape(g)->dims[0], gN = bt_tensor_shape(g)->dims[1];
+  size_t count = (size_t)(M * N);
+  float* gh = (float*)malloc((size_t)(gM * gN) * sizeof(float));
+  float* oh = (float*)malloc(count * sizeof(float));
+  if (!gh || !oh) { free(gh); free(oh); return bt_fail(BT_ERR_OUT_OF_MEMORY, "bt_broadcast_grad: host OOM"); }
+  if (bt_tensor_copy_to_host(g, gh, (size_t)(gM * gN) * sizeof(float)) != BT_OK) {
+    free(gh); free(oh); return bt_fail(BT_ERR_BACKEND, "bt_broadcast_grad: copy failed");
+  }
+  for (int64_t r = 0; r < M; ++r)
+    for (int64_t c = 0; c < N; ++c)
+      oh[r * N + c] = gh[(gM == 1 ? 0 : r) * gN + (gN == 1 ? 0 : c)];
+  bt_tensor_t* result = bt_tensor_create(dims, ndim, BT_FLOAT32, device, oh);
+  free(gh); free(oh);
+  if (!result) return bt_fail(BT_ERR_OUT_OF_MEMORY, "bt_broadcast_grad: result OOM");
   *out = result;
   return BT_OK;
 }

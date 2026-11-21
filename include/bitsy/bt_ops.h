@@ -49,6 +49,10 @@ BT_API bt_status_t bt_reduce_sum(const bt_tensor_t* a, uint32_t axis, int keepdi
 BT_API bt_status_t bt_tanh_backward(const bt_tensor_t* g, const bt_tensor_t* t,
                                     bt_tensor_t** out);
 
+/* exp_020: contiguous full-shape gradient from a 2D reduction gradient. */
+BT_API bt_status_t bt_broadcast_grad(const bt_tensor_t* g, const int64_t* dims,
+                                     int64_t ndim, bt_tensor_t** out);
+
 #ifdef __cplusplus
 }
 #endif

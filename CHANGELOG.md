@@ -6,6 +6,18 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added (TOGISHI Phase 2/6, exp_020)
+
+- **Required end-to-end gradient-flow gate** (`tests/parity/grad_flow.py`) in
+  `run.py` (43/43) and both CI jobs; compares loss, all parameter gradients and
+  post-step parameters against PyTorch. Proven to catch a corrupted gradient
+  whose loss still matched.
+- Dedicated `broadcast_grad` kernel replacing `ones * grad` with a contiguous
+  full-shape gradient (no unsafe stride-0 view). Captured step 0.240 → 0.219 ms
+  (ratio 0.304), eager 1.669 → 1.57 ms (ratio 0.62). Dispatch count unchanged
+  at 41; graph ≥0.31 just missed. Parity 43/43, MNIST/CIFAR within tolerance.
+  Details in `experiments/exp_020/FINDINGS.md`.
+
 ### Added (TOGISHI Phase 6, exp_019)
 
 - Fused `tanh_backward` kernel (`g * (1 - t*t)`, one dispatch) with a CPU path,
