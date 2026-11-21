@@ -6,6 +6,15 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added (TOGISHI Phase 3/5, exp_031)
+
+- `benchmarks/ops/elementwise_graph.py`: three-way captured timing for elementwise
+  ops. At 1M elements captured Bitsy reaches 0.88–1.03× PyTorch CUDA graphs vs
+  eager 0.17–0.47×; 4096-element captured is 0.71–0.85×. The elementwise gap is
+  classified as host submit/fence overhead, not kernel bandwidth; no kernel
+  change. Parity 43/43 incl. gradient gate, CTest both builds. Details in
+  `experiments/exp_031/FINDINGS.md`.
+
 ### Rejected (TOGISHI Phase 6, exp_030)
 
 - Packed f16 GEMM (last ladder rung) was tried and removed: ~3× slower at

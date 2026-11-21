@@ -1,0 +1,75 @@
+{
+  "generated_at": "2026-11-21T21:30:43.718436+00:00",
+  "gpu": "NVIDIA GeForce GTX 1660 SUPER",
+  "torch": "2.11.0+cu126",
+  "config": {
+    "ops": [
+      "add",
+      "mul",
+      "relu"
+    ],
+    "sizes": [
+      4096,
+      1048576
+    ],
+    "iters": 100,
+    "trials": 5,
+    "warmup": 3,
+    "result_path": "E:\\__PROJECTS__\\Hagane\\benchmarks\\results\\elementwise_graph.json"
+  },
+  "measurements": {
+    "4096": {
+      "add": {
+        "bitsy_eager_ms": 0.06192100001499057,
+        "bitsy_captured_ms": 0.010676000092644244,
+        "torch_eager_ms": 0.010494999878574163,
+        "torch_graph_ms": 0.008449000015389174,
+        "eager_ratio_torch_over_bitsy": 0.16949015481070087,
+        "captured_ratio_graph_over_bitsy": 0.7914012684591983
+      },
+      "mul": {
+        "bitsy_eager_ms": 0.05851299996720627,
+        "bitsy_captured_ms": 0.010032000136561692,
+        "torch_eager_ms": 0.011261000181548297,
+        "torch_graph_ms": 0.007992000028025359,
+        "eager_ratio_torch_over_bitsy": 0.19245296238202703,
+        "captured_ratio_graph_over_bitsy": 0.7966507096524512
+      },
+      "relu": {
+        "bitsy_eager_ms": 0.05641499999910593,
+        "bitsy_captured_ms": 0.011633000103756785,
+        "torch_eager_ms": 0.011100999836344272,
+        "torch_graph_ms": 0.00821699999505654,
+        "eager_ratio_torch_over_bitsy": 0.1967739047508677,
+        "captured_ratio_graph_over_bitsy": 0.7063526108284762
+      }
+    },
+    "1048576": {
+      "add": {
+        "bitsy_eager_ms": 0.09655100002419204,
+        "bitsy_captured_ms": 0.04975000018021092,
+        "torch_eager_ms": 0.04447700019227341,
+        "torch_graph_ms": 0.04786899982718751,
+        "eager_ratio_torch_over_bitsy": 0.4606580996688709,
+        "captured_ratio_graph_over_bitsy": 0.9621909478148782
+      },
+      "mul": {
+        "bitsy_eager_ms": 0.09858300007181242,
+        "bitsy_captured_ms": 0.050039000052493066,
+        "torch_eager_ms": 0.04663200001232326,
+        "torch_graph_ms": 0.04914200020721182,
+        "eager_ratio_torch_over_bitsy": 0.4730227318944884,
+        "captured_ratio_graph_over_bitsy": 0.9820739854045794
+      },
+      "relu": {
+        "bitsy_eager_ms": 0.08301900001242757,
+        "bitsy_captured_ms": 0.03739699983270839,
+        "torch_eager_ms": 0.03415799990762025,
+        "torch_graph_ms": 0.03294499998446554,
+        "eager_ratio_torch_over_bitsy": 0.4114479806129555,
+        "captured_ratio_graph_over_bitsy": 0.8809530211471933
+      }
+    }
+  },
+  "gpu_clock_mhz": 1740.0
+}

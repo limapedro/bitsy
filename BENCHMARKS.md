@@ -180,6 +180,16 @@ Linear was worth ~1.6×. The captured graph path improved from 0.30 to 0.34–0.
 but remains well below 0.85. Standalone GEMM (0.72) and elementwise (≤0.54)
 targets are still missed. See `experiments/exp_024/FINDINGS.md`.
 
+## exp_031 — elementwise three-way timing (launch overhead)
+
+`benchmarks/ops/elementwise_graph.py` follows the campaign's own captured
+three-way methodology. At 1M elements Bitsy captured/replayed ops reach
+**0.88–1.03×** PyTorch CUDA graphs (add 0.96–1.03, mul 0.88–0.98, relu
+0.88–0.89), while eager per-op wall ratios remain 0.17–0.47. At 4096 elements
+captured ratios are 0.71–0.85. The elementwise gap in the eager table is
+therefore **host submit/fence overhead, not kernel bandwidth**; no kernel
+change was made. See `experiments/exp_031/FINDINGS.md`.
+
 ## exp_030 — packed f16 GEMM (rejected)
 
 The last GEMM ladder rung was tried and removed: a tiled `f16vec2` shared-memory

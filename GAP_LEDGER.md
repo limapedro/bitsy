@@ -358,6 +358,19 @@ Conclusion: the remaining elementwise gap is bandwidth/kernel-bound
 - Remaining gaps unchanged: standalone GEMM 0.68–0.76, elementwise ≤0.76,
   captured graph ~0.43. End-to-end target still MET (eager 1.11–1.17).
 
+## Phase 3/5 update (exp_031)
+
+- Added three-way captured elementwise benchmark. At 1M elements Bitsy
+  captured/replay reaches **0.88–1.03×** PyTorch CUDA graphs, while eager
+  per-op ratios remain 0.17–0.47; at 4096 elements captured is 0.71–0.85×.
+- The elementwise class is therefore classified as **launch/sync-bound in the
+  eager API**, not bandwidth-bound. No kernel change was made (captured
+  kernels are at parity for large tensors); the small-tensor residual is
+  ≈10 µs/op graph-replay launch cost.
+- Open gaps unchanged: default eager submit cost, standalone GEMM 0.68–0.76,
+  captured full-step graph ~0.43. Parity 43/43 incl. gradient gate, CTest both
+  builds. All changes must still pass the 43-case gate.
+
 ## Honesty
 
 - Timestamp GPU time is a proxy, not the 1000-repeat isolated kernel time the
