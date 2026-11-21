@@ -895,3 +895,26 @@ header. Final tree equals exp_022 (captured 0.224 ms / ratio 0.300, eager
 1.75 ms / ratio 0.604, parity 43/43). Stride-0 views are now rejected twice
 with evidence; further work needs the remaining stride-blind consumer found or
 abandoned. The 43-case gate remains a hard requirement.
+
+---
+
+## 2026-11-21 — Fused GEMM+bias epilogue (exp_024)
+
+**Context.** `nn.Linear.forward` was `x@W + ones@b + add` — three dispatches
+per Linear, and the campaign's fused-epilogue GEMM rung was untried.
+
+**Options considered.** (1) Keep three dispatches, (2) fuse bias into the GEMM
+epilogue (tiled for small shapes, vec4 register-blocked for large) with a
+custom backward that reproduces `g@Wᵀ`, `xᵀ@g` and the row-sum `db`.
+
+**Decision.** Option 2, recorded in `experiments/exp_024/HYPOTHESIS.md`, with a
+CPU fallback for unsupported layouts. No tolerance change.
+
+**Consequences.** Dispatches/step 41 → 35. **Eager end-to-end throughput
+0.60 → 0.95–0.97 of PyTorch CUDA — the ≥0.85 target is met for the first time
+with the ordinary API**; eager step 1.75 → 1.065–1.145 ms. Captured graph
+0.224 → 0.186–0.199 ms (ratio 0.34–0.37, improved but still below 0.85).
+Standalone GEMM 0.72 and elementwise ≤0.54 remain missed. Two implementation
+bugs (`self._op` on the module; stale fallback result) were found and fixed
+before merge, with the 43-case gate green throughout. Next: apply epilogue
+fusion to backward/optimizer chains or another GEMM rung.

@@ -456,6 +456,43 @@ bt_status_t bt_vk_broadcast_grad(const bt_tensor_t* g, bt_tensor_t* out) {
   return status;
 }
 
+/* exp_024: GEMM with bias added in the epilogue. Requires the vec4-aligned
+ * layout of gemm_rb_vec4; callers fall back for other layouts. */
+bt_status_t bt_vk_matmul_bias(const bt_tensor_t* a, const bt_tensor_t* b,
+                              const bt_tensor_t* bias, bt_tensor_t* out) {
+  if (!g_vk.ready) return bt_fail(BT_ERR_BACKEND, "bt_vk_matmul_bias: Vulkan not ready");
+  vk_matmul_pc_t pc = {
+    .M = (uint32_t)a->shape.dims[0], .K = (uint32_t)a->shape.dims[1],
+    .N = (uint32_t)b->shape.dims[1],
+    .sa0 = (int32_t)a->strides[0], .sa1 = (int32_t)a->strides[1],
+    .sb0 = (int32_t)b->strides[0], .sb1 = (int32_t)b->strides[1],
+    .sc0 = (int32_t)out->strides[0], .sc1 = (int32_t)out->strides[1],
+    .offa = (int32_t)a->offset, .offb = (int32_t)b->offset, .offc = (int32_t)out->offset,
+    .k_start = 0, .k_len = (int32_t)pc.K,
+  };
+  VkBuffer buffers[4] = {
+    bt_vk_buffer_of(a->storage->gpu), bt_vk_buffer_of(b->storage->gpu),
+    bt_vk_buffer_of(out->storage->gpu), bt_vk_buffer_of(bias->storage->gpu),
+  };
+  double m = pc.M, n = pc.N, k = pc.K;
+  bt_status_t status;
+  if (pc.M <= 512 && pc.N <= 512) {
+    /* Small shapes use the tiled kernel (exp_008/009 autotune winner). */
+    status = dispatch(g_vk.gemm_tiled_bias_pipeline, buffers, &pc, sizeof(pc),
+                      (pc.N + 15) / 16, (pc.M + 15) / 16, "gemm_tiled_bias",
+                      (m * k + k * n + m * n) * 4.0, 2.0 * m * n * k);
+  } else if (a->strides[1] == 1 && b->strides[1] == 1 &&
+             a->strides[0] % 4 == 0 && b->strides[0] % 4 == 0) {
+    status = dispatch(g_vk.gemm_bias_pipeline, buffers, &pc, sizeof(pc),
+                      (pc.N + 127) / 128, (pc.M + 127) / 128, "gemm_bias",
+                      (m * k + k * n + m * n) * 4.0, 2.0 * m * n * k);
+  } else {
+    return bt_fail(BT_ERR_NOT_IMPLEMENTED, "bt_vk_matmul_bias: unaligned large operands");
+  }
+  if (status == BT_OK) bt_storage_bump_version(out->storage);
+  return status;
+}
+
 /* exp_022: two mul-backward gradients in one dispatch. */
 typedef struct { uint32_t n, M, N, aM, aN, bM, bN;
                  int32_t sa0, sa1, sb0, sb1;

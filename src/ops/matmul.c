@@ -3,6 +3,10 @@
 #include "../core/dispatcher_internal.h"
 #include "../core/error_internal.h"
 
+#ifdef BT_ENABLE_VULKAN
+#include "../backends/vulkan/vk_internal.h"
+#endif
+
 /* 2D row-major matmul. Batched matmul comes later; no silent wrong shapes. */
 bt_status_t bt_matmul(const bt_tensor_t* a, const bt_tensor_t* b, bt_tensor_t** out) {
   bt_clear_error();
@@ -26,6 +30,38 @@ bt_status_t bt_matmul(const bt_tensor_t* a, const bt_tensor_t* b, bt_tensor_t** 
   if (status != BT_OK) { bt_tensor_release(result); return status; }
   *out = result;
   return BT_OK;
+}
+
+bt_status_t bt_matmul_bias(const bt_tensor_t* a, const bt_tensor_t* b,
+                           const bt_tensor_t* bias, bt_tensor_t** out) {
+  bt_clear_error();
+  if (!a || !b || !bias || !out) return bt_fail(BT_ERR_INVALID_ARGUMENT, "bt_matmul_bias: NULL");
+  if (bt_tensor_shape(a)->ndim != 2 || bt_tensor_shape(b)->ndim != 2 ||
+      bt_tensor_shape(bias)->ndim != 2 || bt_tensor_shape(bias)->dims[0] != 1 ||
+      bt_tensor_shape(bias)->dims[1] != bt_tensor_shape(b)->dims[1])
+    return bt_fail(BT_ERR_SHAPE_MISMATCH, "bt_matmul_bias: expects 2D (M,K)x(K,N) + (1,N)");
+#ifdef BT_ENABLE_VULKAN
+  bt_device_t device = bt_tensor_device(a);
+  if (bt_backend_for_device(device) == BT_BACKEND_VULKAN) {
+    int64_t dims[2] = { bt_tensor_shape(a)->dims[0], bt_tensor_shape(b)->dims[1] };
+    bt_tensor_t* result = bt_tensor_empty(dims, 2, BT_FLOAT32, device);
+    if (!result) return bt_fail(BT_ERR_OUT_OF_MEMORY, "bt_matmul_bias: allocation failed");
+    bt_status_t status = bt_vk_matmul_bias(a, b, bias, result);
+    if (status == BT_ERR_NOT_IMPLEMENTED) {
+      bt_tensor_release(result); // fall through to matmul + bias add
+    } else if (status != BT_OK) {
+      bt_tensor_release(result); return status;
+    } else {
+      *out = result;
+      return BT_OK;
+    }
+  }
+#endif
+  /* Fallback: matmul then broadcast-add the bias (correct for any layout). */
+  bt_tensor_t* prod = NULL;
+  bt_status_t status = bt_matmul(a, b, &prod);
+  if (status != BT_OK) return status;
+  return bt_add(prod, bias, out);
 }
 
 bt_status_t bt_transpose(const bt_tensor_t* a, bt_tensor_t** out) {

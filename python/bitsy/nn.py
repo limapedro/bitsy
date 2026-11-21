@@ -32,10 +32,15 @@ class Linear(Module):
     self._ones:dict[int, Tensor] = {}
 
   def forward(self, x:Tensor) -> Tensor:
-    n = x.shape[0]
-    if n not in self._ones:
-      self._ones[n] = Tensor.from_numpy(np.ones((n, 1), np.float32), x.device)
-    return x @ self.W + self._ones[n] @ self.b
+    # exp_024: fused GEMM+bias epilogue replaces (x@W) + (ones@b) + add.
+    ct = C.matmul_bias(x._t, self.W._t, self.b._t)
+    Wt = C.transpose_view(self.W._t)
+    xt = C.transpose_view(x._t)
+    def back(g):
+      return (g._op(C.matmul(g._t, Wt), (), None),
+              g._op(C.matmul(xt, g._t), (), None),
+              reduce_sum_op(g, 0, True))
+    return x._op(ct, (x, self.W, self.b), back)
 
 class Conv2d(Module):
   """NCHW 3x3 convolution with pad/stride; gradients run on the same device."""

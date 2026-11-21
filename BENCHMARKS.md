@@ -161,6 +161,25 @@ step 0.240 → **0.219 ms**, graph ratio 0.278 → **0.304**, eager step 1.669 �
 replacement); the graph ≥0.31 stretch ratio was narrowly missed. See
 `experiments/exp_020/FINDINGS.md`.
 
+## End-to-end training step (updated 2026-11-21, exp_024)
+
+`nn.Linear.forward` now uses a fused GEMM+bias epilogue (tiled for small shapes,
+register-blocked vec4 for large) instead of `(x@W) + (ones@b) + add`, with a
+matching custom backward. Dispatches per step 41 → **35**.
+
+| path | ms/step | ratio vs PyTorch | target |
+|---|---:|---:|---|
+| Bitsy eager (1530 MHz) | **1.065–1.145** | **0.95–0.97** | ≥0.85 **MET** |
+| PyTorch eager | 1.01–1.11 | — | — |
+| Bitsy captured graph (1732 MHz) | 0.186–0.199 | 0.34–0.37 | still missed |
+| PyTorch CUDA graph | 0.067–0.068 | — | — |
+
+The eager end-to-end training-throughput target is **met for the first time**
+(previous best 0.63): removing the redundant `ones @ b` GEMM and add from each
+Linear was worth ~1.6×. The captured graph path improved from 0.30 to 0.34–0.37
+but remains well below 0.85. Standalone GEMM (0.72) and elementwise (≤0.54)
+targets are still missed. See `experiments/exp_024/FINDINGS.md`.
+
 ## exp_023 — zero-dispatch broadcast views rejected again
 
 The exp_019 broadcast-view optimisation was retried after exp_022 fixed view

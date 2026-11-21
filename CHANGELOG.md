@@ -6,6 +6,16 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added (TOGISHI Phase 6, exp_024)
+
+- Fused GEMM+bias epilogue for `nn.Linear.forward` (tiled/vec4 shape selection,
+  CPU fallback) with a custom backward. Dispatches/step 41 → 35.
+- **End-to-end training throughput target MET for the first time:** eager step
+  1.75 → 1.065–1.145 ms, ratio 0.60 → **0.95–0.97** vs PyTorch CUDA (target
+  ≥0.85). Captured graph 0.224 → 0.186–0.199 ms, ratio 0.34–0.37 (still below
+  0.85). Parity 43/43 incl. gradient gate, CTest both builds, MNIST/CIFAR
+  unchanged. See `experiments/exp_024/FINDINGS.md`.
+
 ### Rejected (TOGISHI Phase 5/6, exp_023)
 
 - Zero-dispatch stride-0 broadcast views were retried after the exp_022 offset

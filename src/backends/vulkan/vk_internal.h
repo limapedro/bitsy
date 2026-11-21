@@ -24,6 +24,8 @@ bt_status_t bt_vk_tanh_backward(const bt_tensor_t* g, const bt_tensor_t* t, bt_t
 bt_status_t bt_vk_broadcast_grad(const bt_tensor_t* g, bt_tensor_t* out);
 bt_status_t bt_vk_dual_mul(const bt_tensor_t* g, const bt_tensor_t* a,
                            const bt_tensor_t* b, bt_tensor_t* out);
+bt_status_t bt_vk_matmul_bias(const bt_tensor_t* a, const bt_tensor_t* b,
+                              const bt_tensor_t* bias, bt_tensor_t* out);
 double bt_vk_device_time_ms(void);
 
 void* bt_vk_alloc(size_t nbytes);

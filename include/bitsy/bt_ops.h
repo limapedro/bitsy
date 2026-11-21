@@ -57,6 +57,10 @@ BT_API bt_status_t bt_broadcast_grad(const bt_tensor_t* g, const int64_t* dims,
 BT_API bt_status_t bt_dual_mul(const bt_tensor_t* g, const bt_tensor_t* a,
                                const bt_tensor_t* b, bt_tensor_t** out);
 
+/* exp_024: out = a @ b + bias (bias broadcasts over rows, shape (1,N)). */
+BT_API bt_status_t bt_matmul_bias(const bt_tensor_t* a, const bt_tensor_t* b,
+                                  const bt_tensor_t* bias, bt_tensor_t** out);
+
 #ifdef __cplusplus
 }
 #endif
