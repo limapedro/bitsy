@@ -1090,3 +1090,25 @@ every iteration and therefore cannot benefit — so this is kept as a neutral
 cleanup, not a speed win. The first `device_time_ms()` call after enabling
 returns 0 by design (documented). Parity holds (43/43, CTest both builds). This
 confirms the eager gap is WDDM queue submission itself, not query collection.
+
+---
+
+## 2026-11-21 — Fused CE backward reverted on training parity (exp_033)
+
+**Context.** The output-layer backward chain was still several dispatches;
+a single `g*(softmax-onehot)/B` kernel looked algebraically equivalent.
+
+**Options considered.** (1) Keep the chain, (2) fused backward kernel with a
+`fused_cross_entropy` autograd op.
+
+**Decision.** Option 2 was implemented, measured, and reverted, recorded in
+`experiments/exp_033/HYPOTHESIS.md`.
+
+**Consequences.** Dispatches/step 19 → 14, captured step 0.137–0.143 ms, and
+the 43-case gate passed — but MNIST/CIFAR training parity broke completely
+(W1 diff 0.70 / 0.49). The change was removed entirely and the baseline
+re-verified (43/43, MNIST 3.3e-07). This is the second incident where the
+small-config gradient gate missed a training-scale gradient error, so a
+training-scale gate in CI is now a locked prerequisite for further autograd or
+view changes. The ≥1.05× / ≥0.50 captured predictions were not reliably met
+and the parity failure blocks the approach regardless.

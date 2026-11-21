@@ -385,6 +385,19 @@ Conclusion: the remaining elementwise gap is bandwidth/kernel-bound
 - Remaining: default eager submit cost, standalone GEMM 0.68–0.76, captured
   full-step graph ~0.46–0.49. Next: step-level fused kernel or accept ceiling.
 
+## Phase 5/6 update (exp_033)
+
+- Fused softmax-cross-entropy backward (one dispatch) cut dispatches 19 → 14
+  and captured step 0.145 → 0.137–0.143 ms; the 43-case gate passed.
+- **End-to-end training parity FAILED**: MNIST W1 diff 0.70, CIFAR 0.49.
+  Reverted entirely; baseline restored (43/43, MNIST 3.3e-07, CIFAR 7.3e-07).
+- The gradient gate uses a small config (batch 8, 32→16→8) and missed this, the
+  second such incident after exp_019. A training-scale gradient gate in CI is
+  now a prerequisite for further autograd/view changes.
+- Dispatch-reduction results so far: exp_029 neutral, exp_033 parity failure.
+  Open gaps unchanged: GEMM 0.68, elementwise eager 0.39–0.52, captured graph
+  ~0.46–0.49. Eager end-to-end target still MET.
+
 ## Honesty
 
 - Timestamp GPU time is a proxy, not the 1000-repeat isolated kernel time the

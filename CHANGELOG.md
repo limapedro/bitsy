@@ -6,6 +6,15 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Reverted (TOGISHI Phase 5/6, exp_033)
+
+- Fused softmax-cross-entropy backward cut dispatches 19 → 14 and captured step
+  0.145 → 0.137–0.143 ms; the 43-case gate passed, but end-to-end training
+  parity broke (MNIST W1 diff 0.70, CIFAR 0.49). Fully reverted; baseline
+  restored (43/43, MNIST 3.3e-07). A training-scale gradient gate in CI is now
+  a prerequisite for autograd/view changes. Details in
+  `experiments/exp_033/FINDINGS.md`.
+
 ### Changed (TOGISHI Phase 5, exp_032)
 
 - Device-time timestamps are now collected on demand instead of on every wait;

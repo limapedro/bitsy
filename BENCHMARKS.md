@@ -180,6 +180,15 @@ Linear was worth ~1.6×. The captured graph path improved from 0.30 to 0.34–0.
 but remains well below 0.85. Standalone GEMM (0.72) and elementwise (≤0.54)
 targets are still missed. See `experiments/exp_024/FINDINGS.md`.
 
+## exp_033 — fused softmax-cross-entropy backward (reverted)
+
+A fused output-layer backward kernel cut dispatches 19 → 14 and captured step
+0.145 → 0.137–0.143 ms, and the 43-case gate passed — **but end-to-end training
+parity broke** (MNIST W1 diff 0.70, CIFAR 0.49 vs ~3e-07). The change was fully
+reverted and the exp_032 baseline restored (43/43, MNIST 3.3e-07). This is the
+second case where the small-config gradient gate missed a training-scale
+gradient error; see `experiments/exp_033/FINDINGS.md`.
+
 ## exp_032 — lazy device-time timestamps (neutral)
 
 Device-time timestamp collection is now on demand, removing an unconditional
