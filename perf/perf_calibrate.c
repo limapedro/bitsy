@@ -36,6 +36,21 @@ typedef struct {
 } ctx_t;
 
 static ctx_t C;
+static double g_copy_bw = 0.0;
+
+/* Sample the live SM clock so peak FLOP/s can be normalized per kernel. */
+static double gpu_clock_mhz(void) {
+#ifdef _WIN32
+  FILE *p = _popen("nvidia-smi --query-gpu=clocks.current.graphics --format=csv,noheader", "r");
+  char buf[128];
+  double mhz = 0.0;
+  if (p && fgets(buf, sizeof(buf), p)) sscanf(buf, "%lf", &mhz);
+  if (p) _pclose(p);
+  return mhz;
+#else
+  return 0.0;
+#endif
+}
 
 static double now_ms(void) {
 #ifdef _WIN32
@@ -109,6 +124,7 @@ static void init_vulkan(void) {
   C.have_ts = C.props.limits.timestampComputeAndGraphics ? 1 : 0;
   C.period_ns = C.have_ts ? C.props.limits.timestampPeriod : 0.0;
 
+  const char *dev_exts[] = { "VK_KHR_pipeline_executable_properties" };
   VkPhysicalDeviceFeatures supported, features = { 0 };
   vkGetPhysicalDeviceFeatures(C.phys, &supported);
   features.shaderFloat64 = supported.shaderFloat64;
@@ -116,6 +132,8 @@ static void init_vulkan(void) {
   VkDeviceQueueCreateInfo qi = { .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
                                  .queueFamilyIndex = C.qfam, .queueCount = 1, .pQueuePriorities = &pri };
   VkDeviceCreateInfo di = { .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
+                            .enabledExtensionCount = 1,
+                            .ppEnabledExtensionNames = dev_exts,
                             .queueCreateInfoCount = 1, .pQueueCreateInfos = &qi,
                             .pEnabledFeatures = &features };
   VK(vkCreateDevice(C.phys, &di, NULL, &C.dev));
@@ -229,6 +247,48 @@ static double finish(void) {
   return (double)(ts[1] - ts[0]) * C.period_ns / 1e6;
 }
 
+/* Driver-reported register usage / occupancy via VK_KHR_pipeline_executable_properties. */
+static void pipeline_info(VkPipeline pipe, const char *label) {
+  PFN_vkGetPipelineExecutablePropertiesKHR get_props =
+    (PFN_vkGetPipelineExecutablePropertiesKHR)vkGetDeviceProcAddr(
+      C.dev, "vkGetPipelineExecutablePropertiesKHR");
+  PFN_vkGetPipelineExecutableStatisticsKHR get_stats =
+    (PFN_vkGetPipelineExecutableStatisticsKHR)vkGetDeviceProcAddr(
+      C.dev, "vkGetPipelineExecutableStatisticsKHR");
+  if (!get_props || !get_stats) { printf("%s: executable properties unavailable\n", label); return; }
+
+  VkPipelineInfoKHR pi = { .sType = VK_STRUCTURE_TYPE_PIPELINE_INFO_KHR, .pipeline = pipe };
+  uint32_t n = 0;
+  if (get_props(C.dev, &pi, &n, NULL) != VK_SUCCESS || n == 0) return;
+  if (n > 8) n = 8;
+  VkPipelineExecutablePropertiesKHR props[8];
+  memset(props, 0, sizeof(props));
+  for (uint32_t i = 0; i < n; ++i) props[i].sType = VK_STRUCTURE_TYPE_PIPELINE_EXECUTABLE_PROPERTIES_KHR;
+  get_props(C.dev, &pi, &n, props);
+  for (uint32_t i = 0; i < n; ++i) {
+    VkPipelineExecutableInfoKHR ei = { .sType = VK_STRUCTURE_TYPE_PIPELINE_EXECUTABLE_INFO_KHR,
+                                       .pipeline = pipe, .executableIndex = i };
+    uint32_t ns = 0;
+    if (get_stats(C.dev, &ei, &ns, NULL) != VK_SUCCESS) continue;
+    if (ns > 32) ns = 32;
+    VkPipelineExecutableStatisticKHR stats[32];
+    memset(stats, 0, sizeof(stats));
+    for (uint32_t k = 0; k < ns; ++k) stats[k].sType = VK_STRUCTURE_TYPE_PIPELINE_EXECUTABLE_STATISTIC_KHR;
+    get_stats(C.dev, &ei, &ns, stats);
+    printf("%s executable %u (%s): subgroupSize=%u\n", label, i, props[i].name, props[i].subgroupSize);
+    for (uint32_t k = 0; k < ns; ++k) {
+      if (stats[k].format == VK_PIPELINE_EXECUTABLE_STATISTIC_FORMAT_BOOL32_KHR)
+        printf("  %-40s %u\n", stats[k].name, (unsigned)stats[k].value.b32);
+      else if (stats[k].format == VK_PIPELINE_EXECUTABLE_STATISTIC_FORMAT_INT64_KHR)
+        printf("  %-40s %lld\n", stats[k].name, (long long)stats[k].value.i64);
+      else if (stats[k].format == VK_PIPELINE_EXECUTABLE_STATISTIC_FORMAT_UINT64_KHR)
+        printf("  %-40s %llu\n", stats[k].name, (unsigned long long)stats[k].value.u64);
+      else
+        printf("  %-40s %.3f\n", stats[k].name, stats[k].value.f64);
+    }
+  }
+}
+
 typedef struct { double ms; double gb_s; double flops; } result_t;
 
 int main(int argc, char **argv) {
@@ -274,6 +334,7 @@ int main(int argc, char **argv) {
     double ms = finish();
     double per = ms / reps;
     double bw = (double)(2 * bytes) / (per * 1e-3) / 1e9;
+    g_copy_bw = bw;
     printf("copy vec4 1GiB: %.4f ms/dispatch, %.1f GB/s (%.1f%% of 336)\n",
            per, bw, 100.0 * bw / 336.0);
     fprintf(out, "  \"copy\": {\"ms\": %.6f, \"GBs\": %.3f, \"pctTheory\": %.3f},\n",
@@ -318,6 +379,7 @@ int main(int argc, char **argv) {
     printf("fp32 FMA: %.4f ms/dispatch, %.1f GFLOP/s\n", ms, gf);
     fprintf(out, "  \"fma32\": {\"ms\": %.6f, \"GFLOPs\": %.3f},\n", ms, gf);
     VkPipeline p8 = pipeline("fma8");
+    pipeline_info(p8, "fma8");
     uint32_t pc8[2] = { 524288, 128 };
     begin(p8, pc8, sizeof(pc8));
     for (int i = 0; i < reps; ++i) { vkCmdDispatch(C.cmd, 524288 / 256, 1, 1); if (i + 1 < reps) barrier(); }
@@ -325,7 +387,36 @@ int main(int argc, char **argv) {
     double gf8 = (524288.0 * 1024.0 * 2.0) / (ms8 * 1e-3) / 1e9;
     printf("fp32 FMA x8 accumulators: %.4f ms/dispatch, %.1f GFLOP/s\n", ms8, gf8);
     fprintf(out, "  \"fma32x8\": {\"ms\": %.6f, \"GFLOPs\": %.3f},\n", ms8, gf8);
+    VkPipeline pu = pipeline("fma8u");
+    pipeline_info(pu, "fma8u");
+    uint32_t pcu[2] = { 524288, 32 };
+    double clk0 = gpu_clock_mhz();
+    begin(pu, pcu, sizeof(pcu));
+    for (int i = 0; i < reps; ++i) { vkCmdDispatch(C.cmd, 524288 / 256, 1, 1); if (i + 1 < reps) barrier(); }
+    double msu = finish() / reps;
+    double clk1 = gpu_clock_mhz();
+    double mhz = (clk0 + clk1) * 0.5;
+    double gfu = (524288.0 * 1024.0 * 2.0) / (msu * 1e-3) / 1e9;
+    double peak = 1408.0 * 2.0 * mhz * 1e6 / 1e9;
+    printf("fp32 FMA x8 unrolled32: %.4f ms/dispatch, %.1f GFLOP/s, clock %.0f MHz, %.1f%% of clock-normalized peak\n",
+           msu, gfu, mhz, 100.0 * gfu / peak);
+    fprintf(out, "  \"fma32x8u\": {\"ms\": %.6f, \"GFLOPs\": %.3f, \"clockMHz\": %.1f, \"pctPeak\": %.3f},\n",
+            msu, gfu, mhz, 100.0 * gfu / peak);
+    vkDestroyPipeline(C.dev, pu, NULL);
+
+    VkPipeline p64 = pipeline("fma8u64");
+    pipeline_info(p64, "fma8u64");
+    uint32_t pc64[2] = { 524288, 16 };
+    begin(p64, pc64, sizeof(pc64));
+    for (int i = 0; i < reps; ++i) { vkCmdDispatch(C.cmd, 524288 / 256, 1, 1); if (i + 1 < reps) barrier(); }
+    double ms64 = finish() / reps;
+    double gf64 = (524288.0 * 1024.0 * 2.0) / (ms64 * 1e-3) / 1e9;
+    printf("fp32 FMA x8 unrolled64: %.4f ms/dispatch, %.1f GFLOP/s\n", ms64, gf64);
+    fprintf(out, "  \"fma32x8u64\": {\"ms\": %.6f, \"GFLOPs\": %.3f},\n", ms64, gf64);
+    vkDestroyPipeline(C.dev, p64, NULL);
+
     VkPipeline p16 = pipeline("fma16");
+    pipeline_info(p16, "fma16");
     uint32_t pc16[2] = { 65536, 64 };
     begin(p16, pc16, sizeof(pc16));
     for (int i = 0; i < reps; ++i) { vkCmdDispatch(C.cmd, 65536 / 256, 1, 1); if (i + 1 < reps) barrier(); }
@@ -367,6 +458,7 @@ int main(int argc, char **argv) {
     uint32_t threads[2] = { 4096, 262144 };
     uint32_t strides[2] = { 4096, 262144 };
     const char *names[2] = { "l2read", "dramread" };
+    double dram_bw = 0.0;
     fprintf(out, "  \"reads\": {");
     for (int k = 0; k < 2; ++k) {
       VkBuffer in, outb; VkDeviceMemory mi, mo;
@@ -385,6 +477,7 @@ int main(int argc, char **argv) {
       for (int i = 0; i < reps; ++i) { vkCmdDispatch(C.cmd, threads[k] / 256, 1, 1); if (i + 1 < reps) barrier(); }
       double ms = finish() / reps;
       double bw = threads[k] * 64.0 * 4.0 / (ms * 1e-3) / 1e9;
+      if (k == 1) dram_bw = bw;
       printf("%-8s: %.4f ms, %.1f GB/s\n", names[k], ms, bw);
       fprintf(out, "\"%s\": {\"ms\": %.6f, \"GBs\": %.3f}%s",
               names[k], ms, bw, k == 1 ? "" : ", ");
@@ -392,6 +485,8 @@ int main(int argc, char **argv) {
       vkDestroyBuffer(C.dev, outb, NULL); vkFreeMemory(C.dev, mo, NULL);
     }
     fprintf(out, "},\n");
+    fprintf(out, "  \"measuredBWGBs\": %.3f,\n", dram_bw);
+    fprintf(out, "  \"copyPctMeasuredBW\": %.3f,\n", 100.0 * g_copy_bw / (dram_bw > 0 ? dram_bw : 1.0));
     vkDestroyPipeline(C.dev, p, NULL);
   }
 

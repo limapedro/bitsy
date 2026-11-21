@@ -11,7 +11,7 @@ if(NOT GLSLC)
 endif()
 
 file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/shaders")
-foreach(SHADER fill copy copy4 fma fma8 fma16 f16fma shared readlat empty)
+foreach(SHADER fill copy copy4 fma fma8 fma8u fma8u64 fma16 f16fma shared readlat empty)
   add_custom_command(
     OUTPUT "${CMAKE_BINARY_DIR}/shaders/${SHADER}.spv"
     COMMAND ${GLSLC} --target-env=vulkan1.2 -O
@@ -28,6 +28,8 @@ add_executable(perf_calibrate perf_calibrate.c
   ${CMAKE_BINARY_DIR}/shaders/fma.spv
   ${CMAKE_BINARY_DIR}/shaders/fma8.spv
   ${CMAKE_BINARY_DIR}/shaders/fma16.spv
+  ${CMAKE_BINARY_DIR}/shaders/fma8u.spv
+  ${CMAKE_BINARY_DIR}/shaders/fma8u64.spv
   ${CMAKE_BINARY_DIR}/shaders/f16fma.spv
   ${CMAKE_BINARY_DIR}/shaders/shared.spv
   ${CMAKE_BINARY_DIR}/shaders/readlat.spv

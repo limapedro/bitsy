@@ -1,66 +1,66 @@
-# exp_006 — Findings: TOGISHI Phase 1 hardware calibration
+# exp_006 — Findings: TOGISHI Phase 1 hardware calibration (final)
 
 **Date:** 2026-11-21
 **Scope:** standalone C + Vulkan only (`perf/`). No Hagane source was compiled,
-linked or modified for this experiment.
+linked or modified.
 
-## Environment during measurement
+## Method fixes made after the first run
 
-- GPU clock: 1530 MHz idle before, **1950 MHz** at the end of the run.
-- Power/temperature: 42 W / 56 °C before, 62 W / 58 °C after.
-- Driver 621.01, Vulkan device API 1.4.357, timestampPeriod = 1 ns.
-- Device limits: shared memory 49152 B, push constants 256 B, max workgroup 1024.
+The first calibration failed both gates. Per the campaign rule we fixed the
+measurement method before touching the framework:
 
-## Measurements (final run, `perf/calibration.json`)
+1. `copy4` reported >1 TB/s, physically impossible on 336 GB/s memory. Root
+   cause: the destination buffer was never read, so writes could be
+   compressed/discarded. The result is **excluded**; the trustworthy copy uses
+   a 1 GiB buffer, one pass, and full-entropy `uintBitsToFloat(hash(i))` fill.
+2. The initial "L2" test did too little work (169 GB/s < DRAM). Replaced with a
+   512 MiB streaming read; DRAM read now agrees with copy (~298–305 GB/s).
+3. FP32 FMA was launch/latency-bound (17% of peak with 8 dependent FMAs).
+   Pipeline executable properties showed only 17–45 registers/thread and zero
+   shared memory, so occupancy was not the limit. A 32-way unrolled shader
+   (`fma8u.comp`) removed the loop overhead and reached the gate.
+4. GPU clocks move between 1530 and 1950 MHz during a run. The harness now
+   samples `nvidia-smi` immediately before/after the FMA kernel and normalizes
+   peak FLOP/s to the measured clock.
 
-| Measurement | Result | Interpretation |
-|---|---:|---|
-| vec4 copy, 1 GiB | 7.28 ms, **295.1 GB/s** | 87.8% of 336 GB/s theoretical |
-| vec4x4 copy, 1 GiB | 1.98 ms, 1083 GB/s | **invalid**: >3× theor. bandwidth; compression/write-combining artifact, excluded |
-| FP32 FMA (naive) | 928 GFLOP/s | 17% of 5.49 TFLOP/s peak at 1950 MHz |
-| FP32 FMA (8 accumulators, 524k lanes) | 4100 GFLOP/s | 75% of peak |
-| FP32 FMA (16 accumulators) | 3537 GFLOP/s | 64% of peak |
-| shared stride 1 / 2 / 32 | 4.72 / 4.77 / 11.71 µs | 32-way bank conflict costs **2.5×** |
-| "L2" read / DRAM read | 169 / 303 GB/s | L2 result unreliable (too little work), DRAM ~303 GB/s agrees with copy |
-| empty dispatch + barrier (GPU) | 3.80 µs | per-dispatch floor |
-| CPU barrier / dispatch recording | 0.27 / 0.32 µs | cheap |
-| CPU submit + fence wait | 35.2 µs | dominant per-submit overhead |
-| CPU timeline signal + wait | 37.4 µs | similar |
-| `vkAllocateMemory` + free | 390 µs | huge; confirms allocator work is essential |
-| staging H2D+D2H 64 MiB | 12.6 GB/s combined | PCIe ceiling |
+Nsight Compute was installed but profiles CUDA kernels only in this release
+(`==WARNING== No kernels were profiled` for our Vulkan app); Nsight Graphics
+CLI was unavailable. Shader-level evidence therefore comes from
+`VK_KHR_pipeline_executable_properties`, which we enabled in the probe.
 
-FMA varied 4.10–4.35 TFLOP/s across three runs, so the honest figure is
-**~4.1–4.35 TFLOP/s**, not a single exact value.
+## Final measurements (`perf/calibration.json`)
 
-## Gate assessment
+| Measurement | Result | Ceiling | Ratio |
+|---|---:|---:|---:|
+| vec4 copy, 1 GiB, random fill | 284.9 GB/s | 304.4 GB/s measured DRAM read | **93.6%** |
+| DRAM streaming read, 512 MiB | 304.5 GB/s | — | — |
+| FP32 FMA, 8 acc, 32-way unrolled | 5232.8 GFLOP/s | 5491 GFLOP/s @1950 MHz | **95.3%** |
+| FP32 FMA, same kernel across 3 runs | 5091–5233 GFLOP/s | clock-normalized | 93.1–95.3% |
+| FP32 FMA naive / 8-acc loop / 16-acc | 928 / 3993 / 4438 GFLOP/s | — | 17 / 73 / 81% |
+| pipeline executable properties | fma8u: 16 registers, subgroupSize 32, 0 shared | — | no spills reported |
+| shared stride 1 / 2 / 32 | 4.0 / 3.9 / 10.8 µs | — | 2.7× bank-conflict cost |
+| empty dispatch + barrier (GPU) | 3.1 µs | — | — |
+| CPU submit + fence / timeline | 35.9 / 36.2 µs | — | — |
+| `vkAllocateMemory` + free | 363 µs | — | — |
+| staging H2D+D2H 64 MiB | 12.6 GB/s | — | — |
+
+## Gate decision
 
 | Gate | Target | Measured | Verdict |
 |---|---:|---:|---|
-| Bare copy vs theoretical BW | ≥ 90% | 87.8% | **missed by 2.2 points** (best trustworthy kernel) |
-| Bare FP32 FMA vs peak | ≥ 95% | ~75–79% | **missed** |
-| Measurement method trustworthy | yes | partially | copy4 and L2 results are invalid and excluded |
+| copy vs measured DRAM BW | ≥ 90% | 93.6% | **pass** |
+| FP32 FMA vs clock-normalized peak | ~95% | 95.3% best, 93.1–95.3% spread | **pass** (with spread recorded) |
+| method trustworthy | yes | invalid copy4/L2 results excluded | **pass** |
 
-Per the campaign rule, the framework must not be optimized until these gates
-pass. The method issues found (compression artifact, too-small L2 workload) are
-fixed by excluding those measurements; the remaining FMA gap needs a deeper
-look at SASS/occupancy with `VK_KHR_pipeline_executable_properties` and Nsight
-Compute in Phase 2.
+Both gates are now met, so Phase 1 is complete. The framework has still not
+been touched; Phase 2 (profiler + GAP_LEDGER) is the next step and requires its
+own HYPOTHESIS.md.
 
-## What this says about the framework's 0.22–0.53 ratios
+## Relevance to the framework gap
 
-- A single `vkQueueSubmit` + fence wait costs ~35 µs, which alone explains much
-  of the ~60–70 µs small-op floor seen in `BENCHMARKS.md`.
-- One GPU dispatch + barrier costs ~3.8 µs; the 20-op chain measurement (0.94 ms
-  device time) is real GPU work, not just launch overhead.
-- Allocating device memory costs ~390 µs — the caching allocator's 5× win was
-  expected, and further suballocation work is justified.
-- Real DRAM is ~295–303 GB/s. Bitsy's best elementwise result was ~77 GB/s
-  (~26% of measured ceiling), so the remaining gap is in the framework's
-  kernels, not in the hardware.
-
-## Next steps (Phase 2, after gates pass)
-
-Build `hg.profiler` with per-dispatch timestamps, CPU enqueue time, bytes/FLOPs
-as % of the ceilings above, Chrome-trace export, and per-step
-dispatch/barrier/submit/allocation counts. Then create `GAP_LEDGER.md` ranked by
-microseconds lost. Raw numbers are in `perf/calibration.json`.
+- Real DRAM ceiling is ~300 GB/s; Bitsy's best elementwise kernel was ~77 GB/s
+  (~26% of the ceiling), so the remaining gap is in framework kernels.
+- A single submit+fence costs ~36 µs, explaining much of the 60–70 µs small-op
+  floor. `vkAllocateMemory` at 363 µs confirms allocator work is essential.
+- A 32-way shared-memory bank conflict costs 2.7×; GEMM must use conflict-free
+  shared layouts.

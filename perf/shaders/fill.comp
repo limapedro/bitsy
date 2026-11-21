@@ -1,13 +1,21 @@
 #version 450
-/* Pseudo-random fill so memory compression cannot inflate bandwidth numbers. */
+/* Full-entropy 32-bit hash -> float bits, so memory compression cannot
+ * inflate measured copy bandwidth. */
 layout(local_size_x = 256) in;
 layout(std430, binding = 0) writeonly buffer Out { vec4 dst[]; };
 layout(push_constant) uniform PC { uint n; } pc;
+
+uint hash(uint x) {
+  x ^= x >> 16u; x *= 0x7feb352du;
+  x ^= x >> 15u; x *= 0x846ca68bu;
+  x ^= x >> 16u;
+  return x;
+}
+
 void main() {
   uint i = gl_GlobalInvocationID.x;
   if (i >= pc.n) return;
-  uint h = i * 747796405u + 2891336453u;
-  h ^= h >> 15u;
-  dst[i] = vec4(float(h & 0xffffu), float((h >> 8u) & 0xffffu),
-                float((h >> 16u) & 0xffffu), float((h >> 24u) & 0xffffu));
+  uint h = hash(i + 1u);
+  dst[i] = vec4(uintBitsToFloat(h), uintBitsToFloat(hash(h)),
+                uintBitsToFloat(hash(h + 1u)), uintBitsToFloat(hash(h + 2u)));
 }
