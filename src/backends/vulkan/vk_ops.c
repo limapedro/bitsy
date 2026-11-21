@@ -464,6 +464,34 @@ bt_status_t bt_vk_broadcast_grad(const bt_tensor_t* g, bt_tensor_t* out) {
   return status;
 }
 
+/* exp_036: GEMM + bias + tanh epilogue (small shapes). */
+bt_status_t bt_vk_matmul_bias_tanh(const bt_tensor_t* a, const bt_tensor_t* b,
+                                    const bt_tensor_t* bias, bt_tensor_t* out) {
+  if (!g_vk.ready) return bt_fail(BT_ERR_BACKEND, "bt_vk_matmul_bias_tanh: Vulkan not ready");
+  if (a->strides[1] != 1 || b->strides[1] != 1)
+    return bt_fail(BT_ERR_NOT_IMPLEMENTED, "bt_vk_matmul_bias_tanh: needs row-major operands");
+  vk_matmul_pc_t pc = {
+    .M = (uint32_t)a->shape.dims[0], .K = (uint32_t)a->shape.dims[1],
+    .N = (uint32_t)b->shape.dims[1],
+    .sa0 = (int32_t)a->strides[0], .sa1 = (int32_t)a->strides[1],
+    .sb0 = (int32_t)b->strides[0], .sb1 = (int32_t)b->strides[1],
+    .sc0 = (int32_t)out->strides[0], .sc1 = (int32_t)out->strides[1],
+    .offa = (int32_t)a->offset, .offb = (int32_t)b->offset,
+    .offc = (int32_t)out->offset,
+    .k_start = 0, .k_len = (int32_t)pc.K,
+  };
+  VkBuffer buffers[4] = {
+    bt_vk_buffer_of(a->storage->gpu), bt_vk_buffer_of(b->storage->gpu),
+    bt_vk_buffer_of(out->storage->gpu), bt_vk_buffer_of(bias->storage->gpu),
+  };
+  double m = pc.M, n = pc.N, k = pc.K;
+  bt_status_t status = dispatch(g_vk.gemm_bias_tanh_pipeline, buffers, &pc, sizeof(pc),
+                                (pc.N + 15) / 16, (pc.M + 15) / 16, "gemm_bias_tanh",
+                                (m * k + k * n + m * n) * 4.0, 2.0 * m * n * k);
+  if (status == BT_OK) bt_storage_bump_version(out->storage);
+  return status;
+}
+
 /* exp_029: four SGD updates in one dispatch via descriptor arrays. */
 typedef struct { uint32_t n[4]; float lr; } vk_sgd_fused_pc_t;
 

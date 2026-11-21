@@ -61,6 +61,10 @@ BT_API bt_status_t bt_dual_mul(const bt_tensor_t* g, const bt_tensor_t* a,
 BT_API bt_status_t bt_matmul_bias(const bt_tensor_t* a, const bt_tensor_t* b,
                                   const bt_tensor_t* bias, bt_tensor_t** out);
 
+/* exp_036: out = tanh(a @ b + bias), tiled small-shape epilogue. */
+BT_API bt_status_t bt_matmul_bias_tanh(const bt_tensor_t* a, const bt_tensor_t* b,
+                                       const bt_tensor_t* bias, bt_tensor_t** out);
+
 /* exp_027: fused 2D log_softmax (one row per workgroup). */
 BT_API bt_status_t bt_log_softmax(const bt_tensor_t* x, bt_tensor_t** out);
 

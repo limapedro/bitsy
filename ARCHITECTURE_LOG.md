@@ -1136,6 +1136,26 @@ conditional on this GPU/driver/backend stack; 44/44 parity holds.
 
 ---
 
+## 2026-11-21 — Fused bias+tanh epilogue, neutral (exp_036)
+
+**Context.** One last bounded fusion: apply tanh inside the Linear GEMM
+epilogue, removing a standalone dispatch while keeping the backward composed
+from already-verified ops (unlike exp_033's hand-written backward).
+
+**Options considered.** (1) Keep the two dispatches, (2) fused epilogue with
+a `Linear.forward_tanh` path used by `Sequential`.
+
+**Decision.** Option 2, recorded in `experiments/exp_036/HYPOTHESIS.md`.
+
+**Consequences.** Dispatches/step 19 → 18; captured step 0.1457 → 0.1432–0.1447
+ms (~1%, neutral), graph ratio 0.46, eager 0.780–0.879 ms (ratio 1.14–1.29),
+GEMM/elementwise unchanged. 44/44 parity incl. the training-scale gate,
+MNIST W1 diff 3.278e-07, CIFAR W diff 6.855e-07. This confirms the ceiling
+assessment: single-dispatch fusion has no material effect on the captured
+graph ratio.
+
+---
+
 ## 2026-11-21 — Training-scale gradient gate in CI (exp_034)
 
 **Context.** exp_019 and exp_033 both passed the 43-case gate while training

@@ -28,6 +28,7 @@
 #include "ce_loss.spv.h"
 #include "dual_mul.spv.h"
 #include "sgd_fused.spv.h"
+#include "gemm_tiled_bias_tanh.spv.h"
 #include "splitk_reduce.spv.h"
 #include "fused.spv.h"
 
@@ -226,8 +227,10 @@ static bt_status_t make_pipeline(void) {
                                       .setLayoutCount = 1, .pSetLayouts = &g_vk.sgd_set_layout,
                                       .pushConstantRangeCount = 1, .pPushConstantRanges = &spc };
   VKCHECK(vkCreatePipelineLayout(g_vk.device, &spli, NULL, &g_vk.sgd_pipeline_layout));
-  return pipeline_from_spv_layout(sgd_fused_spv, sgd_fused_spv_bytes,
-                                  g_vk.sgd_pipeline_layout, &g_vk.sgd_fused_pipeline);
+  if ((status = pipeline_from_spv_layout(sgd_fused_spv, sgd_fused_spv_bytes,
+                                         g_vk.sgd_pipeline_layout, &g_vk.sgd_fused_pipeline))) return status;
+  return pipeline_from_spv(gemm_tiled_bias_tanh_spv, gemm_tiled_bias_tanh_spv_bytes,
+                           &g_vk.gemm_bias_tanh_pipeline);
 }
 
 bt_status_t bt_vk_init(void) {
@@ -326,6 +329,7 @@ void bt_vk_shutdown(void) {
   vkDestroyPipeline(g_vk.device, g_vk.log_softmax_pipeline, NULL);
   vkDestroyPipeline(g_vk.device, g_vk.ce_loss_pipeline, NULL);
   vkDestroyPipeline(g_vk.device, g_vk.sgd_fused_pipeline, NULL);
+  vkDestroyPipeline(g_vk.device, g_vk.gemm_bias_tanh_pipeline, NULL);
   vkDestroyPipelineLayout(g_vk.device, g_vk.sgd_pipeline_layout, NULL);
   vkDestroyDescriptorSetLayout(g_vk.device, g_vk.sgd_set_layout, NULL);
   vkDestroyPipelineLayout(g_vk.device, g_vk.pipeline_layout, NULL);

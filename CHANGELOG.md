@@ -6,6 +6,14 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added (TOGISHI Phase 6, exp_036)
+
+- Fused bias+tanh GEMM epilogue with a CPU fallback; `Sequential` merges a
+  Linear+Tanh pair. Dispatches/step 19 → 18, captured step 0.143–0.145 ms
+  (~1%, neutral), graph ratio 0.46, eager ratio 1.14–1.29. Parity 44/44 incl.
+  training-scale gate; MNIST/CIFAR unchanged. Confirms the ceiling assessment.
+  Details in `experiments/exp_036/FINDINGS.md`.
+
 ### Added (TOGISHI Phase 2, exp_035)
 
 - `docs/PERFORMANCE_CEILING.md`: evidence-backed, conditional conclusion for the
