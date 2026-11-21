@@ -180,6 +180,17 @@ Linear was worth ~1.6×. The captured graph path improved from 0.30 to 0.34–0.
 but remains well below 0.85. Standalone GEMM (0.72) and elementwise (≤0.54)
 targets are still missed. See `experiments/exp_024/FINDINGS.md`.
 
+## exp_032 — lazy device-time timestamps (neutral)
+
+Device-time timestamp collection is now on demand, removing an unconditional
+`vkGetQueryPoolResults(WAIT_BIT)` + reset from every wait for callers that never
+read device time. Captured step 0.156 → 0.145–0.166 ms (ratio 0.46–0.49),
+eager step 0.894–0.899 ms (ratio 1.23–1.24), elementwise/GEMM unchanged within
+variance. The ≥1.1× request was not met: `elementwise.py`/`gemm.py` request
+device time each iteration, so they cannot benefit. First `device_time_ms()`
+call after enabling returns 0 by design (documented). Parity 43/43. See
+`experiments/exp_032/FINDINGS.md`.
+
 ## exp_031 — elementwise three-way timing (launch overhead)
 
 `benchmarks/ops/elementwise_graph.py` follows the campaign's own captured

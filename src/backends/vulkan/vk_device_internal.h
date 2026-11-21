@@ -30,6 +30,7 @@ typedef struct {
   VkSemaphore timeline;
   uint64_t timeline_value;
   int query_read_index;
+  int timestamps_wanted;
   VkDescriptorSetLayout set_layout;
   VkDescriptorPool descriptor_pool;
   VkDescriptorSet sets[BT_VK_MAX_DISPATCHES];

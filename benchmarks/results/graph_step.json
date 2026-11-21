@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-11-21T21:04:09.772255+00:00",
-  "gpu_clock_mhz": 1740.0,
+  "generated_at": "2026-11-21T21:42:13.028107+00:00",
+  "gpu_clock_mhz": 1537.5,
   "environment": {
     "torch": "2.11.0+cu126",
     "gpu": "NVIDIA GeForce GTX 1660 SUPER",
@@ -24,17 +24,17 @@
     "abs_diff": 0.0
   },
   "bitsy": {
-    "median_ms": 0.1534705000813119,
-    "stdev_ms": 0.0034034796551062974,
-    "min_ms": 0.14510199980577454,
-    "max_ms": 0.1568000001134351
+    "median_ms": 0.16556300019146875,
+    "stdev_ms": 0.021723489754017503,
+    "min_ms": 0.14502999983960763,
+    "max_ms": 0.2091289998497814
   },
   "torch": {
-    "median_ms": 0.0691019999794662,
-    "stdev_ms": 0.002076015073653558,
-    "min_ms": 0.06617400009417906,
-    "max_ms": 0.07152699981816113
+    "median_ms": 0.08030750002944842,
+    "stdev_ms": 0.01313572128383688,
+    "min_ms": 0.06674900010693818,
+    "max_ms": 0.11178499989910051
   },
-  "graph_throughput_ratio_torch_over_bitsy": 0.4502624279119082,
+  "graph_throughput_ratio_torch_over_bitsy": 0.4850570473872493,
   "note": "replay uses static input buffers (CUDA-graph semantics); timed region is N replays + one completion wait; Bitsy captures once, and after the first wait recycled staging resources may make later replays stale (timing only - numerics verified separately by numeric_check)"
 }

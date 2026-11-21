@@ -385,7 +385,8 @@ bt_status_t bt_vk_wait(void) {
   bt_vk_deferred_release(); // scratch buffers are safe once the GPU is idle
   bt_vk_hazard_reset();
 
-  if (g_vk.have_timestamps && g_vk.query_index > g_vk.query_read_index) {
+  if (g_vk.timestamps_wanted && g_vk.have_timestamps &&
+      g_vk.query_index > g_vk.query_read_index) {
     int count = g_vk.query_index - g_vk.query_read_index;
     uint64_t stamps[2 * BT_VK_MAX_DISPATCHES];
     VkResult result = vkGetQueryPoolResults(
@@ -428,18 +429,23 @@ VkDescriptorSet bt_vk_next_set(void) {
 }
 
 void bt_vk_timestamp_start(void) {
-  if (!g_vk.have_timestamps || g_vk.query_index + 1 >= 2 * BT_VK_MAX_DISPATCHES) return;
+  if (!g_vk.have_timestamps || !g_vk.timestamps_wanted ||
+      g_vk.query_index + 1 >= 2 * BT_VK_MAX_DISPATCHES) return;
   vkCmdWriteTimestamp(g_vk.cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
                       g_vk.timestamp_pool, (uint32_t)g_vk.query_index++);
 }
 
 void bt_vk_timestamp_end(void) {
-  if (!g_vk.have_timestamps || g_vk.query_index + 1 >= 2 * BT_VK_MAX_DISPATCHES) return;
+  if (!g_vk.have_timestamps || !g_vk.timestamps_wanted ||
+      g_vk.query_index + 1 >= 2 * BT_VK_MAX_DISPATCHES) return;
   vkCmdWriteTimestamp(g_vk.cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
                       g_vk.timestamp_pool, (uint32_t)g_vk.query_index++);
 }
 
-double bt_vk_device_time_ms(void) { return g_vk.device_time_ms; }
+double bt_vk_device_time_ms(void) {
+  g_vk.timestamps_wanted = 1; // exp_032: collect device timestamps only once asked
+  return g_vk.device_time_ms;
+}
 
 static void capture_begin_chunk(void) {
   VkCommandBufferBeginInfo bi = { .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,

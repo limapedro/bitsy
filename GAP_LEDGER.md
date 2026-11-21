@@ -371,6 +371,20 @@ Conclusion: the remaining elementwise gap is bandwidth/kernel-bound
   captured full-step graph ~0.43. Parity 43/43 incl. gradient gate, CTest both
   builds. All changes must still pass the 43-case gate.
 
+## Phase 5 update (exp_032)
+
+- Device-time timestamp recording/collection is now lazy (on demand). Removes
+  an unconditional query WAIT_BIT + pool reset from waits that don't need
+  device time. Captured step 0.156 → 0.145–0.166 ms (ratio 0.46–0.49), eager
+  step 0.894–0.899 ms (ratio 1.23–1.24); elementwise/GEMM unchanged.
+- The ≥1.1× request was **not met** because the elementwise/GEMM benchmarks
+  call `device_time_ms()` each iteration. Kept as a small cleanup, recorded as
+  neutral. Cold first `device_time_ms()` sample documented.
+- Eager submit/fence gap is dominated by WDDM queue submission, not timestamp
+  collection. Parity 43/43 incl. gradient gate, CTest both builds.
+- Remaining: default eager submit cost, standalone GEMM 0.68–0.76, captured
+  full-step graph ~0.46–0.49. Next: step-level fused kernel or accept ceiling.
+
 ## Honesty
 
 - Timestamp GPU time is a proxy, not the 1000-repeat isolated kernel time the

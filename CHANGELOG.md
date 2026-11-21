@@ -6,6 +6,16 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed (TOGISHI Phase 5, exp_032)
+
+- Device-time timestamps are now collected on demand instead of on every wait;
+  the profiler query pool is unchanged. Captured step 0.145–0.166 ms (ratio
+  0.46–0.49), eager step 0.894–0.899 ms (ratio 1.23–1.24), elementwise/GEMM
+  unchanged. The ≥1.1× speed prediction was **not met** (benchmarks that report
+  device time cannot benefit); kept as a neutral cleanup. Cold first
+  `device_time_ms()` sample documented. Parity 43/43 incl. gradient gate,
+  CTest both builds. Details in `experiments/exp_032/FINDINGS.md`.
+
 ### Added (TOGISHI Phase 3/5, exp_031)
 
 - `benchmarks/ops/elementwise_graph.py`: three-way captured timing for elementwise
