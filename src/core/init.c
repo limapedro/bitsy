@@ -63,6 +63,31 @@ bt_status_t bt_vulkan_wait(void) {
 #endif
 }
 
+bt_status_t bt_vulkan_capture_begin(void) {
+#ifdef BT_ENABLE_VULKAN
+  return bt_vk_capture_begin();
+#else
+  return BT_OK;
+#endif
+}
+
+bt_status_t bt_vulkan_capture_end(void) {
+#ifdef BT_ENABLE_VULKAN
+  return bt_vk_capture_end();
+#else
+  return BT_OK;
+#endif
+}
+
+bt_status_t bt_vulkan_replay(int count) {
+#ifdef BT_ENABLE_VULKAN
+  return bt_vk_replay(count);
+#else
+  (void)count;
+  return BT_OK;
+#endif
+}
+
 double bt_vulkan_device_time_ms(void) {
 #ifdef BT_ENABLE_VULKAN
   return bt_vk_device_time_ms();

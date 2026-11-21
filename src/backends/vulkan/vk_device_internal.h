@@ -18,6 +18,9 @@ typedef struct {
   uint32_t qfam;
   VkCommandPool pool;
   VkCommandBuffer cmd;
+  VkCommandBuffer main_cmd;
+  VkCommandBuffer replay_cmd;
+  int capturing;
   VkFence fence;
   VkSemaphore timeline;
   uint64_t timeline_value;

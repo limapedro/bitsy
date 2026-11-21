@@ -6,6 +6,16 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added (TOGISHI Phase 5, exp_013)
+
+- `bt_vulkan_capture_begin/end/replay` record-once command buffers with
+  timeline replay (`bt.capture_begin()`, `capture_end()`, `replay(n)` in Python).
+- 20-add chain: 1.080 → 0.899 ms/chain (1.20×); Bitsy replay versus PyTorch
+  CUDA graph replay is **1.00×** — first measured performance-parity result,
+  limited to the captured path. The ≥1.5× prediction was not met (GPU work is
+  now the floor). Default eager ratios unchanged; parity 42/42. Details in
+  `experiments/exp_013/FINDINGS.md`.
+
 ### Added (TOGISHI Phase 6, exp_012)
 
 - vec4/aligned elementwise fast path with linear indexing and a safe scalar

@@ -9,7 +9,8 @@ import ctypes, os
 from pathlib import Path
 from typing import Any
 
-__all__ = ["BitsyError", "Tensor", "add", "add_relu", "sub", "mul", "div", "relu", "sigmoid", "flush", "wait", "profile", "profile_reset", "profile_dump", "device_time_ms",
+__all__ = ["BitsyError", "Tensor", "add", "add_relu", "sub", "mul", "div", "relu", "sigmoid", "flush", "wait", "capture_begin", "capture_end", "replay",
+"profile", "profile_reset", "profile_dump", "device_time_ms",
            "tanh", "exp", "log", "matmul", "mm", "transpose", "view",
            "conv2d", "conv2d_backward_x", "conv2d_backward_w", "conv2d_backward_b",
            "device", "dtype_size", "has_vulkan", "last_error", "shutdown", "version"]
@@ -60,6 +61,9 @@ _fn("bt_profiler_reset", [], None)
 _fn("bt_profiler_dump_json", [ctypes.c_char_p], ctypes.c_int)
 _fn("bt_vulkan_flush", [], ctypes.c_int)
 _fn("bt_vulkan_wait", [], ctypes.c_int)
+_fn("bt_vulkan_capture_begin", [], ctypes.c_int)
+_fn("bt_vulkan_capture_end", [], ctypes.c_int)
+_fn("bt_vulkan_replay", [ctypes.c_int], ctypes.c_int)
 _fn("bt_vulkan_device_time_ms", [], ctypes.c_double)
 _fn("bt_device_cpu", [], _Device)
 _fn("bt_device_from_string", [ctypes.c_char_p, ctypes.POINTER(_Device)], ctypes.c_int)
@@ -95,6 +99,9 @@ def dtype_size(dtype:int) -> int: return int(_lib.bt_dtype_size(dtype))
 def has_vulkan() -> bool: return bool(_lib.bt_has_vulkan())
 def flush() -> None: _check(_lib.bt_vulkan_flush())
 def wait() -> None: _check(_lib.bt_vulkan_wait())
+def capture_begin() -> None: _check(_lib.bt_vulkan_capture_begin())
+def capture_end() -> None: _check(_lib.bt_vulkan_capture_end())
+def replay(count:int) -> None: _check(_lib.bt_vulkan_replay(count))
 def profile(enabled:bool=True) -> None: _lib.bt_profiler_enable(1 if enabled else 0)
 def profile_reset() -> None: _lib.bt_profiler_reset()
 def profile_dump(path:str) -> None: _check(_lib.bt_profiler_dump_json(path.encode()))
