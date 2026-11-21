@@ -69,6 +69,12 @@ BT_API bt_status_t bt_tensor_view(const bt_tensor_t* tensor, const int64_t* dims
 BT_API bt_status_t bt_tensor_transpose_view(const bt_tensor_t* tensor,
                                             bt_tensor_t** out);
 
+/* exp_022: contiguous view with an element offset into shared storage
+ * (used to split a packed dual-output buffer into two tensors). */
+BT_API bt_status_t bt_tensor_offset_view(const bt_tensor_t* tensor, int64_t offset,
+                                         const int64_t* dims, int64_t ndim,
+                                         bt_tensor_t** out);
+
 /* exp_019: a zero-dispatch broadcast view was attempted and REVERTED because
  * it broke end-to-end training gradients while the 42-case op harness stayed
  * green. Do not reintroduce it without auditing every stride-blind consumer. */

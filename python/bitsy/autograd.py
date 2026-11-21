@@ -100,6 +100,9 @@ class Tensor:
   def __mul__(self, other) -> "Tensor":
     b = self._coerce(other)
     out = C.mul(self._t, b._t)
+    # exp_022: a fused dual-output gradient kernel was tried here; it passed
+    # isolated checks but broke end-to-end gradients (the 43-case gate caught
+    # it), so the unfused path is restored. See FINDINGS.
     return self._op(out, (self, b), lambda g: (self._op(C.mul(g._t, b._t), (), None),
                                                self._op(C.mul(g._t, self._t), (), None)))
   __rmul__ = __mul__

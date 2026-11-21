@@ -53,6 +53,10 @@ BT_API bt_status_t bt_tanh_backward(const bt_tensor_t* g, const bt_tensor_t* t,
 BT_API bt_status_t bt_broadcast_grad(const bt_tensor_t* g, const int64_t* dims,
                                      int64_t ndim, bt_tensor_t** out);
 
+/* exp_022: fused dual-output multiply, out shape (2, numel(g)). */
+BT_API bt_status_t bt_dual_mul(const bt_tensor_t* g, const bt_tensor_t* a,
+                               const bt_tensor_t* b, bt_tensor_t** out);
+
 #ifdef __cplusplus
 }
 #endif
