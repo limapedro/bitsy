@@ -45,8 +45,8 @@ def reduce_sum_op(t:"Tensor", axis:int, keepdim:bool) -> "Tensor":
     shp[axis] = 1
     gg = g.reshape(*shp)
     # exp_019: zero-dispatch broadcast view; reduce_sum is stride-aware now.
-    # exp_020: dedicated contiguous full-shape gradient kernel (no ones tensor,
-    # no unsafe stride-0 view).
+    # exp_023: zero-dispatch broadcast view was retried after the offset fix
+    # and STILL failed the gradient gate; keep the dedicated kernel.
     return (Tensor(C.broadcast_grad(gg._t, t.shape), False, t.device),)
   return t._op(out, (t,), back)
 

@@ -1,0 +1,47 @@
+{
+  "generated_at": "2026-11-21T19:35:50.972355+00:00",
+  "mode": "auto",
+  "gpu": "NVIDIA GeForce GTX 1660 SUPER",
+  "torch": "2.11.0+cu126",
+  "cuda": "12.6",
+  "bitsy": "0.2.0-bitsy",
+  "method": "wall time with bt.flush()+torch.cuda.synchronize() per iteration; device time from timestamp queries",
+  "results": [
+    {
+      "n": 256,
+      "torch_ms": 0.044550004531629384,
+      "bitsy_ms": 0.29245000041555613,
+      "bitsy_device_ms": 0.091712,
+      "ratio": 0.15233374754086565,
+      "torch_GFLOPS": 753.1858268651173,
+      "bitsy_GFLOPS": 114.73561960102893,
+      "torch_spread_ms": [
+        0.04089999129064381,
+        0.14869999722577631
+      ],
+      "bitsy_spread_ms": [
+        0.23790000705048442,
+        0.40600000647827983
+      ],
+      "clockMHz": 1530.0
+    },
+    {
+      "n": 1024,
+      "torch_ms": 0.9402499999850988,
+      "bitsy_ms": 1.3085499813314527,
+      "bitsy_device_ms": 1.0343040000000001,
+      "ratio": 0.7185434361692414,
+      "torch_GFLOPS": 2283.9496389620135,
+      "bitsy_GFLOPS": 1641.1170216172638,
+      "torch_spread_ms": [
+        0.890900002559647,
+        1.1784000089392066
+      ],
+      "bitsy_spread_ms": [
+        1.2088000075891614,
+        1.6118999919854105
+      ],
+      "clockMHz": 1530.0
+    }
+  ]
+}

@@ -75,9 +75,9 @@ BT_API bt_status_t bt_tensor_offset_view(const bt_tensor_t* tensor, int64_t offs
                                          const int64_t* dims, int64_t ndim,
                                          bt_tensor_t** out);
 
-/* exp_019: a zero-dispatch broadcast view was attempted and REVERTED because
- * it broke end-to-end training gradients while the 42-case op harness stayed
- * green. Do not reintroduce it without auditing every stride-blind consumer. */
+/* exp_019/023: a zero-dispatch broadcast view was tried twice and broke the
+ * end-to-end gradient gate both times, even after view offsets were fixed.
+ * Do not reintroduce it without finding the remaining stride-blind consumer. */
 
 #ifdef __cplusplus
 }

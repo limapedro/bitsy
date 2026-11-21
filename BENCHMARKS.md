@@ -161,6 +161,17 @@ step 0.240 → **0.219 ms**, graph ratio 0.278 → **0.304**, eager step 1.669 �
 replacement); the graph ≥0.31 stretch ratio was narrowly missed. See
 `experiments/exp_020/FINDINGS.md`.
 
+## exp_023 — zero-dispatch broadcast views rejected again
+
+The exp_019 broadcast-view optimisation was retried after exp_022 fixed view
+offsets. The isolated 42 op cases passed but the mandatory gradient gate failed
+(42/43 overall, identical loss, wrong parameter gradients), so it was reverted
+again; the API remains removed with a warning in the header. The exp_022 offset
+fix was not the root cause. Final tree is unchanged from exp_022: captured
+0.224 ms (ratio 0.300), eager 1.75 ms (ratio 0.604), parity 43/43. The earlier
+0.213 ms / 0.312 from the broken path is **not** claimed. See
+`experiments/exp_023/FINDINGS.md`.
+
 ## exp_022 — dual-output mul rejected; view-offset fix
 
 A fused mul-backward kernel with a packed two-output buffer was tried. Isolated

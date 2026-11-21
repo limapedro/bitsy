@@ -1,0 +1,40 @@
+{
+  "generated_at": "2026-11-21T19:35:39.459450+00:00",
+  "gpu_clock_mhz": 1732.5,
+  "environment": {
+    "torch": "2.11.0+cu126",
+    "gpu": "NVIDIA GeForce GTX 1660 SUPER",
+    "bitsy": "0.2.0-bitsy"
+  },
+  "config": {
+    "in_features": 784,
+    "hidden": 64,
+    "out_features": 10,
+    "batch": 64,
+    "replay_count": 100,
+    "trials": 10,
+    "warmup_replays": 3,
+    "lr": 0.1,
+    "seed": 0,
+    "result_path": "E:\\__PROJECTS__\\Hagane\\benchmarks\\results\\graph_step.json"
+  },
+  "numeric_check": {
+    "eager_loss": 2.437650203704834,
+    "captured_loss": 2.437650203704834,
+    "abs_diff": 0.0
+  },
+  "bitsy": {
+    "median_ms": 0.22346700003254227,
+    "stdev_ms": 0.002107946416447009,
+    "min_ms": 0.2195140000549145,
+    "max_ms": 0.2269079998950474
+  },
+  "torch": {
+    "median_ms": 0.0670269998954609,
+    "stdev_ms": 0.0027461372384038974,
+    "min_ms": 0.06641399988438934,
+    "max_ms": 0.07511199975851923
+  },
+  "graph_throughput_ratio_torch_over_bitsy": 0.29994137785758135,
+  "note": "replay uses static input buffers (CUDA-graph semantics); timed region is N replays + one completion wait; Bitsy captures once, and after the first wait recycled staging resources may make later replays stale (timing only - numerics verified separately by numeric_check)"
+}
