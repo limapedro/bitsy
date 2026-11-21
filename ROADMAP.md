@@ -8,7 +8,7 @@ Status legend: **done** / **in progress** / **planned**.
 
 | # | Name | Focus | Status |
 |---|---|---|---|
-| M0 | Anvil | Repository, CMake, CI, conventions, empty Python package, parity harness skeleton, first `add` on `cpu_ref` | **in progress** |
+| M0 | Anvil | Repository, CMake, CI, conventions, empty Python package, parity harness skeleton, first `add` on `cpu_ref` | **done** (`v0.1.0-m0`) |
 | M1 | Ingot | Tensor core on `cpu_ref`: storage, views, strides, broadcasting, creation, elementwise, reductions, full parity | planned |
 | M2 | Forge | Vulkan bring-up: device, allocator, streams, pipelines, shader build, transfers, first elementwise kernels | planned |
 | M3 | Quench | Core op coverage on Vulkan: reductions, indexing, movement, sorting, cumulative, RNG parity | planned |
@@ -34,5 +34,7 @@ Exit criteria:
 - [x] Empty `hagane` Python package imports
 - [x] Dataclass-configured parity harness skeleton
 - [x] Tolerance table with recorded reasoning
-- [ ] `add` implemented on `cpu_ref` and matching PyTorch (forward)
-- [ ] M0 status report and tag `v0.1.0-m0`
+- [x] `add` implemented on `cpu_ref` and matching PyTorch (forward) — 13/13 cases, bit-exact
+- [x] M0 status report and tag `v0.1.0-m0`
+
+See `docs/m0_status.md` for the evidence and known limitations.

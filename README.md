@@ -1,5 +1,7 @@
 # Hagane (鋼)
 
+[![CI](https://github.com/limapedro/hagane/actions/workflows/ci.yml/badge.svg)](https://github.com/limapedro/hagane/actions/workflows/ci.yml)
+
 Hagane is a deep learning framework written from scratch in **C11** with a
 **Vulkan compute** backend and a Python front end that mirrors PyTorch.
 The goal is that PyTorch code moves to Hagane with minimal edits:
@@ -14,9 +16,10 @@ print(x + y)                 # tensor([5., 7., 9.])
 
 ## Status
 
-**M0 "Anvil" — foundations (in progress).** Hagane is not yet usable for
-training. See [ROADMAP.md](ROADMAP.md) for the milestone plan and current
-state, and [CHANGELOG.md](CHANGELOG.md) for released changes.
+**M0 "Anvil" — foundations complete (`v0.1.0-m0`).** Hagane is not yet usable
+for training. See [docs/m0_status.md](docs/m0_status.md) for the evidence,
+[ROADMAP.md](ROADMAP.md) for the milestone plan, and
+[CHANGELOG.md](CHANGELOG.md) for released changes.
 
 ## Two goals
 

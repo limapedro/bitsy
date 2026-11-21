@@ -1,0 +1,380 @@
+{
+  "generated_at": "2026-11-21T10:31:38.806035+00:00",
+  "environment": {
+    "platform": "Windows-10-10.0.26300-SP0",
+    "python": "3.10.11",
+    "torch": "2.11.0+cu126",
+    "hagane": "0.1.0-m0",
+    "cuda_available": true,
+    "cuda_version": "12.6",
+    "gpu": "NVIDIA GeForce GTX 1660 SUPER"
+  },
+  "config": {
+    "ops": [
+      "add"
+    ],
+    "backends": [
+      "cpu_ref"
+    ],
+    "include_cuda": true,
+    "seed": 1234
+  },
+  "summary": {
+    "total": 13,
+    "passed": 13,
+    "failed": 0
+  },
+  "cases": [
+    {
+      "name": "add_scalar_scalar",
+      "op": "add",
+      "shape": [],
+      "dtype": "float32",
+      "value_set": "normal",
+      "hagane_vs_torch_cpu": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 1,
+        "mismatches": 0
+      },
+      "torch_cuda_vs_torch_cpu": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 1,
+        "mismatches": 0
+      },
+      "hagane_vs_torch_cuda": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 1,
+        "mismatches": 0
+      },
+      "passed": true
+    },
+    {
+      "name": "add_vector",
+      "op": "add",
+      "shape": [
+        3
+      ],
+      "dtype": "float32",
+      "value_set": "normal",
+      "hagane_vs_torch_cpu": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 3,
+        "mismatches": 0
+      },
+      "torch_cuda_vs_torch_cpu": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 3,
+        "mismatches": 0
+      },
+      "hagane_vs_torch_cuda": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 3,
+        "mismatches": 0
+      },
+      "passed": true
+    },
+    {
+      "name": "add_vector_special",
+      "op": "add",
+      "shape": [
+        8
+      ],
+      "dtype": "float32",
+      "value_set": "special",
+      "hagane_vs_torch_cpu": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 8,
+        "mismatches": 0
+      },
+      "torch_cuda_vs_torch_cpu": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 8,
+        "mismatches": 0
+      },
+      "hagane_vs_torch_cuda": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 8,
+        "mismatches": 0
+      },
+      "passed": true
+    },
+    {
+      "name": "add_vector_extremes",
+      "op": "add",
+      "shape": [
+        8
+      ],
+      "dtype": "float32",
+      "value_set": "large_small",
+      "hagane_vs_torch_cpu": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 8,
+        "mismatches": 0
+      },
+      "torch_cuda_vs_torch_cpu": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 8,
+        "mismatches": 0
+      },
+      "hagane_vs_torch_cuda": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 8,
+        "mismatches": 0
+      },
+      "passed": true
+    },
+    {
+      "name": "add_broadcast_row",
+      "op": "add",
+      "shape": [
+        2,
+        3
+      ],
+      "dtype": "float32",
+      "value_set": "normal",
+      "hagane_vs_torch_cpu": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 6,
+        "mismatches": 0
+      },
+      "torch_cuda_vs_torch_cpu": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 6,
+        "mismatches": 0
+      },
+      "hagane_vs_torch_cuda": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 6,
+        "mismatches": 0
+      },
+      "passed": true
+    },
+    {
+      "name": "add_broadcast_axes",
+      "op": "add",
+      "shape": [
+        2,
+        3,
+        4
+      ],
+      "dtype": "float32",
+      "value_set": "normal",
+      "hagane_vs_torch_cpu": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 24,
+        "mismatches": 0
+      },
+      "torch_cuda_vs_torch_cpu": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 24,
+        "mismatches": 0
+      },
+      "hagane_vs_torch_cuda": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 24,
+        "mismatches": 0
+      },
+      "passed": true
+    },
+    {
+      "name": "add_scalar_rhs",
+      "op": "add",
+      "shape": [
+        2,
+        2
+      ],
+      "dtype": "float32",
+      "value_set": "normal",
+      "hagane_vs_torch_cpu": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 4,
+        "mismatches": 0
+      },
+      "torch_cuda_vs_torch_cpu": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 4,
+        "mismatches": 0
+      },
+      "hagane_vs_torch_cuda": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 4,
+        "mismatches": 0
+      },
+      "passed": true
+    },
+    {
+      "name": "add_size_one",
+      "op": "add",
+      "shape": [
+        5
+      ],
+      "dtype": "float32",
+      "value_set": "normal",
+      "hagane_vs_torch_cpu": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 5,
+        "mismatches": 0
+      },
+      "torch_cuda_vs_torch_cpu": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 5,
+        "mismatches": 0
+      },
+      "hagane_vs_torch_cuda": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 5,
+        "mismatches": 0
+      },
+      "passed": true
+    },
+    {
+      "name": "add_empty",
+      "op": "add",
+      "shape": [
+        0,
+        2
+      ],
+      "dtype": "float32",
+      "value_set": "normal",
+      "hagane_vs_torch_cpu": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 0,
+        "mismatches": 0
+      },
+      "torch_cuda_vs_torch_cpu": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 0,
+        "mismatches": 0
+      },
+      "hagane_vs_torch_cuda": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 0,
+        "mismatches": 0
+      },
+      "passed": true
+    },
+    {
+      "name": "add_non_power_of_two",
+      "op": "add",
+      "shape": [
+        7,
+        13
+      ],
+      "dtype": "float32",
+      "value_set": "normal",
+      "hagane_vs_torch_cpu": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 91,
+        "mismatches": 0
+      },
+      "torch_cuda_vs_torch_cpu": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 91,
+        "mismatches": 0
+      },
+      "hagane_vs_torch_cuda": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 91,
+        "mismatches": 0
+      },
+      "passed": true
+    },
+    {
+      "name": "add_large",
+      "op": "add",
+      "shape": [
+        4096
+      ],
+      "dtype": "float32",
+      "value_set": "normal",
+      "hagane_vs_torch_cpu": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 4096,
+        "mismatches": 0
+      },
+      "torch_cuda_vs_torch_cpu": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 4096,
+        "mismatches": 0
+      },
+      "hagane_vs_torch_cuda": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 4096,
+        "mismatches": 0
+      },
+      "passed": true
+    },
+    {
+      "name": "add_broadcast_special",
+      "op": "add",
+      "shape": [
+        2,
+        8
+      ],
+      "dtype": "float32",
+      "value_set": "special",
+      "hagane_vs_torch_cpu": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 16,
+        "mismatches": 0
+      },
+      "torch_cuda_vs_torch_cpu": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 16,
+        "mismatches": 0
+      },
+      "hagane_vs_torch_cuda": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 16,
+        "mismatches": 0
+      },
+      "passed": true
+    },
+    {
+      "name": "add_shape_error",
+      "op": "add",
+      "dtype": "float32",
+      "expect_error": true,
+      "torch_raised": true,
+      "hagane_raised": true,
+      "hagane_message": "HG_ERR_SHAPE_MISMATCH: hg_broadcast_shapes: sizes 3 and 4 at dim 1 are not broadcastable (status 6)",
+      "passed": true
+    }
+  ]
+}
