@@ -44,8 +44,15 @@ BT_API bt_status_t bt_vulkan_flush(void);
 BT_API bt_status_t bt_vulkan_wait(void);
 
 /* Record-once submission: capture dispatches between begin/end, then replay
- * the captured command buffer `count` times with one timeline signal each.
- * Inputs must stay alive until bt_vulkan_wait() completes. */
+ * the captured command buffer(s) `count` times with one timeline signal each.
+ * Inputs must stay alive until bt_vulkan_wait() completes.
+ *
+ * exp_015: a capture is split into command-buffer chunks at host readbacks
+ * (the interim autograd reduces some gradients on the CPU); each chunk is
+ * submitted+waited so the readback sees valid data, then recording continues.
+ * After the bt_vulkan_wait() that completes a replay, staging/scratch
+ * resources are recycled, so the captured chunks must NOT be replayed again
+ * without calling bt_vulkan_capture_begin()/end() to re-capture them. */
 BT_API bt_status_t bt_vulkan_capture_begin(void);
 BT_API bt_status_t bt_vulkan_capture_end(void);
 BT_API bt_status_t bt_vulkan_replay(int count);

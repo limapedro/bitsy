@@ -233,7 +233,10 @@ bt_status_t bt_vk_upload(void* handle, const void* host, size_t nbytes) {
   }
   /* Deferred path: pooled staging, copy enqueued into the current command
    * buffer; the only host wait is the existing completion point. */
-  if (g_stage_used_n >= STAGE_MAX) { bt_vk_flush(); bt_vk_wait(); } // safety: avoid in-use reuse
+  if (g_stage_used_n >= STAGE_MAX) { // safety: avoid in-use reuse
+    if (g_vk.capturing) bt_vk_capture_sync_chunk();
+    else { bt_vk_flush(); bt_vk_wait(); }
+  }
   vk_buffer_t* stage = stage_acquire(nbytes);
   if (!stage) return bt_fail(BT_ERR_OUT_OF_MEMORY, "bt_vk_upload: staging OOM");
   void* mapped = NULL;
@@ -278,7 +281,10 @@ bt_status_t bt_vk_readback(void* handle, void* host, size_t nbytes) {
   VkBufferCopy copy = { .srcOffset = 0, .dstOffset = 0, .size = nbytes };
   vkCmdCopyBuffer(g_vk.cmd, src->buffer, stage->buffer, 1, &copy);
   bt_vk_barrier();
-  bt_status_t status = bt_vk_flush();
+  /* exp_015: during capture the compute producing `src` is only recorded, not
+   * executed. Submit + wait the current chunk so the staging buffer is valid,
+   * then continue recording the remainder of the step in a new chunk. */
+  bt_status_t status = g_vk.capturing ? bt_vk_capture_sync_chunk() : bt_vk_flush();
   if (status == BT_OK) status = bt_vk_wait();
   if (status != BT_OK) { stage_push(g_stage_pool, &g_stage_pool_n, stage); return status; }
   void* mapped = NULL;

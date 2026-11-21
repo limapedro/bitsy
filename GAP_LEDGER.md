@@ -116,6 +116,24 @@ Conclusion: the remaining elementwise gap is bandwidth/kernel-bound
 - Next: capture the whole training step (CUDA-graph equivalent) with managed
   input/parameter buffers and replay it, then measure against PyTorch graphs.
 
+## Phase 5 update (exp_015)
+
+- Full-step capture/replay works and is bit-exact (captured loss == eager loss,
+  abs diff 0.0). It was made possible by splitting the capture into
+  command-buffer chunks at the autograd's CPU-gradient readbacks; a single
+  command buffer deadlocked because `bt_vk_wait()` collected timestamp queries
+  from the unsubmitted buffer.
+- Captured step wall time 3.220 (eager) → **0.294–0.355 ms/step** (~9–11×), but
+  PyTorch CUDA graph is 0.067 ms/step: **graph ratio 0.19–0.23**, missing both
+  the ≥0.85 end-to-end target and the ≥0.80 gate.
+- Ranked remaining causes: (1) one extra submit/replay from the CPU readback in
+  `_unbroadcast` (~36 µs); (2) many small dispatches from the interim Python
+  autograd. Next: device-side reductions to remove the readback and get a
+  single-chunk capture, then re-measure with parity verification.
+- A first chunking implementation that recycled resources at chunk boundaries
+  produced bit-wrong replays; fixed by pinning resources until the final wait.
+  Replaying a capture after that wait is now documented as invalid.
+
 ## Honesty
 
 - Timestamp GPU time is a proxy, not the 1000-repeat isolated kernel time the

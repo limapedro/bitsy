@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-11-21T16:48:18.682799+00:00",
-  "gpu_clock_mhz": 1860.0,
+  "generated_at": "2026-11-21T17:27:39.176538+00:00",
+  "gpu_clock_mhz": 1605.0,
   "config": {
     "elements": 1048576,
     "ops": 20,
@@ -8,10 +8,10 @@
     "warmup": 3,
     "result_path": "E:\\__PROJECTS__\\Hagane\\benchmarks\\results\\replay_chain.json"
   },
-  "bitsy_recorded_ms_per_chain": 1.080089999595657,
-  "bitsy_replay_ms_per_chain": 0.8991999995487276,
-  "bitsy_replay_speedup": 1.2011677047794826,
-  "torch_eager_ms_per_chain": 0.9131550003075972,
-  "torch_graph_ms_per_chain": 0.8998674995382316,
-  "replay_vs_graph_ratio": 1.0007423265011555
+  "bitsy_recorded_ms_per_chain": 1.127144999918528,
+  "bitsy_replay_ms_per_chain": 0.8884124996257015,
+  "bitsy_replay_speedup": 1.2687180790380677,
+  "torch_eager_ms_per_chain": 0.9191224999085534,
+  "torch_graph_ms_per_chain": 0.8900399996491615,
+  "replay_vs_graph_ratio": 1.0018319193214253
 }
