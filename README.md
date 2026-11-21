@@ -14,9 +14,10 @@ print(x + y)                 # tensor([5., 7., 9.])
 
 ## Status
 
-**M0 "Anvil" — foundations (in progress).** Hagane is not yet usable for
-training. See [ROADMAP.md](ROADMAP.md) for the milestone plan and current
-state, and [CHANGELOG.md](CHANGELOG.md) for released changes.
+**M0 "Anvil" — foundations complete (`v0.1.0-m0`).** Hagane is not yet usable
+for training. See [docs/m0_status.md](docs/m0_status.md) for the evidence,
+[ROADMAP.md](ROADMAP.md) for the milestone plan, and
+[CHANGELOG.md](CHANGELOG.md) for released changes.
 
 ## Two goals
 

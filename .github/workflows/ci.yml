@@ -23,6 +23,18 @@ jobs:
         run: cmake --build build
       - name: C unit tests
         run: ctest --test-dir build --output-on-failure
+      - name: Install PyTorch (CPU) and NumPy
+        run: |
+          python -m pip install numpy
+          python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+      - name: Parity harness
+        run: python tests/parity/run.py
+      - name: Upload parity report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: parity-report-windows
+          path: tests/parity/reports/latest.json
 
   linux:
     name: Linux (gcc + Ninja, software Vulkan available)
@@ -45,3 +57,15 @@ jobs:
       - name: Confirm a software Vulkan ICD is present
         run: |
           if command -v vulkaninfo >/dev/null; then vulkaninfo --summary; else echo "vulkaninfo not installed; lavapipe present for future Vulkan CI"; fi
+      - name: Install PyTorch (CPU) and NumPy
+        run: |
+          python -m pip install numpy
+          python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+      - name: Parity harness
+        run: python tests/parity/run.py
+      - name: Upload parity report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: parity-report-linux
+          path: tests/parity/reports/latest.json
