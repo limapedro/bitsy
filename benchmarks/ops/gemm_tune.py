@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import json, os, sys
+import json, os, statistics, sys
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -17,7 +17,8 @@ from gemm import bench, CONFIG as GEMM_CONFIG  # noqa: E402
 
 @dataclass(frozen=True, slots=True)
 class TuneConfig:
-  variants:tuple = (0, 1, 2, 4, 5, 6, 7)
+  variants:tuple = (0, 1, 2, 4, 5, 6, 7, 8)
+  samples:int = 3  # exp_026: median of samples avoids 0.3%-noise winner flips
   result_path:Path = ROOT / "benchmarks" / "results" / "gemm_tune.json"
   cache_path:Path = ROOT / "benchmarks" / "results" / "gemm_autotune.txt"
 
@@ -33,12 +34,16 @@ def run(config:TuneConfig = CONFIG) -> int:
     times = {}
     for variant in config.variants:
       os.environ["BT_GEMM_VARIANT"] = str(variant)
-      result = bench(n, GEMM_CONFIG)
-      times[variant] = {"bitsy_ms": result["bitsy_ms"],
-                        "ratio": result["ratio"],
-                        "GFLOPS": result["bitsy_GFLOPS"]}
-      print(f"n={n} variant={variant}: {result['bitsy_ms']:.3f} ms, "
-            f"ratio {result['ratio']:.2f}")
+      runs = [bench(n, GEMM_CONFIG) for _ in range(config.samples)]
+      med = statistics.median(r["bitsy_ms"] for r in runs)
+      med_result = min(runs, key=lambda r: abs(r["bitsy_ms"] - med))
+      times[variant] = {"bitsy_ms": med,
+                        "ratio": med_result["ratio"],
+                        "GFLOPS": med_result["bitsy_GFLOPS"],
+                        "samples": [r["bitsy_ms"] for r in runs]}
+      print(f"n={n} variant={variant}: median {med:.3f} ms, "
+            f"ratio {med_result['ratio']:.2f}, samples "
+            f"{[round(r['bitsy_ms'], 3) for r in runs]}")
     best = min(times, key=lambda v: times[v]["bitsy_ms"])
     report["measurements"][str(n)] = {"variants": times, "winner": best}
     cache_lines.append(f"{n} {n} {n} {best}")

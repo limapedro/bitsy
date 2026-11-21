@@ -180,6 +180,18 @@ Linear was worth ~1.6×. The captured graph path improved from 0.30 to 0.34–0.
 but remains well below 0.85. Standalone GEMM (0.72) and elementwise (≤0.54)
 targets are still missed. See `experiments/exp_024/FINDINGS.md`.
 
+## exp_026 — median GEMM tuning and 64x128 tile
+
+`gemm_tune.py` now takes the **median of 3 samples** per variant; two
+consecutive runs selected the same winners, removing the exp_025 noise flip.
+A new 64×128×8 variant (8) won 1024² in both runs with medians 0.982 / 1.001 ms
+versus 1.069 / 1.016 ms for the previous winner (1.02–1.09×), and is now the
+autotune choice at both shapes. The ≥1.05× prediction was met in one run and
+not the other (reported as a range); the GEMM ratio is still **0.72–0.76**,
+below the 0.80 target. Standalone 1024² 1.270 ms, captured 0.194 ms (ratio
+0.343), eager 0.979 ms (ratio 1.17, target met), parity 43/43. See
+`experiments/exp_026/FINDINGS.md`.
+
 ## exp_025 — 128x64 tile aspect ratio (negative result)
 
 A 128×64×8 register-blocked variant (variant 7) was measured against the
