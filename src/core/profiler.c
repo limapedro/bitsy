@@ -1,3 +1,6 @@
+#ifndef _WIN32
+#define _POSIX_C_SOURCE 200809L  /* clock_gettime / CLOCK_MONOTONIC on Linux */
+#endif
 #include <bitsy/bt_profiler.h>
 
 #include <stdio.h>
