@@ -180,6 +180,14 @@ Linear was worth ~1.6×. The captured graph path improved from 0.30 to 0.34–0.
 but remains well below 0.85. Standalone GEMM (0.72) and elementwise (≤0.54)
 targets are still missed. See `experiments/exp_024/FINDINGS.md`.
 
+## exp_030 — packed f16 GEMM (rejected)
+
+The last GEMM ladder rung was tried and removed: a tiled `f16vec2` shared-memory
+GEMM was **~3× slower** at 1024² (3.508 ms vs ~1.0–1.3 ms) and produced wrong
+results on a K=16 check even after fixing a tile-index bug. No code was kept;
+the tree is unchanged from exp_029. The ≥1.05× / ≥0.80 predictions were not
+met. See `experiments/exp_030/FINDINGS.md`.
+
 ## exp_029 — fused SGD update (neutral)
 
 All four parameter updates now issue in one dispatch via a dedicated 12-binding
