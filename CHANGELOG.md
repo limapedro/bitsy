@@ -6,6 +6,17 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added (M10 experiment, exp_004)
+
+- Timeline-semaphore async submission: `bt_vulkan_flush()` no longer waits;
+  `bt_vulkan_wait()` is the explicit host completion point and also collects
+  timestamp results.
+- Fused `bt_add_relu` kernel on both backends; 20-pair chain is 1.97x faster
+  than separate add + relu (`experiments/exp_004/fusion.json`).
+- Parity suite extended to 42 cases including exact fused-op checks. Async
+  submission alone did not meet its speed prediction (2% on an already-batched
+  chain) and is documented as such.
+
 ### Added (M10 experiment)
 
 - Batched Vulkan submissions: dispatches are recorded until `bt_vulkan_flush()`

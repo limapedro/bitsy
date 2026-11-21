@@ -10,6 +10,7 @@
 #include "matmul.spv.h"
 #include "conv.spv.h"
 #include "gemm_tiled.spv.h"
+#include "fused.spv.h"
 
 vk_ctx_t g_vk;
 
@@ -98,7 +99,9 @@ static bt_status_t make_pipeline(void) {
   if ((status = pipeline_from_spv(elementwise_spv, elementwise_spv_bytes, &g_vk.pipeline))) return status;
   if ((status = pipeline_from_spv(matmul_spv, matmul_spv_bytes, &g_vk.matmul_pipeline))) return status;
   if ((status = pipeline_from_spv(conv_spv, conv_spv_bytes, &g_vk.conv_pipeline))) return status;
-  return pipeline_from_spv(gemm_tiled_spv, gemm_tiled_spv_bytes, &g_vk.gemm_tiled_pipeline);
+  if ((status = pipeline_from_spv(gemm_tiled_spv, gemm_tiled_spv_bytes,
+                                  &g_vk.gemm_tiled_pipeline))) return status;
+  return pipeline_from_spv(fused_spv, fused_spv_bytes, &g_vk.fused_pipeline);
 }
 
 bt_status_t bt_vk_init(void) {
@@ -137,6 +140,12 @@ bt_status_t bt_vk_init(void) {
   VKCHECK(vkAllocateCommandBuffers(g_vk.device, &ai, &g_vk.cmd));
   VkFenceCreateInfo fi = { .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO };
   VKCHECK(vkCreateFence(g_vk.device, &fi, NULL, &g_vk.fence));
+  VkSemaphoreTypeCreateInfo sti = {
+    .sType = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO,
+    .semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE, .initialValue = 0 };
+  VkSemaphoreCreateInfo sci2 = { .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
+                                 .pNext = &sti };
+  VKCHECK(vkCreateSemaphore(g_vk.device, &sci2, NULL, &g_vk.timeline));
   if (g_vk.have_timestamps) {
     VkQueryPoolCreateInfo qi2 = { .sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO,
                                   .queryType = VK_QUERY_TYPE_TIMESTAMP,
@@ -154,17 +163,20 @@ bt_status_t bt_vk_init(void) {
 void bt_vk_shutdown(void) {
   if (!g_vk.ready) return;
   (void)bt_vk_flush();
+  (void)bt_vk_wait();
   bt_vk_allocator_shutdown();
   vkDeviceWaitIdle(g_vk.device);
   vkDestroyPipeline(g_vk.device, g_vk.pipeline, NULL);
   vkDestroyPipeline(g_vk.device, g_vk.matmul_pipeline, NULL);
   vkDestroyPipeline(g_vk.device, g_vk.conv_pipeline, NULL);
   vkDestroyPipeline(g_vk.device, g_vk.gemm_tiled_pipeline, NULL);
+  vkDestroyPipeline(g_vk.device, g_vk.fused_pipeline, NULL);
   vkDestroyPipelineLayout(g_vk.device, g_vk.pipeline_layout, NULL);
   if (g_vk.have_timestamps) vkDestroyQueryPool(g_vk.device, g_vk.timestamp_pool, NULL);
   vkDestroyDescriptorPool(g_vk.device, g_vk.descriptor_pool, NULL);
   vkDestroyDescriptorSetLayout(g_vk.device, g_vk.set_layout, NULL);
   vkDestroyFence(g_vk.device, g_vk.fence, NULL);
+  vkDestroySemaphore(g_vk.device, g_vk.timeline, NULL);
   vkFreeCommandBuffers(g_vk.device, g_vk.pool, 1, &g_vk.cmd);
   vkDestroyCommandPool(g_vk.device, g_vk.pool, NULL);
   vkDestroyDevice(g_vk.device, NULL);
@@ -175,40 +187,58 @@ void bt_vk_shutdown(void) {
 int bt_vk_available(void) { return g_vk.ready; }
 const char* bt_vk_device_name(void) { return g_vk.ready ? g_vk.props.deviceName : "none"; }
 
-/* Batched submission: record many dispatches, submit once, wait once. */
+/* Async submit: signal a timeline value, do not block the CPU. */
 bt_status_t bt_vk_flush(void) {
   if (!g_vk.ready || !g_vk.recording) return BT_OK;
 
   VKCHECK(vkEndCommandBuffer(g_vk.cmd));
+  uint64_t value = ++g_vk.timeline_value;
+  VkTimelineSemaphoreSubmitInfo tsi = {
+    .sType = VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO,
+    .signalSemaphoreValueCount = 1, .pSignalSemaphoreValues = &value };
   VkSubmitInfo submit = { .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-                          .commandBufferCount = 1, .pCommandBuffers = &g_vk.cmd };
-  VKCHECK(vkResetFences(g_vk.device, 1, &g_vk.fence));
-  VKCHECK(vkQueueSubmit(g_vk.queue, 1, &submit, g_vk.fence));
-  VKCHECK(vkWaitForFences(g_vk.device, 1, &g_vk.fence, VK_TRUE, UINT64_MAX));
-
-  if (g_vk.have_timestamps && g_vk.query_index > 0) {
-    uint64_t stamps[2 * BT_VK_MAX_DISPATCHES];
-    VkResult result = vkGetQueryPoolResults(
-      g_vk.device, g_vk.timestamp_pool, 0, (uint32_t)g_vk.query_index,
-      sizeof(stamps), stamps, sizeof(uint64_t),
-      VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT);
-    if (result == VK_SUCCESS) {
-      double ns = 0.0;
-      for (int i = 0; i < g_vk.query_index; i += 2)
-        if (stamps[i + 1] > stamps[i]) ns += (double)(stamps[i + 1] - stamps[i]);
-      g_vk.device_time_ms = ns * g_vk.props.limits.timestampPeriod / 1e6;
-    }
-    vkResetQueryPool(g_vk.device, g_vk.timestamp_pool, 0, (uint32_t)g_vk.query_index);
-  }
-
-  g_vk.query_index = 0;
-  g_vk.set_index = 0;
+                          .pNext = &tsi, .commandBufferCount = 1,
+                          .pCommandBuffers = &g_vk.cmd,
+                          .signalSemaphoreCount = 1,
+                          .pSignalSemaphores = &g_vk.timeline };
+  VKCHECK(vkQueueSubmit(g_vk.queue, 1, &submit, VK_NULL_HANDLE));
   g_vk.recording = 0;
   return BT_OK;
 }
 
+/* Host completion point: wait for the last submitted value, collect timestamps,
+ * and recycle descriptor sets / query slots. */
+bt_status_t bt_vk_wait(void) {
+  if (!g_vk.ready || g_vk.timeline_value == 0) return BT_OK;
+  VkSemaphoreWaitInfo wait = { .sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,
+                               .semaphoreCount = 1, .pSemaphores = &g_vk.timeline,
+                               .pValues = &g_vk.timeline_value };
+  VKCHECK(vkWaitSemaphores(g_vk.device, &wait, UINT64_MAX));
+
+  if (g_vk.have_timestamps && g_vk.query_index > g_vk.query_read_index) {
+    int count = g_vk.query_index - g_vk.query_read_index;
+    uint64_t stamps[2 * BT_VK_MAX_DISPATCHES];
+    VkResult result = vkGetQueryPoolResults(
+      g_vk.device, g_vk.timestamp_pool, (uint32_t)g_vk.query_read_index,
+      (uint32_t)count, sizeof(stamps), stamps, sizeof(uint64_t),
+      VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT);
+    if (result == VK_SUCCESS) {
+      double ns = 0.0;
+      for (int i = 0; i < count; i += 2)
+        if (stamps[i + 1] > stamps[i]) ns += (double)(stamps[i + 1] - stamps[i]);
+      g_vk.device_time_ms = ns * g_vk.props.limits.timestampPeriod / 1e6;
+    }
+    vkResetQueryPool(g_vk.device, g_vk.timestamp_pool,
+                     (uint32_t)g_vk.query_read_index, (uint32_t)count);
+  }
+  g_vk.query_read_index = 0;
+  g_vk.query_index = 0;
+  g_vk.set_index = 0;
+  return BT_OK;
+}
+
 VkDescriptorSet bt_vk_next_set(void) {
-  if (g_vk.set_index >= BT_VK_MAX_DISPATCHES) (void)bt_vk_flush();
+  if (g_vk.set_index >= BT_VK_MAX_DISPATCHES) (void)bt_vk_wait();
   return g_vk.sets[g_vk.set_index++];
 }
 

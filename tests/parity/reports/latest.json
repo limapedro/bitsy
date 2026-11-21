@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-21T13:10:34.799289+00:00",
+  "generated_at": "2026-11-21T13:29:33.568285+00:00",
   "environment": {
     "platform": "Windows-10-10.0.26300-SP0",
     "python": "3.10.11",
@@ -13,6 +13,7 @@
   "config": {
     "ops": [
       "add",
+      "add_relu",
       "sub",
       "mul",
       "div",
@@ -30,8 +31,8 @@
     "seed": 1234
   },
   "summary": {
-    "total": 40,
-    "passed": 40,
+    "total": 42,
+    "passed": 42,
     "failed": 0,
     "skipped": []
   },
@@ -614,6 +615,36 @@
       "passed": true
     },
     {
+      "name": "add_relu_cpu",
+      "op": "add_relu",
+      "device": "cpu",
+      "shape": [
+        7,
+        13
+      ],
+      "dtype": "float32",
+      "value_set": "normal",
+      "bitsy_vs_torch": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 91,
+        "mismatches": 0
+      },
+      "torch_cuda_vs_torch_cpu": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 91,
+        "mismatches": 0
+      },
+      "bitsy_vs_torch_cuda": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 91,
+        "mismatches": 0
+      },
+      "passed": true
+    },
+    {
       "name": "sub_cpu",
       "op": "sub",
       "device": "cpu",
@@ -856,6 +887,24 @@
     {
       "name": "add_vulkan",
       "op": "add",
+      "device": "vulkan",
+      "shape": [
+        7,
+        13
+      ],
+      "dtype": "float32",
+      "value_set": "normal",
+      "bitsy_vs_torch": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 91,
+        "mismatches": 0
+      },
+      "passed": true
+    },
+    {
+      "name": "add_relu_vulkan",
+      "op": "add_relu",
       "device": "vulkan",
       "shape": [
         7,

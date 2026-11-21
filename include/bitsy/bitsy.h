@@ -38,6 +38,10 @@ BT_API int bt_has_vulkan(void);
  * Call this before comparing wall time against a synchronized PyTorch op. */
 BT_API bt_status_t bt_vulkan_flush(void);
 
+/* Wait for the last submitted batch to complete. Equivalent to a CUDA sync
+ * for wall-time comparisons; readback also waits internally. */
+BT_API bt_status_t bt_vulkan_wait(void);
+
 /* GPU time of the last flushed batch, measured with timestamp queries. */
 BT_API double bt_vulkan_device_time_ms(void);
 

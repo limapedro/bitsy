@@ -43,7 +43,8 @@ def success_case(case:ParityCase, config:ParityConfig) -> dict[str, Any]:
   on_gpu = case.device == "vulkan"
   if on_gpu:
     lhs, rhs = lhs.cuda(), rhs.cuda()
-  torch_op = getattr(torch, case.op)
+  torch_op = (lambda x, y: torch.relu(torch.add(x, y))) if case.op == "add_relu" \
+             else getattr(torch, case.op)
   bitsy_op = getattr(bt, case.op)
 
   if case.op in UNARY:

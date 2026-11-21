@@ -19,6 +19,9 @@ typedef struct {
   VkCommandPool pool;
   VkCommandBuffer cmd;
   VkFence fence;
+  VkSemaphore timeline;
+  uint64_t timeline_value;
+  int query_read_index;
   VkDescriptorSetLayout set_layout;
   VkDescriptorPool descriptor_pool;
   VkDescriptorSet sets[BT_VK_MAX_DISPATCHES];
@@ -29,6 +32,7 @@ typedef struct {
   VkPipeline matmul_pipeline;
   VkPipeline conv_pipeline;
   VkPipeline gemm_tiled_pipeline;
+  VkPipeline fused_pipeline;
   VkQueryPool timestamp_pool;
   int query_index;
   int have_timestamps;
@@ -42,8 +46,11 @@ extern vk_ctx_t g_vk;
 /* Ensure the command buffer is recording; no submit happens here. */
 void bt_vk_begin_cmd(void);
 
-/* Submit everything recorded so far and wait. Safe with zero pending work. */
+/* Submit recorded work and signal the timeline; do not wait. */
 bt_status_t bt_vk_flush(void);
+
+/* Wait for the last submitted timeline value and collect timestamp results. */
+bt_status_t bt_vk_wait(void);
 
 /* Next descriptor set for one dispatch; flushes when the batch is full. */
 VkDescriptorSet bt_vk_next_set(void);

@@ -1,0 +1,14 @@
+{
+  "generated_at": "2026-11-21T13:25:52.140762+00:00",
+  "mode": "batched",
+  "ops": 20,
+  "elements": 1048576,
+  "bitsy_ms": 1.2506499915616587,
+  "bitsy_device_ms": 0.93512,
+  "spread_ms": [
+    1.1391000007279217,
+    1.514500007033348
+  ],
+  "gpu": "GTX 1660 SUPER",
+  "bitsy": "0.2.0-bitsy"
+}

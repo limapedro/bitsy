@@ -484,4 +484,29 @@ meeting the experiment's prediction; timestamps show 0.942 ms of GPU work in
 that batch. Single-op wall time is unchanged because one op still means one
 submit, and the headline ratios remain below target. All correctness checks
 stayed green (CTest 1/1, parity 40/40, gradcheck and conv_check unchanged).
-Timeline semaphores and pointwise fusion remain the next performance steps.
+
+---
+
+## 2026-11-21 — Timeline semaphore + first fused pointwise kernel (exp_004)
+
+**Context.** exp_003 still waited on a fence at every flush, and pointwise
+chains issued one dispatch per op. Both were candidates for the remaining gap.
+
+**Options considered.** (1) Keep fence waits and separate pointwise kernels,
+(2) signal a timeline semaphore on submit and add an explicit host wait, plus a
+fused `relu(a+b)` shader, (3) implement a full graph-level fusion pass first.
+
+**Decision.** Option 2, recorded in `experiments/exp_004/HYPOTHESIS.md`.
+`bt_vulkan_flush()` submits asynchronously and signals the timeline; the new
+`bt_vulkan_wait()` waits for the last value, collects timestamp results and
+recycles descriptor/query slots. Upload/readback wait where the host needs the
+data. A fused `bt_add_relu` kernel (GLSL + cpu_ref) replaces two dispatches with
+one. A general fusion pass remains future work.
+
+**Consequences.** Fusion is a clear win: 20 add+relu pairs drop from 2.365 ms
+to 1.200 ms (1.97x). The async prediction was **not** met: the chain already
+had a single submission, so timeline submission improved it only 1.277 → 1.251
+ms (~2%). We kept it because it removes the CPU fence stall and exposes an
+explicit completion point, but we do not claim a speedup from it. Parity grew
+to 42/42 including exact fused cases; no tolerance was loosened. Performance
+targets remain missed and are reported in `BENCHMARKS.md`.

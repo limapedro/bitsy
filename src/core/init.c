@@ -55,6 +55,14 @@ bt_status_t bt_vulkan_flush(void) {
 #endif
 }
 
+bt_status_t bt_vulkan_wait(void) {
+#ifdef BT_ENABLE_VULKAN
+  return bt_vk_wait();
+#else
+  return BT_OK;
+#endif
+}
+
 double bt_vulkan_device_time_ms(void) {
 #ifdef BT_ENABLE_VULKAN
   return bt_vk_device_time_ms();
