@@ -1,0 +1,31 @@
+#version 450
+/* 8 accumulators, 32 fully-unrolled FMAs per loop iteration (no branch per FMA). */
+layout(local_size_x = 256) in;
+layout(std430, binding = 0) readonly buffer In { float src[]; };
+layout(std430, binding = 1) writeonly buffer Out { float dst[]; };
+layout(push_constant) uniform PC { uint n, loops; } pc;
+void main() {
+  uint gid = gl_GlobalInvocationID.x;
+  if (gid >= pc.n) return;
+  float s0 = src[0], s1 = src[1], s2 = src[2], s3 = src[3];
+  float s4 = src[4], s5 = src[5], s6 = src[6], s7 = src[7];
+  for (uint k = 0; k < pc.loops; ++k) {
+    s0 = fma(s0, 1.000001, s1); s1 = fma(s1, 1.000002, s2);
+    s2 = fma(s2, 1.000003, s3); s3 = fma(s3, 1.000004, s4);
+    s4 = fma(s4, 1.000005, s5); s5 = fma(s5, 1.000006, s6);
+    s6 = fma(s6, 1.000007, s7); s7 = fma(s7, 1.000008, s0);
+    s0 = fma(s0, 1.000009, s2); s1 = fma(s1, 1.000010, s3);
+    s2 = fma(s2, 1.000011, s4); s3 = fma(s3, 1.000012, s5);
+    s4 = fma(s4, 1.000013, s6); s5 = fma(s5, 1.000014, s7);
+    s6 = fma(s6, 1.000015, s0); s7 = fma(s7, 1.000016, s1);
+    s0 = fma(s0, 1.000017, s3); s1 = fma(s1, 1.000018, s4);
+    s2 = fma(s2, 1.000019, s5); s3 = fma(s3, 1.000020, s6);
+    s4 = fma(s4, 1.000021, s7); s5 = fma(s5, 1.000022, s0);
+    s6 = fma(s6, 1.000023, s1); s7 = fma(s7, 1.000024, s2);
+    s0 = fma(s0, 1.000025, s4); s1 = fma(s1, 1.000026, s5);
+    s2 = fma(s2, 1.000027, s6); s3 = fma(s3, 1.000028, s7);
+    s4 = fma(s4, 1.000029, s0); s5 = fma(s5, 1.000030, s1);
+    s6 = fma(s6, 1.000031, s2); s7 = fma(s7, 1.000032, s3);
+  }
+  dst[gid] = s0 + s1 + s2 + s3 + s4 + s5 + s6 + s7;
+}
