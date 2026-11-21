@@ -84,12 +84,14 @@ Sources: `benchmarks/results/elementwise.json`, `benchmarks/results/gemm.json`,
 | add | 1,048,576 | 0.1522 | 0.0556 | 0.0479 | 0.36 | ≥0.95 / ≥90% peak | miss 0.59 |
 | mul | 1,048,576 | 0.1746 | 0.0621 | 0.0521 | 0.36 | ≥0.95 / ≥90% peak | miss 0.59 |
 | relu | 1,048,576 | 0.1840 | 0.0429 | 0.0492 | 0.23 | ≥0.95 / ≥90% peak | miss 0.72 |
-| GEMM (naive) | 1024² | 10.224 | 0.908 | — | 0.09 | ≥0.80 | miss 0.71 |
+| GEMM (naive) | 1024² | 12.722 | 0.908 | 12.464 | 0.07 | ≥0.80 | miss 0.73 |
 | GEMM (tiled) | 1024² | 4.329 | 0.950 | 4.088 | 0.22 | ≥0.80 | miss 0.58 |
-| GEMM (tiled) | 256² | 0.177 | 0.047 | 0.070 | 0.27 | ≥0.80 | miss 0.53 |
+| GEMM (register-blocked, autotune) | 1024² | 1.224 | 0.942 | 1.064 | 0.77 | ≥0.80 | miss 0.03 |
+| GEMM (tiled, autotune) | 256² | 0.164 | 0.063 | 0.070 | 0.38 | ≥0.80 | miss 0.42 |
 
 Achieved throughput: large elementwise peaks at ~77 GiB/s vs PyTorch ~211 GiB/s;
-tiled GEMM reaches 496 GFLOPS vs PyTorch 2261 GFLOPS at n=1024.
+register-blocked GEMM reaches 1754 GFLOPS vs PyTorch 2280 GFLOPS at n=1024
+(up from 496 GFLOPS with the tiled kernel).
 
 **No performance target is met.** Conv2d performance has not been benchmarked
 at all — only its numerics. Ratios vary between snapshots mainly because

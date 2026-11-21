@@ -59,7 +59,8 @@ def bench(n:int, config:GemmConfig) -> dict:
           "bitsy_spread_ms": [min(bt_times), max(bt_times)]}
 
 def run(config:GemmConfig = CONFIG) -> int:
-  mode = "tiled" if os.environ.get("BT_GEMM_TILED") == "1" else "naive"
+  mode = { "0": "naive", "1": "tiled", "2": "rb", "3": "rb_splitk" }.get(
+      os.environ.get("BT_GEMM_VARIANT", ""), "auto")
   rows = [bench(n, config) for n in config.sizes]
   report = {"generated_at": datetime.now(timezone.utc).isoformat(),
             "mode": mode, "gpu": torch.cuda.get_device_name(0),

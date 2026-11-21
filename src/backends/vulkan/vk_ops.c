@@ -147,6 +147,7 @@ typedef struct {
   uint32_t M, N, K;
   int32_t sa0, sa1, sb0, sb1, sc0, sc1;
   int32_t offa, offb, offc;
+  int32_t k_start, k_len;
 } vk_matmul_pc_t;
 
 static bt_status_t matmul_kernel(const bt_tensor_t* a, const bt_tensor_t* b, bt_tensor_t* out) {
@@ -159,23 +160,65 @@ static bt_status_t matmul_kernel(const bt_tensor_t* a, const bt_tensor_t* b, bt_
     .sc0 = (int32_t)out->strides[0], .sc1 = (int32_t)out->strides[1],
     .offa = (int32_t)a->offset, .offb = (int32_t)b->offset,
     .offc = (int32_t)out->offset,
+    .k_start = 0, .k_len = (int32_t)pc.K,
   };
   VkBuffer buffers[4] = {
     bt_vk_buffer_of(a->storage->gpu), bt_vk_buffer_of(b->storage->gpu),
     bt_vk_buffer_of(out->storage->gpu), bt_vk_buffer_of(a->storage->gpu),
   };
-  static int tiled = -1;
-  if (tiled < 0) {
-    const char* env = getenv("BT_GEMM_TILED");
-    tiled = env && atoi(env) ? 1 : 0;
+  static int variant = -1;
+  if (variant < 0) {
+    const char* env = getenv("BT_GEMM_VARIANT");
+    variant = env ? atoi(env) : -1; // -1 = autotuned selection by shape
   }
-  VkPipeline pipeline = tiled ? g_vk.gemm_tiled_pipeline : g_vk.matmul_pipeline;
-  uint32_t tile = tiled ? 16 : 8;
+  int chosen = variant;
+  // Measured autotune (exp_008): tiled wins at small sizes, register-blocked
+  // at large sizes; split-K currently loses because the reduce costs more than
+  // the extra occupancy on 22 SMs.
+  if (chosen < 0) chosen = (pc.M <= 512 && pc.N <= 512) ? 1 : 2;
+
   double m = pc.M, n = pc.N, k = pc.K;
-  bt_status_t status = dispatch(pipeline, buffers, &pc, sizeof(pc),
-                                (pc.N + tile - 1) / tile, (pc.M + tile - 1) / tile,
-                                tiled ? "gemm_tiled" : "gemm_naive",
-                                (m * k + k * n + m * n) * 4.0, 2.0 * m * n * k);
+  double gemm_bytes = (m * k + k * n + m * n) * 4.0;
+  double gemm_flops = 2.0 * m * n * k;
+  bt_status_t status = BT_OK;
+
+  if (chosen == 0 || chosen == 1) {
+    uint32_t tile = chosen ? 16 : 8;
+    VkPipeline pipeline = chosen ? g_vk.gemm_tiled_pipeline : g_vk.matmul_pipeline;
+    status = dispatch(pipeline, buffers, &pc, sizeof(pc),
+                      (pc.N + tile - 1) / tile, (pc.M + tile - 1) / tile,
+                      chosen ? "gemm_tiled" : "gemm_naive", gemm_bytes, gemm_flops);
+  } else if (chosen == 2) {
+    status = dispatch(g_vk.gemm_rb_pipeline, buffers, &pc, sizeof(pc),
+                      (pc.N + 127) / 128, (pc.M + 127) / 128,
+                      "gemm_rb", gemm_bytes, gemm_flops);
+  } else {
+    const uint32_t splits = 4;
+    size_t partial_bytes = (size_t)splits * pc.M * pc.N * sizeof(float);
+    void* partial = bt_vk_alloc(partial_bytes);
+    if (!partial) return bt_fail(BT_ERR_OUT_OF_MEMORY, "bt_vk_matmul: split-K scratch");
+    for (uint32_t s = 0; s < splits; ++s) {
+      vk_matmul_pc_t spc = pc;
+      spc.k_start = (int32_t)(s * pc.K / splits);
+      spc.k_len = (int32_t)((s + 1) * pc.K / splits - s * pc.K / splits);
+      spc.offc = (int32_t)(s * pc.M * pc.N);
+      VkBuffer sb[4] = { buffers[0], buffers[1], bt_vk_buffer_of(partial), buffers[0] };
+      status = dispatch(g_vk.gemm_rb_pipeline, sb, &spc, sizeof(spc),
+                        (pc.N + 127) / 128, (pc.M + 127) / 128,
+                        "gemm_rb_splitk", gemm_bytes, gemm_flops / splits);
+      if (status != BT_OK) break;
+    }
+    if (status == BT_OK) {
+      uint32_t reduce[2] = { pc.M * pc.N, splits };
+      VkBuffer rb[4] = { bt_vk_buffer_of(partial), bt_vk_buffer_of(partial),
+                         buffers[2], bt_vk_buffer_of(partial) };
+      uint32_t total = pc.M * pc.N;
+      status = dispatch(g_vk.splitk_reduce_pipeline, rb, reduce, sizeof(reduce),
+                        (total + 255) / 256, 1, "splitk_reduce",
+                        (double)total * (splits + 1) * 4.0, (double)total * splits);
+    }
+    bt_vk_defer_free(partial);
+  }
   if (status == BT_OK) bt_storage_bump_version(out->storage);
   return status;
 }

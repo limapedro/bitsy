@@ -12,6 +12,7 @@ layout(push_constant) uniform PC {
   uint M, N, K;
   int sa0, sa1, sb0, sb1, sc0, sc1;
   int offa, offb, offc;
+  int k_start, k_len;
 } pc;
 
 shared float Atile[16][16];
@@ -21,11 +22,12 @@ void main() {
   int i = int(gl_GlobalInvocationID.y), j = int(gl_GlobalInvocationID.x);
   int ti = int(gl_LocalInvocationID.y), tj = int(gl_LocalInvocationID.x);
   float sum = 0.0;
-  for (int k0 = 0; k0 < int(pc.K); k0 += 16) {
+  int k_end = pc.k_start + pc.k_len;
+  for (int k0 = pc.k_start; k0 < k_end; k0 += 16) {
     int ak = k0 + tj, bk = k0 + ti;
-    Atile[ti][tj] = (i < int(pc.M) && ak < int(pc.K))
+    Atile[ti][tj] = (i < int(pc.M) && ak < k_end)
       ? a[pc.offa + i * pc.sa0 + ak * pc.sa1] : 0.0;
-    Btile[ti][tj] = (j < int(pc.N) && bk < int(pc.K))
+    Btile[ti][tj] = (j < int(pc.N) && bk < k_end)
       ? b[pc.offb + bk * pc.sb0 + j * pc.sb1] : 0.0;
     barrier();
     for (int kk = 0; kk < 16; ++kk) sum += Atile[ti][kk] * Btile[kk][tj];
