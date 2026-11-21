@@ -850,3 +850,27 @@ and kept only as a negative result, like the k16 variant in exp_010. Parity
 holds (43/43 incl. gradient gate, CTest both builds) and training throughput is
 unchanged within variance. The ≥1.05× / ≥0.80 predictions are recorded as
 misses. Remaining GEMM rungs: fused epilogues, packed f16, tile aspect ratio.
+
+---
+
+## 2026-11-21 — Dual-output mul rejected; view-offset fix (exp_022)
+
+**Context.** ~15 scalar elementwise dispatches still dominate a training step;
+`__mul__` backward issues two independent muls per node.
+
+**Options considered.** (1) Keep two dispatches, (2) fuse both gradients into
+a packed output buffer and split it with offset views.
+
+**Decision.** Option 2 was implemented and subjected to the mandatory 43-case
+gate, recorded in `experiments/exp_022/HYPOTHESIS.md`.
+
+**Consequences.** Isolated outputs matched the unfused muls, but the gradient
+gate failed with identical loss and wrong parameter gradients; the fused path
+was reverted (kernel kept as a negative-result variant). Debugging found a
+genuine correctness defect: `bt_tensor_copy_to_host` and four fused shaders
+ignored `tensor->offset`, reading non-zero-offset views from element 0. Fixed
+with `bt_vk_readback_offset()` and offset push constants — the likely root
+cause of exp_019's broadcast-view failure. No performance change (captured
+0.220 ms / ratio 0.303, eager 1.56 ms / ratio 0.627); parity 43/43. Next:
+retry zero-dispatch views now that offsets are honoured, or another fusion
+rung; the 43-case gate remains mandatory.

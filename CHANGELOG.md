@@ -6,6 +6,18 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed (TOGISHI Phase 5/6, exp_022)
+
+- `bt_tensor_copy_to_host` and the fused `sgd_step`/`reduce_sum`/
+  `broadcast_grad`/`dual_mul` shaders ignored `tensor->offset`; added
+  `bt_vk_readback_offset()` and offset push constants so non-zero-offset views
+  read correctly. Likely root cause of exp_019's broadcast-view gradient bug.
+- A fused dual-output mul backward was tried and **reverted**: isolated outputs
+  matched but the 43-case gradient gate failed with identical loss and wrong
+  gradients. Kept as a negative-result variant. No perf change: captured 0.220
+  ms (ratio 0.303), eager 1.56 ms (ratio 0.627), parity 43/43. Details in
+  `experiments/exp_022/FINDINGS.md`.
+
 ### Added (TOGISHI Phase 6, exp_021)
 
 - `gemm_rb_vec4_swz` (variant 6): 4×4 group-swizzled tile order, measured and

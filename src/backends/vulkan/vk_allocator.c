@@ -252,6 +252,10 @@ bt_status_t bt_vk_upload(void* handle, const void* host, size_t nbytes) {
 }
 
 bt_status_t bt_vk_readback(void* handle, void* host, size_t nbytes) {
+  return bt_vk_readback_offset(handle, host, 0, nbytes);
+}
+
+bt_status_t bt_vk_readback_offset(void* handle, void* host, size_t offset, size_t nbytes) {
   if (!handle || !nbytes) return BT_OK;
   vk_buffer_t* src = handle;
   if (!deferred_transfers()) {
@@ -260,7 +264,7 @@ bt_status_t bt_vk_readback(void* handle, void* host, size_t nbytes) {
                                      VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, &stage);
     if (status != BT_OK) return status;
     bt_vk_begin_cmd();
-    VkBufferCopy copy = { .srcOffset = 0, .dstOffset = 0, .size = nbytes };
+    VkBufferCopy copy = { .srcOffset = offset, .dstOffset = 0, .size = nbytes };
     vkCmdCopyBuffer(g_vk.cmd, src->buffer, stage.buffer, 1, &copy);
     bt_vk_barrier();
     status = bt_vk_flush();
@@ -278,7 +282,7 @@ bt_status_t bt_vk_readback(void* handle, void* host, size_t nbytes) {
   vk_buffer_t* stage = stage_acquire(nbytes);
   if (!stage) return bt_fail(BT_ERR_OUT_OF_MEMORY, "bt_vk_readback: staging OOM");
   bt_vk_begin_cmd();
-  VkBufferCopy copy = { .srcOffset = 0, .dstOffset = 0, .size = nbytes };
+  VkBufferCopy copy = { .srcOffset = offset, .dstOffset = 0, .size = nbytes };
   vkCmdCopyBuffer(g_vk.cmd, src->buffer, stage->buffer, 1, &copy);
   bt_vk_barrier();
   /* exp_015: during capture the compute producing `src` is only recorded, not

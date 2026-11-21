@@ -10,6 +10,7 @@
 #ifdef BT_ENABLE_VULKAN
 bt_status_t bt_vk_upload(void* handle, const void* host, size_t nbytes);
 bt_status_t bt_vk_readback(void* handle, void* host, size_t nbytes);
+bt_status_t bt_vk_readback_offset(void* handle, void* host, size_t offset, size_t nbytes);
 #endif
 
 /* A tensor is just a view over refcounted storage. No hidden owners. */
@@ -136,6 +137,27 @@ bt_status_t bt_tensor_transpose_view(const bt_tensor_t* tensor, bt_tensor_t** ou
   return BT_OK;
 }
 
+bt_status_t bt_tensor_offset_view(const bt_tensor_t* tensor, int64_t offset,
+                                  const int64_t* dims, int64_t ndim, bt_tensor_t** out) {
+  if (!tensor || !dims || !out) return bt_fail(BT_ERR_INVALID_ARGUMENT, "bt_tensor_offset_view: NULL");
+  bt_shape_t shape;
+  bt_status_t status = bt_shape_make(dims, ndim, &shape);
+  if (status != BT_OK) return status;
+  if (bt_shape_numel(&shape) + offset > bt_shape_numel(&tensor->shape))
+    return bt_fail(BT_ERR_SHAPE_MISMATCH, "bt_tensor_offset_view: out of range");
+  bt_tensor_t* view = calloc(1, sizeof(*view));
+  if (!view) return bt_fail(BT_ERR_OUT_OF_MEMORY, "bt_tensor_offset_view: OOM");
+  view->storage = bt_storage_retain(tensor->storage);
+  view->offset = tensor->offset + offset;
+  view->shape = shape;
+  (void)bt_shape_contiguous_strides(&shape, view->strides);
+  view->dtype = tensor->dtype;
+  view->device = tensor->device;
+  view->refcount = 1;
+  *out = view;
+  return BT_OK;
+}
+
 /* exp_019: bt_tensor_broadcast_view was removed after it broke end-to-end
  * training gradients while isolated 42-case parity stayed green. */
 
@@ -151,7 +173,9 @@ bt_status_t bt_tensor_copy_to_host(const bt_tensor_t* tensor, void* dst, size_t 
   if (needed) {
     if (tensor->device.type == BT_DEVICE_TYPE_VULKAN) {
 #ifdef BT_ENABLE_VULKAN
-      return bt_vk_readback(tensor->storage->gpu, dst, needed);
+      return bt_vk_readback_offset(tensor->storage->gpu, dst,
+                                   (size_t)tensor->offset * bt_dtype_size(tensor->dtype),
+                                   needed);
 #else
       return bt_fail(BT_ERR_NOT_IMPLEMENTED, "vulkan backend not compiled");
 #endif

@@ -7,7 +7,7 @@ layout(std430, binding = 0) readonly buffer G { float g[]; };
 layout(std430, binding = 2) writeonly buffer O { float o[]; };
 layout(push_constant) uniform PC {
   uint n, outN, gM, gN;
-  int gs0, gs1;
+  int gs0, gs1, offg;
 } pc;
 void main() {
   uint i = gl_GlobalInvocationID.x;
@@ -16,5 +16,5 @@ void main() {
   uint c = i - r * pc.outN;
   int gi = (pc.gM == 1 ? 0 : int(r)) * pc.gs0 +
            (pc.gN == 1 ? 0 : int(c)) * pc.gs1;
-  o[i] = g[gi];
+  o[i] = g[pc.offg + gi];
 }

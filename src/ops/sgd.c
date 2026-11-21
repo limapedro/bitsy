@@ -92,3 +92,41 @@ bt_status_t bt_tanh_backward(const bt_tensor_t* g, const bt_tensor_t* t,
   *out = result;
   return BT_OK;
 }
+
+bt_status_t bt_dual_mul(const bt_tensor_t* g, const bt_tensor_t* a,
+                        const bt_tensor_t* b, bt_tensor_t** out) {
+  bt_clear_error();
+  if (!g || !a || !b || !out) return bt_fail(BT_ERR_INVALID_ARGUMENT, "bt_dual_mul: NULL");
+  int64_t n = bt_shape_numel(bt_tensor_shape(g));
+  int64_t dims[2] = { 2, n };
+  bt_device_t device = bt_tensor_device(g);
+  if (bt_backend_for_device(device) == BT_BACKEND_VULKAN) {
+#ifdef BT_ENABLE_VULKAN
+    bt_tensor_t* result = bt_tensor_empty(dims, 2, BT_FLOAT32, device);
+    if (!result) return bt_fail(BT_ERR_OUT_OF_MEMORY, "bt_dual_mul: allocation failed");
+    bt_status_t status = bt_vk_dual_mul(g, a, b, result);
+    if (status != BT_OK) { bt_tensor_release(result); return status; }
+    *out = result;
+    return BT_OK;
+#else
+    return bt_fail(BT_ERR_NOT_IMPLEMENTED, "bt_dual_mul: Vulkan unavailable");
+#endif
+  }
+  size_t count = (size_t)n;
+  float* gh = (float*)malloc(count * sizeof(float));
+  float* ah = (float*)malloc(count * sizeof(float));
+  float* bh = (float*)malloc(count * sizeof(float));
+  float* oh = (float*)malloc(2 * count * sizeof(float));
+  if (!gh || !ah || !bh || !oh) { free(gh); free(ah); free(bh); free(oh); return bt_fail(BT_ERR_OUT_OF_MEMORY, "bt_dual_mul: host OOM"); }
+  if (bt_tensor_copy_to_host(g, gh, count * sizeof(float)) != BT_OK ||
+      bt_tensor_copy_to_host(a, ah, count * sizeof(float)) != BT_OK ||
+      bt_tensor_copy_to_host(b, bh, count * sizeof(float)) != BT_OK) {
+    free(gh); free(ah); free(bh); free(oh); return bt_fail(BT_ERR_BACKEND, "bt_dual_mul: copy failed");
+  }
+  for (size_t i = 0; i < count; ++i) { oh[i] = gh[i] * ah[i]; oh[count + i] = gh[i] * bh[i]; }
+  bt_tensor_t* result = bt_tensor_create(dims, 2, BT_FLOAT32, device, oh);
+  free(gh); free(ah); free(bh); free(oh);
+  if (!result) return bt_fail(BT_ERR_OUT_OF_MEMORY, "bt_dual_mul: result OOM");
+  *out = result;
+  return BT_OK;
+}

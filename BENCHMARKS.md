@@ -161,6 +161,18 @@ step 0.240 → **0.219 ms**, graph ratio 0.278 → **0.304**, eager step 1.669 �
 replacement); the graph ≥0.31 stretch ratio was narrowly missed. See
 `experiments/exp_020/FINDINGS.md`.
 
+## exp_022 — dual-output mul rejected; view-offset fix
+
+A fused mul-backward kernel with a packed two-output buffer was tried. Isolated
+checks matched the unfused muls, but the mandatory 43-case gradient gate failed
+(loss identical, all parameter gradients wrong), so the path was reverted. The
+investigation found and fixed a real bug: `bt_tensor_copy_to_host` and the
+fused `sgd_step`/`reduce_sum`/`broadcast_grad`/`dual_mul` shaders ignored
+`tensor->offset`, so non-zero-offset views were read from element 0 — the likely
+root cause of exp_019's broadcast-view failure. No performance change (normal
+tensors have offset 0): captured 0.220 ms (ratio 0.303), eager 1.56 ms (ratio
+0.627), parity 43/43. See `experiments/exp_022/FINDINGS.md`.
+
 ## exp_021 — GEMM L2 swizzle (negative result, kept for honesty)
 
 A 4×4 group-swizzled tile order (`BT_GEMM_VARIANT=6`) was measured against the

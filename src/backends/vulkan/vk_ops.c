@@ -360,7 +360,8 @@ static bt_status_t transpose_kernel(const bt_tensor_t* a, const bt_tensor_t* b, 
 
 /* exp_017: fused W - lr*grad in one dispatch; lr is a push constant. */
 typedef struct { uint32_t n, M, N; float lr;
-                 int32_t sa0, sa1, sb0, sb1, sc0, sc1; } vk_sgd_pc_t;
+                 int32_t sa0, sa1, sb0, sb1, sc0, sc1;
+                 int32_t offw, offg, offo; } vk_sgd_pc_t;
 
 bt_status_t bt_vk_sgd_step(const bt_tensor_t* w, const bt_tensor_t* grad,
                            float lr, bt_tensor_t* out) {
@@ -378,7 +379,9 @@ bt_status_t bt_vk_sgd_step(const bt_tensor_t* w, const bt_tensor_t* grad,
                      .sb0 = two_d ? (int32_t)grad->strides[0] : 0,
                      .sb1 = two_d ? (int32_t)grad->strides[1] : 1,
                      .sc0 = two_d ? (int32_t)out->strides[0] : 0,
-                     .sc1 = two_d ? (int32_t)out->strides[1] : 1 };
+                     .sc1 = two_d ? (int32_t)out->strides[1] : 1,
+                     .offw = (int32_t)w->offset, .offg = (int32_t)grad->offset,
+                     .offo = (int32_t)out->offset };
   VkBuffer buffers[4] = {
     bt_vk_buffer_of(w->storage->gpu), bt_vk_buffer_of(grad->storage->gpu),
     bt_vk_buffer_of(out->storage->gpu), bt_vk_buffer_of(w->storage->gpu),
@@ -391,7 +394,7 @@ bt_status_t bt_vk_sgd_step(const bt_tensor_t* w, const bt_tensor_t* grad,
 }
 
 /* exp_018: dedicated 2D axis reduction (one workgroup, no ones-vector GEMM). */
-typedef struct { uint32_t M, N, axis; int32_t sa0, sa1; } vk_reduce_pc_t;
+typedef struct { uint32_t M, N, axis; int32_t sa0, sa1, off; } vk_reduce_pc_t;
 
 bt_status_t bt_vk_reduce_sum(const bt_tensor_t* a, uint32_t axis, bt_tensor_t* out) {
   if (!g_vk.ready) return bt_fail(BT_ERR_BACKEND, "bt_vk_reduce_sum: Vulkan not ready");
@@ -399,7 +402,8 @@ bt_status_t bt_vk_reduce_sum(const bt_tensor_t* a, uint32_t axis, bt_tensor_t* o
   if (!n) return BT_OK;
   vk_reduce_pc_t pc = { .M = (uint32_t)a->shape.dims[0],
                         .N = (uint32_t)a->shape.dims[1], .axis = axis,
-                        .sa0 = (int32_t)a->strides[0], .sa1 = (int32_t)a->strides[1] };
+                        .sa0 = (int32_t)a->strides[0], .sa1 = (int32_t)a->strides[1],
+                        .off = (int32_t)a->offset };
   VkBuffer buffers[4] = {
     bt_vk_buffer_of(a->storage->gpu), bt_vk_buffer_of(a->storage->gpu),
     bt_vk_buffer_of(out->storage->gpu), bt_vk_buffer_of(a->storage->gpu),
@@ -431,7 +435,7 @@ bt_status_t bt_vk_tanh_backward(const bt_tensor_t* g, const bt_tensor_t* t, bt_t
 }
 
 /* exp_020: contiguous full-shape gradient from a reduction gradient. */
-typedef struct { uint32_t n, outN, gM, gN; int32_t gs0, gs1; } vk_bcast_pc_t;
+typedef struct { uint32_t n, outN, gM, gN; int32_t gs0, gs1, offg; } vk_bcast_pc_t;
 
 bt_status_t bt_vk_broadcast_grad(const bt_tensor_t* g, bt_tensor_t* out) {
   if (!g_vk.ready) return bt_fail(BT_ERR_BACKEND, "bt_vk_broadcast_grad: Vulkan not ready");
@@ -439,7 +443,8 @@ bt_status_t bt_vk_broadcast_grad(const bt_tensor_t* g, bt_tensor_t* out) {
   if (!n) return BT_OK;
   vk_bcast_pc_t pc = { .n = (uint32_t)n, .outN = (uint32_t)out->shape.dims[1],
                        .gM = (uint32_t)g->shape.dims[0], .gN = (uint32_t)g->shape.dims[1],
-                       .gs0 = (int32_t)g->strides[0], .gs1 = (int32_t)g->strides[1] };
+                       .gs0 = (int32_t)g->strides[0], .gs1 = (int32_t)g->strides[1],
+                       .offg = (int32_t)g->offset };
   VkBuffer buffers[4] = {
     bt_vk_buffer_of(g->storage->gpu), bt_vk_buffer_of(g->storage->gpu),
     bt_vk_buffer_of(out->storage->gpu), bt_vk_buffer_of(g->storage->gpu),
@@ -447,6 +452,49 @@ bt_status_t bt_vk_broadcast_grad(const bt_tensor_t* g, bt_tensor_t* out) {
   bt_status_t status = dispatch(g_vk.broadcast_grad_pipeline, buffers, &pc, sizeof(pc),
                                 (uint32_t)((n + 255) / 256), 1, "broadcast_grad",
                                 (double)n * 2.0 * 4.0, 0.0);
+  if (status == BT_OK) bt_storage_bump_version(out->storage);
+  return status;
+}
+
+/* exp_022: two mul-backward gradients in one dispatch. */
+typedef struct { uint32_t n, M, N, aM, aN, bM, bN;
+                 int32_t sa0, sa1, sb0, sb1;
+                 int32_t offg, offa, offb; } vk_dual_mul_pc_t;
+
+static void dual_shape(const bt_tensor_t* t, uint32_t* m, uint32_t* nn,
+                       int32_t* s0, int32_t* s1) {
+  const bt_shape_t* sh = bt_tensor_shape(t);
+  if (sh->ndim == 2) {
+    *m = (uint32_t)sh->dims[0]; *nn = (uint32_t)sh->dims[1];
+    *s0 = (int32_t)t->strides[0]; *s1 = (int32_t)t->strides[1];
+  } else if (sh->ndim == 1) {
+    *m = 1; *nn = (uint32_t)sh->dims[0]; *s0 = 0; *s1 = (int32_t)t->strides[0];
+  } else {
+    *m = 1; *nn = 1; *s0 = 0; *s1 = 0;
+  }
+}
+
+bt_status_t bt_vk_dual_mul(const bt_tensor_t* g, const bt_tensor_t* a,
+                           const bt_tensor_t* b, bt_tensor_t* out) {
+  if (!g_vk.ready) return bt_fail(BT_ERR_BACKEND, "bt_vk_dual_mul: Vulkan not ready");
+  int64_t n2 = bt_shape_numel(&out->shape);
+  int64_t n = n2 / 2;
+  if (!n) return BT_OK;
+  vk_dual_mul_pc_t pc;
+  dual_shape(g, &pc.M, &pc.N, &pc.sa0, &pc.sa1);
+  dual_shape(a, &pc.aM, &pc.aN, &pc.sa0, &pc.sa1);
+  dual_shape(b, &pc.bM, &pc.bN, &pc.sb0, &pc.sb1);
+  pc.n = (uint32_t)n;
+  pc.offg = (int32_t)g->offset;
+  pc.offa = (int32_t)a->offset;
+  pc.offb = (int32_t)b->offset;
+  VkBuffer buffers[4] = {
+    bt_vk_buffer_of(g->storage->gpu), bt_vk_buffer_of(a->storage->gpu),
+    bt_vk_buffer_of(b->storage->gpu), bt_vk_buffer_of(out->storage->gpu),
+  };
+  bt_status_t status = dispatch(g_vk.dual_mul_pipeline, buffers, &pc, sizeof(pc),
+                                (uint32_t)((n + 255) / 256), 1, "dual_mul",
+                                4.0 * (double)n * 4.0, 2.0 * (double)n);
   if (status == BT_OK) bt_storage_bump_version(out->storage);
   return status;
 }

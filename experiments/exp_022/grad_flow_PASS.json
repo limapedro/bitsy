@@ -1,0 +1,34 @@
+{
+  "generated_at": "2026-11-21T19:23:11.672235+00:00",
+  "environment": {
+    "torch": "2.11.0+cu126",
+    "torch_device": "cuda",
+    "bitsy_vulkan": true
+  },
+  "config": {
+    "in_features": 32,
+    "hidden": 16,
+    "out_features": 8,
+    "batch": 8,
+    "lr": 0.1,
+    "seed": 0,
+    "rtol": 0.0001,
+    "atol": 1e-05,
+    "report_path": "E:\\__PROJECTS__\\Hagane\\tests\\parity\\reports\\grad_flow.json"
+  },
+  "bitsy_loss": 2.0995962619781494,
+  "torch_loss": 2.0995962619781494,
+  "checks": {
+    "loss": true,
+    "grad_w1": true,
+    "param_w1": true,
+    "grad_b1": true,
+    "param_b1": true,
+    "grad_w2": true,
+    "param_w2": true,
+    "grad_b2": true,
+    "param_b2": true
+  },
+  "passed": true,
+  "error": null
+}

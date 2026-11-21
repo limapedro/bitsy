@@ -226,6 +226,20 @@ Conclusion: the remaining elementwise gap is bandwidth/kernel-bound
   Alternatively return to the ~15 scalar elementwise dispatches per step.
   All changes must pass the 43-case gate including the gradient flow check.
 
+## Phase 5/6 update (exp_022)
+
+- Fused dual-output mul backward (packed 2n output + offset views) was tried;
+  isolated outputs matched unfused muls but the 43-case gradient gate failed
+  with identical loss and wrong parameter gradients. Reverted; kernel kept as
+  a negative-result variant. The gate proved load-bearing again.
+- **Correctness fix:** view offsets were ignored by `bt_tensor_copy_to_host`
+  and by the fused `sgd_step`/`reduce_sum`/`broadcast_grad`/`dual_mul` shaders.
+  Added `bt_vk_readback_offset()` and offset push constants. Likely root cause
+  of exp_019's broadcast-view gradient corruption. No perf change (offset 0 in
+  normal paths): captured 0.220 ms / ratio 0.303, eager 1.56 ms / ratio 0.627.
+- Next: retry zero-dispatch views now that offsets are honoured, or pursue
+  another fusion/GEMM rung. All changes must pass the 43-case gate.
+
 ## Honesty
 
 - Timestamp GPU time is a proxy, not the 1000-repeat isolated kernel time the
