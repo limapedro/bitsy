@@ -1,5 +1,7 @@
 # Hagane (鋼)
 
+[![CI](https://github.com/limapedro/hagane/actions/workflows/ci.yml/badge.svg)](https://github.com/limapedro/hagane/actions/workflows/ci.yml)
+
 Hagane is a deep learning framework written from scratch in **C11** with a
 **Vulkan compute** backend and a Python front end that mirrors PyTorch.
 The goal is that PyTorch code moves to Hagane with minimal edits:
