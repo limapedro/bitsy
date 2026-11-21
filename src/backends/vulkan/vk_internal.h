@@ -16,6 +16,7 @@ bt_status_t bt_vk_wait(void);
 bt_status_t bt_vk_capture_begin(void);
 bt_status_t bt_vk_capture_end(void);
 bt_status_t bt_vk_replay(int count);
+bt_status_t bt_vk_capture_sync_chunk(void);
 double bt_vk_device_time_ms(void);
 
 void* bt_vk_alloc(size_t nbytes);

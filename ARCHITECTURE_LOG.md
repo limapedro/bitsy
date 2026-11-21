@@ -683,3 +683,30 @@ per-op Python/ctypes dispatch and autograd construction, recorded as a negative
 result. Numeric parity holds: 42/42, MNIST report identical, CIFAR Bitsy losses
 bit-identical between modes; the small torch-side variation is cuDNN benchmark
 nondeterminism. Next: full-step capture/replay against PyTorch CUDA graphs.
+
+---
+
+## 2026-11-21 — Full-step capture with readback chunking (exp_015)
+
+**Context.** exp_014 left end-to-end throughput at 0.34–0.37, dominated by
+per-op dispatch. A pointwise capture had already matched PyTorch graphs 1.00×
+(exp_013), but a whole training step had never been captured.
+
+**Options considered.** (1) Declare full-step capture impossible because the
+interim autograd reads bias gradients back to the CPU during backward,
+(2) split the capture into command-buffer chunks at each readback: submit+wait
+the chunk so the readback is valid, then continue recording.
+
+**Decision.** Option 2, recorded in `experiments/exp_015/HYPOTHESIS.md`. Chunk
+submission must **not** recycle staging, scratch, descriptor or timestamp
+resources, because replayed chunks reference them; a version that did recycle
+produced bit-wrong replays and was rejected. Replaying after the final wait is
+documented as invalid without re-capture.
+
+**Consequences.** A captured step is bit-identical to eager (abs diff 0.0) and
+runs in 0.294–0.355 ms/step versus 3.220 ms eager (~9–11×). Against PyTorch
+CUDA graphs (0.067 ms/step) the ratio is only **0.19–0.23**, missing both
+end-to-end targets; recorded as a negative result. The remaining causes are the
+extra submit per replay imposed by the CPU readback and the many small
+dispatches from the Python autograd. Next: device-side reductions to remove the
+readback and obtain a single-chunk capture.

@@ -9,6 +9,9 @@
  * is required because set contents are written on the host, not captured by
  * vkCmdBindDescriptorSets. */
 #define BT_VK_MAX_DISPATCHES 1024
+/* exp_015: a captured step is split into command-buffer chunks at host
+ * readbacks (the interim autograd reduces bias gradients on the CPU). */
+#define BT_VK_CAPTURE_MAX_CHUNKS 64
 
 typedef struct {
   VkInstance instance;
@@ -20,6 +23,8 @@ typedef struct {
   VkCommandBuffer cmd;
   VkCommandBuffer main_cmd;
   VkCommandBuffer replay_cmd;
+  VkCommandBuffer capture_chunks[BT_VK_CAPTURE_MAX_CHUNKS];
+  int capture_chunk_count;
   int capturing;
   VkFence fence;
   VkSemaphore timeline;

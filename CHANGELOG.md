@@ -6,6 +6,19 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added (TOGISHI Phase 5, exp_015)
+
+- Full training-step capture/replay: captures are split into command-buffer
+  chunks at host readbacks (the interim autograd reduces bias gradients on the
+  CPU), with resources pinned until the final wait. A single buffer deadlocked
+  on unexecuted timestamp queries; a recycling version was bit-wrong and was
+  rejected. Replay after the final wait requires re-capture (documented).
+- Captured step is bit-identical to eager (abs diff 0.0) and runs in
+  0.294–0.355 ms/step vs 3.220 ms eager (~9–11×), but only 0.19–0.23× of
+  PyTorch CUDA graph throughput — both end-to-end targets missed.
+  New `benchmarks/models/graph_step_bench.py`. Parity 42/42. Details in
+  `experiments/exp_015/FINDINGS.md`.
+
 ### Changed (TOGISHI Phase 4/5, exp_014)
 
 - Deferred transfers are now the **default**: uploads/readbacks use a pooled

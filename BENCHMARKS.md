@@ -112,6 +112,27 @@ per-op Python/ctypes dispatch and autograd construction, not transfer sync.
 Numeric parity is unchanged — MNIST/CIFAR bitsy losses are bit-identical
 between modes (see `experiments/exp_014/FINDINGS.md`).
 
+## Captured full training step (updated 2026-11-21, exp_015)
+
+`python benchmarks/models/graph_step_bench.py`: the whole MLP step (forward +
+backward + SGD) captured and replayed 100× per trial, 10 trials, median of
+per-step wall time. Inputs are static buffers (CUDA-graph semantics). Captured
+output is bit-identical to eager (abs diff 0.0).
+
+| path | ms/step | clock |
+|---|---:|---:|
+| Bitsy eager (default API, exp_014) | 3.220 | 1530 MHz |
+| Bitsy captured + replayed | **0.294–0.355** | 1732–1935 MHz |
+| PyTorch eager | 1.20 | 1530 MHz |
+| PyTorch CUDA graph | **0.067–0.068** | 1732–1935 MHz |
+
+Capture is **~9–11× faster than eager Bitsy**, but **graph throughput is only
+0.19–0.23× PyTorch** — the ≥0.85 end-to-end target and the ≥0.80 intermediate
+gate are both **missed**. Each replay issues two command-buffer submits
+(one extra because the interim autograd reads bias gradients back to the CPU
+mid-backward) plus many small dispatches. Details and the capture-lifetime
+limitation are in `experiments/exp_015/FINDINGS.md`.
+
 ## Comparison target
 
 PyTorch CUDA on the **same** GTX 1660 Super, in the same machine, with warm-up,
