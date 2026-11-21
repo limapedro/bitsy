@@ -180,6 +180,16 @@ Linear was worth ~1.6×. The captured graph path improved from 0.30 to 0.34–0.
 but remains well below 0.85. Standalone GEMM (0.72) and elementwise (≤0.54)
 targets are still missed. See `experiments/exp_024/FINDINGS.md`.
 
+## exp_029 — fused SGD update (neutral)
+
+All four parameter updates now issue in one dispatch via a dedicated 12-binding
+layout. Dispatches per step 22 → **19**, but captured time is unchanged
+(0.153–0.159 ms vs 0.156) — the single kernel launches `max_workgroups × 4`
+workgroups with an if-chain, offsetting the saved submit. The ≥1.02× prediction
+was **not met**. Eager ratio remains 1.11–1.17 (target met); graph ratio 0.43–0.45
+and standalone GEMM/elementwise targets remain missed. Parity 43/43 incl.
+gradient gate; MNIST W1 diff 3.3e-07. See `experiments/exp_029/FINDINGS.md`.
+
 ## exp_028 — fused cross-entropy loss reduction
 
 `nn.cross_entropy` now composes the fused log_softmax with a single fused

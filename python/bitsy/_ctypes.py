@@ -87,6 +87,7 @@ _fn("bt_dual_mul", [_ptr, _ptr, _ptr, ctypes.POINTER(_ptr)], ctypes.c_int)
 _fn("bt_matmul_bias", [_ptr, _ptr, _ptr, ctypes.POINTER(_ptr)], ctypes.c_int)
 _fn("bt_log_softmax", [_ptr, ctypes.POINTER(_ptr)], ctypes.c_int)
 _fn("bt_ce_loss", [_ptr, _ptr, ctypes.POINTER(_ptr)], ctypes.c_int)
+_fn("bt_sgd_step_fused", [ctypes.POINTER(_ptr), ctypes.POINTER(_ptr), ctypes.c_float, ctypes.POINTER(ctypes.POINTER(_ptr))], ctypes.c_int)
 _fn("bt_tensor_offset_view", [_ptr, ctypes.c_int64, ctypes.POINTER(ctypes.c_int64), ctypes.c_int64, ctypes.POINTER(_ptr)], ctypes.c_int)
 _fn("bt_tensor_view", [_ptr, _i64p, ctypes.c_int64, ctypes.POINTER(_ptr)], ctypes.c_int)
 _fn("bt_conv2d", [_ptr, _ptr, _ptr, _ConvParams, ctypes.POINTER(_ptr)], ctypes.c_int)
@@ -220,6 +221,16 @@ def conv2d_backward_b(dy:Tensor, out_channels:int) -> Tensor:
   out = _ptr()
   _check(_lib.bt_conv2d_backward_b(_ptr(dy._ptr), out_channels, ctypes.byref(out)))
   return _from_handle(out, dy._device)
+
+def sgd_step_fused(ws, grads, lr:float):
+  """Fused up-to-four-parameter SGD update (exp_029)."""
+  warr = (_ptr * 4)(*[ _ptr(w._ptr) if w is not None else _ptr() for w in ws ])
+  garr = (_ptr * 4)(*[ _ptr(g._ptr) if g is not None else _ptr() for g in grads ])
+  slots = [_ptr() for _ in range(4)]
+  out_ptrs = (ctypes.POINTER(_ptr) * 4)(*[ctypes.pointer(s) for s in slots])
+  _check(_lib.bt_sgd_step_fused(warr, garr, ctypes.c_float(lr), out_ptrs))
+  return [Tensor(slots[i].value, ws[i].shape, ws[i]._device) if ws[i] is not None else None
+          for i in range(4)]
 
 def ce_loss(ls:Tensor, onehot:Tensor) -> Tensor:
   """Fused cross-entropy scalar loss (exp_028)."""

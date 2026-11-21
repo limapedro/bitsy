@@ -6,6 +6,15 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added (TOGISHI Phase 5/6, exp_029)
+
+- Fused four-parameter SGD update in one dispatch (12-binding layout, dedicated
+  pipeline, CPU fallback). Dispatches/step 22 → 19, but captured time is
+  unchanged (0.153–0.159 ms) — the ≥1.02× prediction was **not met**, kept as a
+  neutral result. Three implementation bugs caught by CTest/the gate and fixed.
+  Parity 43/43 incl. gradient gate, CTest both builds; eager ratio 1.11–1.17
+  (target met). Details in `experiments/exp_029/FINDINGS.md`.
+
 ### Added (TOGISHI Phase 5/6, exp_028)
 
 - Fused cross-entropy loss reduction (`onehot*log_softmax` over both axes,

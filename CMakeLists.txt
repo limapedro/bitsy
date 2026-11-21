@@ -32,7 +32,7 @@ if(BT_ENABLE_VULKAN)
   find_package(Python3 COMPONENTS Interpreter REQUIRED)
 
   set(SHADER_HEADERS "")
-  foreach(SHADER elementwise elementwise_vec4 matmul conv gemm_tiled gemm_rb gemm_rb_vec4 gemm_rb_vec4_k16 gemm_rb_vec4_swz gemm_rb_vec4_128x64 gemm_rb_vec4_64x128 gemm_bias gemm_tiled_bias log_softmax ce_loss splitk_reduce fused sgd_step reduce_sum tanh_backward broadcast_grad dual_mul)
+  foreach(SHADER elementwise elementwise_vec4 matmul conv gemm_tiled gemm_rb gemm_rb_vec4 gemm_rb_vec4_k16 gemm_rb_vec4_swz gemm_rb_vec4_128x64 gemm_rb_vec4_64x128 gemm_bias gemm_tiled_bias log_softmax ce_loss splitk_reduce fused sgd_step reduce_sum tanh_backward broadcast_grad dual_mul sgd_fused)
     set(SHADER_SRC ${CMAKE_CURRENT_SOURCE_DIR}/src/backends/vulkan/shaders/${SHADER}.comp)
     set(SHADER_SPV ${CMAKE_BINARY_DIR}/generated/${SHADER}.spv)
     set(SHADER_HEADER ${CMAKE_BINARY_DIR}/generated/${SHADER}.spv.h)

@@ -57,6 +57,10 @@ typedef struct {
   VkPipeline log_softmax_pipeline;
   VkPipeline ce_loss_pipeline;
   VkPipeline dual_mul_pipeline;
+  VkPipeline sgd_fused_pipeline;
+  VkDescriptorSetLayout sgd_set_layout;
+  VkDescriptorSet sgd_set;
+  VkPipelineLayout sgd_pipeline_layout;
   VkPipeline fused_pipeline;
   VkPipelineCache pipeline_cache;
   VkQueryPool timestamp_pool;

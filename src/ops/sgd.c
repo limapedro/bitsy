@@ -50,6 +50,54 @@ bt_status_t bt_sgd_step(const bt_tensor_t* w, const bt_tensor_t* grad,
   return status;
 }
 
+bt_status_t bt_sgd_step_fused(const bt_tensor_t* w[4], const bt_tensor_t* grad[4],
+                              float lr, bt_tensor_t** out[4]) {
+  bt_clear_error();
+  if (!w || !grad || !out) return bt_fail(BT_ERR_INVALID_ARGUMENT, "bt_sgd_step_fused: NULL");
+  const bt_tensor_t* ws[4] = { w[0], w[1], w[2], w[3] };
+  const bt_tensor_t* gs[4] = { grad[0], grad[1], grad[2], grad[3] };
+  for (int i = 0; i < 4; ++i)
+    if ((ws[i] && !gs[i]) || (!ws[i] && gs[i]))
+      return bt_fail(BT_ERR_INVALID_ARGUMENT, "bt_sgd_step_fused: unpaired param/grad");
+#ifdef BT_ENABLE_VULKAN
+  bt_tensor_t* outs[4] = { NULL, NULL, NULL, NULL };
+  int all_vk = 1, count = 0;
+  for (int i = 0; i < 4; ++i) if (ws[i]) {
+    ++count;
+    if (bt_backend_for_device(bt_tensor_device(ws[i])) != BT_BACKEND_VULKAN) all_vk = 0;
+  }
+  if (all_vk && count > 0) {
+    int64_t dims[8];
+    for (int i = 0; i < 4; ++i) if (ws[i]) {
+      const bt_shape_t* sh = bt_tensor_shape(ws[i]);
+      for (int d = 0; d < sh->ndim; ++d) dims[d] = sh->dims[d];
+      outs[i] = bt_tensor_empty(dims, (int)sh->ndim, BT_FLOAT32, bt_tensor_device(ws[i]));
+      if (!outs[i]) { for (int j = 0; j < 4; ++j) if (outs[j]) bt_tensor_release(outs[j]);
+                      return bt_fail(BT_ERR_OUT_OF_MEMORY, "bt_sgd_step_fused: allocation failed"); }
+    }
+    const bt_tensor_t* nullw[4] = { NULL, NULL, NULL, NULL };
+    const bt_tensor_t* nullg[4] = { NULL, NULL, NULL, NULL };
+    const bt_tensor_t* wo[4], *go[4], *oo[4];
+    for (int i = 0; i < 4; ++i) {
+      wo[i] = ws[i] ? ws[i] : nullw[i];
+      go[i] = gs[i] ? gs[i] : nullg[i];
+      oo[i] = outs[i] ? (const bt_tensor_t*)outs[i] : nullw[i];
+    }
+    bt_status_t status = bt_vk_sgd_fused(wo, go, (const bt_tensor_t**)oo, lr);
+    if (status != BT_OK) { for (int j = 0; j < 4; ++j) if (outs[j]) bt_tensor_release(outs[j]); return status; }
+    for (int i = 0; i < 4; ++i) if (outs[i]) *out[i] = outs[i];
+    return BT_OK;
+  }
+  for (int j = 0; j < 4; ++j) if (outs[j]) bt_tensor_release(outs[j]);
+#endif
+  for (int i = 0; i < 4; ++i)
+    if (ws[i]) {
+      bt_status_t status = bt_sgd_step(ws[i], gs[i], lr, out[i]);
+      if (status != BT_OK) return status;
+    }
+  return BT_OK;
+}
+
 bt_status_t bt_tanh_backward(const bt_tensor_t* g, const bt_tensor_t* t,
                              bt_tensor_t** out) {
   bt_clear_error();
