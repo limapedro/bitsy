@@ -6,6 +6,16 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added (TOGISHI Phase 5/6, exp_027)
+
+- Fused `log_softmax` kernel (one dispatch per row) with an analytic backward
+  `g - exp(y)*sum_cols(g)` and a CPU fallback; `nn.log_softmax` uses it.
+  Dispatches/step 35 → 30; captured step 0.194 → 0.179–0.182 ms (1.07×), graph
+  ratio 0.343 → 0.366–0.368; eager ratio 1.09–1.11 (end-to-end target met).
+  Parity 43/43 incl. gradient gate, CTest both builds; MNIST W1 diff 3.3e-07
+  (fp32 drift from fused reduction order, within 1e-5). Details in
+  `experiments/exp_027/FINDINGS.md`.
+
 ### Added (TOGISHI Phase 6, exp_026)
 
 - `gemm_tune.py` now takes the **median of 3 samples** per variant; two runs

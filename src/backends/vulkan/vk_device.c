@@ -24,6 +24,7 @@
 #include "reduce_sum.spv.h"
 #include "tanh_backward.spv.h"
 #include "broadcast_grad.spv.h"
+#include "log_softmax.spv.h"
 #include "dual_mul.spv.h"
 #include "splitk_reduce.spv.h"
 #include "fused.spv.h"
@@ -182,7 +183,10 @@ static bt_status_t make_pipeline(void) {
                                   &g_vk.tanh_backward_pipeline))) return status;
   if ((status = pipeline_from_spv(broadcast_grad_spv, broadcast_grad_spv_bytes,
                                   &g_vk.broadcast_grad_pipeline))) return status;
-  return pipeline_from_spv(dual_mul_spv, dual_mul_spv_bytes, &g_vk.dual_mul_pipeline);
+  if ((status = pipeline_from_spv(dual_mul_spv, dual_mul_spv_bytes,
+                                  &g_vk.dual_mul_pipeline))) return status;
+  return pipeline_from_spv(log_softmax_spv, log_softmax_spv_bytes,
+                           &g_vk.log_softmax_pipeline);
 }
 
 bt_status_t bt_vk_init(void) {
@@ -278,6 +282,7 @@ void bt_vk_shutdown(void) {
   vkDestroyPipeline(g_vk.device, g_vk.tanh_backward_pipeline, NULL);
   vkDestroyPipeline(g_vk.device, g_vk.broadcast_grad_pipeline, NULL);
   vkDestroyPipeline(g_vk.device, g_vk.dual_mul_pipeline, NULL);
+  vkDestroyPipeline(g_vk.device, g_vk.log_softmax_pipeline, NULL);
   vkDestroyPipelineLayout(g_vk.device, g_vk.pipeline_layout, NULL);
   vkDestroyPipelineCache(g_vk.device, g_vk.pipeline_cache, NULL);
   if (g_vk.have_timestamps) {

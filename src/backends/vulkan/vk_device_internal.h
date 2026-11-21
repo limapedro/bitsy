@@ -54,6 +54,7 @@ typedef struct {
   VkPipeline reduce_sum_pipeline;
   VkPipeline tanh_backward_pipeline;
   VkPipeline broadcast_grad_pipeline;
+  VkPipeline log_softmax_pipeline;
   VkPipeline dual_mul_pipeline;
   VkPipeline fused_pipeline;
   VkPipelineCache pipeline_cache;

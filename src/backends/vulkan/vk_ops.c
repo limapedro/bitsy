@@ -464,6 +464,26 @@ bt_status_t bt_vk_broadcast_grad(const bt_tensor_t* g, bt_tensor_t* out) {
   return status;
 }
 
+/* exp_027: fused log_softmax, one workgroup per row. */
+typedef struct { uint32_t M, N, offx, offo; } vk_logsoftmax_pc_t;
+
+bt_status_t bt_vk_log_softmax(const bt_tensor_t* x, bt_tensor_t* out) {
+  if (!g_vk.ready) return bt_fail(BT_ERR_BACKEND, "bt_vk_log_softmax: Vulkan not ready");
+  if (x->shape.ndim != 2) return bt_fail(BT_ERR_SHAPE_MISMATCH, "bt_vk_log_softmax: 2D only");
+  vk_logsoftmax_pc_t pc = { .M = (uint32_t)x->shape.dims[0],
+                            .N = (uint32_t)x->shape.dims[1],
+                            .offx = (uint32_t)x->offset, .offo = (uint32_t)out->offset };
+  VkBuffer buffers[4] = {
+    bt_vk_buffer_of(x->storage->gpu), bt_vk_buffer_of(x->storage->gpu),
+    bt_vk_buffer_of(out->storage->gpu), bt_vk_buffer_of(x->storage->gpu),
+  };
+  bt_status_t status = dispatch(g_vk.log_softmax_pipeline, buffers, &pc, sizeof(pc),
+                                pc.M, 1, "log_softmax",
+                                2.0 * (double)pc.M * pc.N * 4.0, 0.0);
+  if (status == BT_OK) bt_storage_bump_version(out->storage);
+  return status;
+}
+
 /* exp_024: GEMM with bias added in the epilogue. Requires the vec4-aligned
  * layout of gemm_rb_vec4; callers fall back for other layouts. */
 bt_status_t bt_vk_matmul_bias(const bt_tensor_t* a, const bt_tensor_t* b,

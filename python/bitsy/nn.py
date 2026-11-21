@@ -77,8 +77,8 @@ class Sequential(Module):
     return x
 
 def log_softmax(logits:Tensor) -> Tensor:
-  # exp_018: row-sum via dedicated reduction (was logits.exp() @ ones col).
-  return logits - reduce_sum_op(logits.exp(), 1, True).log()
+  # exp_027: one fused dispatch instead of exp + reduce + log + subtract.
+  return logits.log_softmax()
 
 def cross_entropy(logits:Tensor, onehot:Tensor) -> Tensor:
   B = logits.shape[0]

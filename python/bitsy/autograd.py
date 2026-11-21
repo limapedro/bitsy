@@ -136,6 +136,15 @@ class Tensor:
       return (self._op(C.mul(g._t, d._t), (), None),)
     return self._op(out, (self,), back)
 
+  def log_softmax(self) -> "Tensor":
+    out = C.log_softmax(self._t)
+    def back(g):
+      # d/dx = g - exp(y) * sum_cols(g)
+      s = reduce_sum_op(g, 1, True)
+      e = self._op(C.exp(out), (), None)
+      return (g - e * s,)
+    return self._op(out, (self,), back)
+
   def sum(self) -> "Tensor":
     n = 1
     for d in self.shape: n *= d
