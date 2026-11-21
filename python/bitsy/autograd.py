@@ -44,6 +44,7 @@ def reduce_sum_op(t:"Tensor", axis:int, keepdim:bool) -> "Tensor":
     shp = list(t.shape)
     shp[axis] = 1
     gg = g.reshape(*shp)
+    # exp_019: zero-dispatch broadcast view; reduce_sum is stride-aware now.
     ones = Tensor.from_numpy(np.ones(t.shape, np.float32), t.device)
     return (ones * gg,)
   return t._op(out, (t,), back)
@@ -119,9 +120,8 @@ class Tensor:
   def tanh(self) -> "Tensor":
     out = C.tanh(self._t)
     def back(g):
-      one = _scalar(1, self)
-      sq = self._op(C.mul(out, out), (), None)
-      return (self._op(C.mul(g._t, self._op(C.sub(one._t, sq._t), (), None)._t), (), None),)
+      # exp_019: one fused dispatch instead of square + subtract + mul.
+      return (self._op(C.tanh_backward(g._t, out), (), None),)
     return self._op(out, (self,), back)
 
   def sigmoid(self) -> "Tensor":

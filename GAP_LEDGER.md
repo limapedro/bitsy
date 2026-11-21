@@ -186,6 +186,21 @@ Conclusion: the remaining elementwise gap is bandwidth/kernel-bound
   Next: a general fused elementwise-chain kernel (multiple ops per dispatch),
   with full parity re-verification.
 
+## Phase 5/6 update (exp_019)
+
+- Attempted zero-dispatch broadcast views for reduction gradients. They gave
+  captured 0.213 ms / graph ratio 0.312 / eager 1.67 ms, **but broke training
+  parity**: MNIST loss 1.87 vs 1.33, accuracy 0.434 vs 0.896, W1 diff 0.149;
+  all four parameter gradients changed while forward loss stayed identical.
+  Reverted and the API removed. Making `reduce_sum`/`sgd_step` stride-aware did
+  not fix it; the cause is elsewhere in the backward graph.
+- Kept only fused `tanh_backward`: dispatches 43 → 41, no measurable captured
+  gain (0.240 ms, ratio 0.278). Eager 1.67 ms (ratio 0.57) within variance.
+- **Methodology gap found:** 42/42 isolated-op parity did not catch a gradient
+  flow error; end-to-end training parity must be a required gate for autograd
+  /view changes. Next: a safe full-shape contiguous gradient kernel or a fully
+  stride-audited tensor stack, then re-measure.
+
 ## Honesty
 
 - Timestamp GPU time is a proxy, not the 1000-repeat isolated kernel time the

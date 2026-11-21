@@ -1,5 +1,7 @@
 #include <bitsy/bt_ops.h>
 
+#include <stdlib.h>
+
 #include "../core/error_internal.h"
 #include "../core/dispatcher_internal.h"
 
@@ -46,4 +48,47 @@ bt_status_t bt_sgd_step(const bt_tensor_t* w, const bt_tensor_t* grad,
   status = bt_sub(w, scaled, out);
   bt_tensor_release(scaled);
   return status;
+}
+
+bt_status_t bt_tanh_backward(const bt_tensor_t* g, const bt_tensor_t* t,
+                             bt_tensor_t** out) {
+  bt_clear_error();
+  if (!g || !t || !out) return bt_fail(BT_ERR_INVALID_ARGUMENT, "bt_tanh_backward: NULL");
+  if (!bt_shape_equal(bt_tensor_shape(g), bt_tensor_shape(t)))
+    return bt_fail(BT_ERR_SHAPE_MISMATCH, "bt_tanh_backward: shape mismatch");
+  bt_device_t device = bt_tensor_device(g);
+  int64_t n = bt_shape_numel(bt_tensor_shape(g));
+  if (bt_backend_for_device(device) == BT_BACKEND_VULKAN) {
+#ifdef BT_ENABLE_VULKAN
+    int64_t dims[8];
+    for (int i = 0; i < bt_tensor_shape(g)->ndim; ++i) dims[i] = bt_tensor_shape(g)->dims[i];
+    bt_tensor_t* result = bt_tensor_empty(dims, (int)bt_tensor_shape(g)->ndim, BT_FLOAT32, device);
+    if (!result) return bt_fail(BT_ERR_OUT_OF_MEMORY, "bt_tanh_backward: allocation failed");
+    bt_status_t status = bt_vk_tanh_backward(g, t, result);
+    if (status != BT_OK) { bt_tensor_release(result); return status; }
+    *out = result;
+    return BT_OK;
+#else
+    return bt_fail(BT_ERR_NOT_IMPLEMENTED, "bt_tanh_backward: Vulkan unavailable");
+#endif
+  }
+  size_t count = (size_t)n;
+  float* gh = (float*)malloc(count * sizeof(float));
+  float* th = (float*)malloc(count * sizeof(float));
+  float* oh = (float*)malloc(count * sizeof(float));
+  if (!gh || !th || !oh) { free(gh); free(th); free(oh); return bt_fail(BT_ERR_OUT_OF_MEMORY, "bt_tanh_backward: host OOM"); }
+  if (bt_tensor_copy_to_host(g, gh, count * sizeof(float)) != BT_OK ||
+      bt_tensor_copy_to_host(t, th, count * sizeof(float)) != BT_OK) {
+    free(gh); free(th); free(oh); return bt_fail(BT_ERR_BACKEND, "bt_tanh_backward: copy failed");
+  }
+  for (size_t i = 0; i < count; ++i) {
+    float sq = th[i] * th[i];
+    oh[i] = gh[i] * (1.0f - sq);
+  }
+  bt_tensor_t* result = bt_tensor_create(bt_tensor_shape(g)->dims, (int64_t)bt_tensor_shape(g)->ndim,
+                                         BT_FLOAT32, device, oh);
+  free(gh); free(th); free(oh);
+  if (!result) return bt_fail(BT_ERR_OUT_OF_MEMORY, "bt_tanh_backward: result OOM");
+  *out = result;
+  return BT_OK;
 }

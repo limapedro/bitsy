@@ -6,6 +6,18 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added (TOGISHI Phase 6, exp_019)
+
+- Fused `tanh_backward` kernel (`g * (1 - t*t)`, one dispatch) with a CPU path,
+  wired into autograd. Dispatches/step 43 → 41; no measurable captured-graph
+  gain (0.240 ms, ratio 0.278), eager 1.669 ms (ratio 0.569). Parity 42/42,
+  MNIST W1 diff 1.788e-07.
+- **Reverted/removed:** zero-dispatch broadcast views for reduction gradients.
+  They improved captured time to 0.213 ms (ratio 0.312) but broke training
+  parity (MNIST loss 1.87 vs 1.33, W1 diff 0.149) while the isolated 42-case
+  harness stayed green. End-to-end training parity is now a required gate for
+  autograd/view changes. See `experiments/exp_019/FINDINGS.md`.
+
 ### Added (TOGISHI Phase 6, exp_018)
 
 - `reduce_sum.comp` + `bt_reduce_sum()` C/Python API with an autograd-aware

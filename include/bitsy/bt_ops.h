@@ -45,6 +45,10 @@ BT_API bt_status_t bt_sgd_step(const bt_tensor_t* w, const bt_tensor_t* grad,
 BT_API bt_status_t bt_reduce_sum(const bt_tensor_t* a, uint32_t axis, int keepdim,
                                  bt_tensor_t** out);
 
+/* exp_019: fused tanh backward out = g * (1 - t*t). */
+BT_API bt_status_t bt_tanh_backward(const bt_tensor_t* g, const bt_tensor_t* t,
+                                    bt_tensor_t** out);
+
 #ifdef __cplusplus
 }
 #endif

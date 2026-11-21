@@ -781,3 +781,29 @@ short of the ≥0.29 stretch goal (recorded as a narrow miss). Parity holds
 (42/42, CTest both builds, MNIST identical, CIFAR W diff 6.4e-07, captured
 step bit-identical to eager). The dominant remaining cost is now ~19 scalar
 elementwise dispatches; a general fused elementwise-chain kernel is next.
+
+---
+
+## 2026-11-21 — Broadcast views rejected; fused tanh backward (exp_019)
+
+**Context.** Backward was dominated by 11 `mul` calls, several of them
+`ones * gradient` just to broadcast a reduction gradient.
+
+**Options considered.** (1) Zero-dispatch broadcast views (stride 0), (2) fused
+kernels for the remaining mul/sub chains.
+
+**Decision.** Broadcast views were tried, measured, and **permanently
+reverted**: they broke end-to-end training (MNIST loss 1.87 vs 1.33, accuracy
+0.434 vs 0.896, W1 diff 0.149) even though the 42-case isolated-op harness
+still passed 42/42, and making `reduce_sum`/`sgd_step` stride-aware did not fix
+it. The API was removed with a warning in the header. Only the bit-equivalent
+fused `tanh_backward` kernel was kept, recorded in
+`experiments/exp_019/HYPOTHESIS.md` and `FINDINGS.md`.
+
+**Consequences.** Dispatches per step 43 → 41; no measurable captured-graph
+gain (0.240 ms, ratio 0.278). Eager 1.669 ms (ratio 0.569) within variance.
+Numeric parity holds: 42/42, CTest both builds, MNIST W1 diff 1.788e-07. The
+important locked consequence is procedural: **end-to-end training parity is a
+required gate for autograd/view changes**, because the isolated harness did not
+detect this error. Next: a safe contiguous full-shape gradient kernel or a
+fully stride-audited tensor stack.
