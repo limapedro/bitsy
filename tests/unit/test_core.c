@@ -165,8 +165,28 @@ static void add_errors(void) {
   check_status(bt_add(a, c, &r), BT_ERR_SHAPE_MISMATCH, "add shape error");
   bt_tensor_release(a); bt_tensor_release(b); bt_tensor_release(c);
 
-  CHECK(!bt_tensor_empty(dims, 1, BT_FLOAT32, bt_device_vulkan(0)));
-  CHECK(strstr(bt_get_last_error(), "cpu_ref"));
+  bt_tensor_t* vk = bt_tensor_empty(dims, 1, BT_FLOAT32, bt_device_vulkan(0));
+  if (bt_has_vulkan()) {
+    CHECK(vk && bt_tensor_device(vk).type == BT_DEVICE_TYPE_VULKAN);
+    bt_tensor_release(vk);
+  } else {
+    CHECK(!vk && strstr(bt_get_last_error(), "vulkan backend not compiled"));
+  }
+}
+
+/* GPU smoke test: upload, dispatch the shader, read back. */
+static void vulkan_add(void) {
+  if (!bt_has_vulkan()) return;
+  int64_t dims[1] = { 3 };
+  float av[3] = { 1.f, 2.f, 3.f }, bv[3] = { 10.f, 20.f, 30.f }, out[3];
+  bt_device_t gpu = bt_device_vulkan(0);
+  bt_tensor_t* a = bt_tensor_create(dims, 1, BT_FLOAT32, gpu, av);
+  bt_tensor_t* b = bt_tensor_create(dims, 1, BT_FLOAT32, gpu, bv);
+  bt_tensor_t* r = NULL;
+  check_status(bt_add(a, b, &r), BT_OK, "vulkan add");
+  CHECK(r && bt_tensor_copy_to_host(r, out, sizeof(out)) == BT_OK);
+  CHECK(out[0] == 11.f && out[1] == 22.f && out[2] == 33.f);
+  bt_tensor_release(r); bt_tensor_release(a); bt_tensor_release(b);
 }
 
 /* *** suite *** */
@@ -177,7 +197,7 @@ int main(void) {
   check_status(bt_init(), BT_OK, "bt_init");
   const test_fn tests[] = {
     dtypes, devices, shapes, storage, tensor_creation,
-    add_basic, add_broadcast, add_scalar, add_empty, add_errors
+    add_basic, add_broadcast, add_scalar, add_empty, add_errors, vulkan_add
   };
   const size_t count = sizeof(tests) / sizeof(tests[0]);
   for (size_t i = 0; i < count; ++i) tests[i]();

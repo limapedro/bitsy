@@ -14,9 +14,15 @@ class Tolerance:
   ulp_budget:int|None = None
   reason:str = ""
 
-# IEEE add is correctly rounded on both sides, so there is no tolerance to tune.
+EXACT = Tolerance("exact", reason="correctly-rounded IEEE ops are deterministic")
+# Different exp implementations are expected to differ by a few ULPs. A ULP
+# distribution against float64 is still to be recorded; this is the M2 bound.
+APPROX = Tolerance("rtol_atol", rtol=1e-5, atol=1e-6,
+                   reason="transcendentals differ by a few ULPs between libraries")
+
 TOLERANCES:dict[tuple[str, str], Tolerance] = {
-  ("add", "float32"): Tolerance("exact", reason="correctly-rounded IEEE addition is deterministic"),
+  **{(op, "float32"): EXACT for op in ("add", "sub", "mul", "div", "relu")},
+  **{(op, "float32"): APPROX for op in ("sigmoid", "tanh", "exp")},
 }
 
 def tolerance_for(op:str, dtype:str) -> Tolerance:

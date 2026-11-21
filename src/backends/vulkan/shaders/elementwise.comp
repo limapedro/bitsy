@@ -1,0 +1,48 @@
+#version 450
+
+/* One shader for all fp32 elementwise ops: the op is a uniform push constant,
+ * so there is no branch divergence across invocations. Workgroup size 256 keeps
+ * each dispatch tiny (well under the Windows WDDM TDR budget). */
+layout(local_size_x = 256) in;
+
+layout(std430, binding = 0) readonly buffer A { float a[]; };
+layout(std430, binding = 1) readonly buffer B { float b[]; };
+layout(std430, binding = 2) writeonly buffer O { float o[]; };
+
+layout(push_constant) uniform PC {
+  uint n, ndim, op;
+  int dims[8];
+  int sa[8], sb[8], so[8];
+  int offa, offb, offo;
+} pc;
+
+void main() {
+  uint idx = gl_GlobalInvocationID.x;
+  if (idx >= pc.n) return;
+
+  // Same right-aligned odometer as cpu_ref; stride 0 means broadcast.
+  int ia = pc.offa, ib = pc.offb, io = pc.offo;
+  int rem = int(idx);
+  for (int d = int(pc.ndim) - 1; d >= 0; --d) {
+    int c = rem % pc.dims[d];
+    rem /= pc.dims[d];
+    ia += c * pc.sa[d];
+    ib += c * pc.sb[d];
+    io += c * pc.so[d];
+  }
+
+  float av = a[ia], bv = b[ib];
+  // GLSL division may be approximate; `precise` keeps it bit-identical to CPU.
+  precise float r;
+  if (pc.op == 0) r = av + bv;
+  else if (pc.op == 1) r = av - bv;
+  else if (pc.op == 2) r = av * bv;
+  // fp32 GLSL division is only approximately rounded on this driver; a float64
+  // intermediate (Turing exposes shaderFloat64) gives the correctly rounded result.
+  else if (pc.op == 3) r = float(double(av) / double(bv));
+  else if (pc.op == 4) r = max(av, 0.0);
+  else if (pc.op == 5) r = 1.0 / (1.0 + exp(-av));
+  else if (pc.op == 6) r = tanh(av);
+  else r = exp(av);
+  o[io] = r;
+}

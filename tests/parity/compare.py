@@ -1,4 +1,4 @@
-"""Comparators. Only 'exact' exists in M0; ULP/rtol modes arrive with M1-M5."""
+"""Comparators. 'exact' for IEEE ops, rtol/atol for transcendentals (M2)."""
 
 from __future__ import annotations
 
@@ -15,20 +15,23 @@ def _as_numpy(t:torch.Tensor) -> np.ndarray:
 def compare(actual:torch.Tensor, expected:torch.Tensor, tolerance:Tolerance) -> dict[str, Any]:
   if actual.shape != expected.shape:
     return {"passed": False, "reason": f"shape {tuple(actual.shape)} != {tuple(expected.shape)}"}
-  if tolerance.mode != "exact":
-    raise NotImplementedError(f"tolerance mode {tolerance.mode!r} is not implemented yet")
 
   a, e = _as_numpy(actual), _as_numpy(expected)
-  if a.dtype == np.float32 and e.dtype == np.float32:
-    # Compare bit patterns so signed zeros differ, but allow any NaN payload.
-    ab = actual.contiguous().view(torch.int32).numpy()
-    eb = expected.contiguous().view(torch.int32).numpy()
-    equal = (ab == eb) | np.isnan(e)
+  if tolerance.mode == "exact":
+    if a.dtype == np.float32 and e.dtype == np.float32:
+      # Compare bit patterns so signed zeros differ, but allow any NaN payload.
+      ab = actual.contiguous().view(torch.int32).numpy()
+      eb = expected.contiguous().view(torch.int32).numpy()
+      equal = (ab == eb) | np.isnan(e)
+    else:
+      equal = np.array_equal(a, e)
+  elif tolerance.mode == "rtol_atol":
+    equal = np.isclose(a, e, rtol=tolerance.rtol, atol=tolerance.atol, equal_nan=True)
   else:
-    equal = np.array_equal(a, e)
+    raise NotImplementedError(f"tolerance mode {tolerance.mode!r} is not implemented")
 
   mismatches = int(np.count_nonzero(~equal))
-  ret:dict[str, Any] = {"passed": not mismatches, "mode": "exact",
+  ret:dict[str, Any] = {"passed": not mismatches, "mode": tolerance.mode,
                         "elements": int(a.size), "mismatches": mismatches}
   if mismatches:
     i = int(np.argmax(~equal))

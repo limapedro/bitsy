@@ -4,7 +4,13 @@
 #include <string.h>
 
 #include "error_internal.h"
+#include "storage_internal.h"
 #include "tensor_internal.h"
+
+#ifdef BT_ENABLE_VULKAN
+bt_status_t bt_vk_upload(void* handle, const void* host, size_t nbytes);
+bt_status_t bt_vk_readback(void* handle, void* host, size_t nbytes);
+#endif
 
 /* A tensor is just a view over refcounted storage. No hidden owners. */
 static bt_tensor_t* alloc(const int64_t* dims, int64_t ndim, bt_dtype_t dtype,
@@ -20,9 +26,21 @@ static bt_tensor_t* alloc(const int64_t* dims, int64_t ndim, bt_dtype_t dtype,
   bt_storage_t* storage = bt_storage_alloc(nbytes, device);
   if (!storage) return NULL;
 
-  void* data = bt_storage_data(storage);
-  if (host_data && numel) memcpy(data, host_data, nbytes);
-  else if (zero && nbytes) memset(data, 0, nbytes);
+  if (device.type == BT_DEVICE_TYPE_VULKAN) {
+#ifdef BT_ENABLE_VULKAN
+    if (host_data && nbytes) {
+      bt_status_t status = bt_vk_upload(storage->gpu, host_data, nbytes);
+      if (status != BT_OK) { bt_storage_release(storage); return NULL; }
+    }
+#else
+    bt_storage_release(storage);
+    return bt_fail(BT_ERR_NOT_IMPLEMENTED, "vulkan backend not compiled"), NULL;
+#endif
+  } else {
+    void* data = bt_storage_data(storage);
+    if (host_data && numel) memcpy(data, host_data, nbytes);
+    else if (zero && nbytes) memset(data, 0, nbytes);
+  }
 
   bt_tensor_t* t = calloc(1, sizeof(*t));
   if (!t) {
@@ -83,6 +101,13 @@ bt_status_t bt_tensor_copy_to_host(const bt_tensor_t* tensor, void* dst, size_t 
     return bt_fail(BT_ERR_INVALID_ARGUMENT, "bt_tensor_copy_to_host: dst too small (%zu < %zu)",
                    dst_bytes, needed);
   if (needed) {
+    if (tensor->device.type == BT_DEVICE_TYPE_VULKAN) {
+#ifdef BT_ENABLE_VULKAN
+      return bt_vk_readback(tensor->storage->gpu, dst, needed);
+#else
+      return bt_fail(BT_ERR_NOT_IMPLEMENTED, "vulkan backend not compiled");
+#endif
+    }
     const unsigned char* src = bt_storage_data(tensor->storage);
     memcpy(dst, src + tensor->offset * bt_dtype_size(tensor->dtype), needed);
   }

@@ -6,7 +6,11 @@
 #include <bitsy/bt_error.h>
 #include <bitsy/bt_tensor.h>
 
-typedef enum bt_op_id_t { BT_OP_ADD = 0, BT_OP_COUNT } bt_op_id_t;
+typedef enum bt_op_id_t {
+  BT_OP_ADD = 0, BT_OP_SUB, BT_OP_MUL, BT_OP_DIV,
+  BT_OP_RELU, BT_OP_SIGMOID, BT_OP_TANH, BT_OP_EXP,
+  BT_OP_COUNT
+} bt_op_id_t;
 
 typedef enum bt_backend_t {
   BT_BACKEND_CPU_REF = 0,

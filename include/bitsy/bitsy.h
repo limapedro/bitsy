@@ -30,6 +30,9 @@ BT_API bt_status_t bt_shutdown(void);
 /* Compiled version string. */
 BT_API const char* bt_version(void);
 
+/* Non-zero when a Vulkan compute device was initialized. */
+BT_API int bt_has_vulkan(void);
+
 #ifdef __cplusplus
 }
 #endif

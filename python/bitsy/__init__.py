@@ -1,11 +1,15 @@
 """Bitsy — a C11 deep-learning framework with a Vulkan backend.
 
-M0 bring-up package: it imports cleanly and exposes the narrow ctypes-backed
-helpers needed by the parity harness. M6 replaces them with the CPython
-extension and the full PyTorch-compatible ``bt.Tensor`` surface.
+M0/M2 bring-up package: imports cleanly and exposes the ctypes-backed helpers
+used by the parity harness. M6 replaces them with the CPython extension and the
+full PyTorch-compatible ``bt.Tensor`` surface.
 """
 
-from ._ctypes import BitsyError, Tensor, add, dtype_size, last_error, shutdown, version
+from ._ctypes import (BitsyError, Tensor, add, sub, mul, div, relu, sigmoid,
+                      tanh, exp, device, dtype_size, has_vulkan, last_error,
+                      shutdown, version)
 
 __version__ = "0.2.0-bitsy"
-__all__ = ["BitsyError", "Tensor", "add", "dtype_size", "last_error", "shutdown", "version", "__version__"]
+__all__ = ["BitsyError", "Tensor", "add", "sub", "mul", "div", "relu", "sigmoid",
+           "tanh", "exp", "device", "dtype_size", "has_vulkan", "last_error",
+           "shutdown", "version", "__version__"]

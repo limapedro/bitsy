@@ -6,6 +6,17 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added (M2 in progress)
+
+- Vulkan compute backend on the GTX 1660 Super: device selection, embedded
+  SPIR-V shader, device buffers with staging transfers and fence waits.
+- Eight fp32 elementwise ops on both backends, with parity against PyTorch
+  CPU and CUDA (19/19 cases, including 9 Vulkan cases).
+- `benchmarks/ops/elementwise.py` and the first honest wall-time comparison
+  against PyTorch CUDA in `BENCHMARKS.md` (targets currently missed).
+- `experiments/exp_001`: caching allocator, 5–6x lower latency, findings kept
+  including the before snapshot.
+
 ## [0.2.0-bitsy] - 2026-11-21
 
 ### Changed

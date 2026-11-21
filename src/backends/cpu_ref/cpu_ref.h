@@ -7,7 +7,8 @@
 /* Install the naive kernels in the dispatcher table. */
 bt_status_t bt_cpu_ref_register(void);
 
-bt_status_t bt_cpu_ref_add_float32(const bt_tensor_t* a, const bt_tensor_t* b,
-                                   bt_tensor_t* out);
+/* Naive broadcasting elementwise kernel shared by all registered ops. */
+bt_status_t bt_cpu_ref_elementwise(const bt_tensor_t* a, const bt_tensor_t* b,
+                                   bt_tensor_t* out, int op);
 
 #endif /* BITSY_SRC_BACKENDS_CPU_REF_CPU_REF_H */

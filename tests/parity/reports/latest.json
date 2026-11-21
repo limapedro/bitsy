@@ -1,17 +1,25 @@
 {
-  "generated_at": "2026-11-21T10:52:08.771754+00:00",
+  "generated_at": "2026-11-21T11:19:10.226265+00:00",
   "environment": {
     "platform": "Windows-10-10.0.26300-SP0",
     "python": "3.10.11",
     "torch": "2.11.0+cu126",
     "bitsy": "0.2.0-bitsy",
     "cuda_available": true,
+    "bitsy_vulkan": true,
     "cuda_version": "12.6",
     "gpu": "NVIDIA GeForce GTX 1660 SUPER"
   },
   "config": {
     "ops": [
-      "add"
+      "add",
+      "sub",
+      "mul",
+      "div",
+      "relu",
+      "sigmoid",
+      "tanh",
+      "exp"
     ],
     "backends": [
       "cpu_ref"
@@ -20,18 +28,20 @@
     "seed": 1234
   },
   "summary": {
-    "total": 13,
-    "passed": 13,
-    "failed": 0
+    "total": 33,
+    "passed": 33,
+    "failed": 0,
+    "skipped": []
   },
   "cases": [
     {
       "name": "add_scalar_scalar",
       "op": "add",
+      "device": "cpu",
       "shape": [],
       "dtype": "float32",
       "value_set": "normal",
-      "bitsy_vs_torch_cpu": {
+      "bitsy_vs_torch": {
         "passed": true,
         "mode": "exact",
         "elements": 1,
@@ -54,12 +64,13 @@
     {
       "name": "add_vector",
       "op": "add",
+      "device": "cpu",
       "shape": [
         3
       ],
       "dtype": "float32",
       "value_set": "normal",
-      "bitsy_vs_torch_cpu": {
+      "bitsy_vs_torch": {
         "passed": true,
         "mode": "exact",
         "elements": 3,
@@ -82,12 +93,13 @@
     {
       "name": "add_vector_special",
       "op": "add",
+      "device": "cpu",
       "shape": [
         8
       ],
       "dtype": "float32",
       "value_set": "special",
-      "bitsy_vs_torch_cpu": {
+      "bitsy_vs_torch": {
         "passed": true,
         "mode": "exact",
         "elements": 8,
@@ -110,12 +122,13 @@
     {
       "name": "add_vector_extremes",
       "op": "add",
+      "device": "cpu",
       "shape": [
         8
       ],
       "dtype": "float32",
       "value_set": "large_small",
-      "bitsy_vs_torch_cpu": {
+      "bitsy_vs_torch": {
         "passed": true,
         "mode": "exact",
         "elements": 8,
@@ -138,13 +151,14 @@
     {
       "name": "add_broadcast_row",
       "op": "add",
+      "device": "cpu",
       "shape": [
         2,
         3
       ],
       "dtype": "float32",
       "value_set": "normal",
-      "bitsy_vs_torch_cpu": {
+      "bitsy_vs_torch": {
         "passed": true,
         "mode": "exact",
         "elements": 6,
@@ -167,6 +181,7 @@
     {
       "name": "add_broadcast_axes",
       "op": "add",
+      "device": "cpu",
       "shape": [
         2,
         3,
@@ -174,7 +189,7 @@
       ],
       "dtype": "float32",
       "value_set": "normal",
-      "bitsy_vs_torch_cpu": {
+      "bitsy_vs_torch": {
         "passed": true,
         "mode": "exact",
         "elements": 24,
@@ -197,13 +212,14 @@
     {
       "name": "add_scalar_rhs",
       "op": "add",
+      "device": "cpu",
       "shape": [
         2,
         2
       ],
       "dtype": "float32",
       "value_set": "normal",
-      "bitsy_vs_torch_cpu": {
+      "bitsy_vs_torch": {
         "passed": true,
         "mode": "exact",
         "elements": 4,
@@ -226,12 +242,13 @@
     {
       "name": "add_size_one",
       "op": "add",
+      "device": "cpu",
       "shape": [
         5
       ],
       "dtype": "float32",
       "value_set": "normal",
-      "bitsy_vs_torch_cpu": {
+      "bitsy_vs_torch": {
         "passed": true,
         "mode": "exact",
         "elements": 5,
@@ -254,13 +271,14 @@
     {
       "name": "add_empty",
       "op": "add",
+      "device": "cpu",
       "shape": [
         0,
         2
       ],
       "dtype": "float32",
       "value_set": "normal",
-      "bitsy_vs_torch_cpu": {
+      "bitsy_vs_torch": {
         "passed": true,
         "mode": "exact",
         "elements": 0,
@@ -283,13 +301,14 @@
     {
       "name": "add_non_power_of_two",
       "op": "add",
+      "device": "cpu",
       "shape": [
         7,
         13
       ],
       "dtype": "float32",
       "value_set": "normal",
-      "bitsy_vs_torch_cpu": {
+      "bitsy_vs_torch": {
         "passed": true,
         "mode": "exact",
         "elements": 91,
@@ -312,12 +331,13 @@
     {
       "name": "add_large",
       "op": "add",
+      "device": "cpu",
       "shape": [
         4096
       ],
       "dtype": "float32",
       "value_set": "normal",
-      "bitsy_vs_torch_cpu": {
+      "bitsy_vs_torch": {
         "passed": true,
         "mode": "exact",
         "elements": 4096,
@@ -340,13 +360,14 @@
     {
       "name": "add_broadcast_special",
       "op": "add",
+      "device": "cpu",
       "shape": [
         2,
         8
       ],
       "dtype": "float32",
       "value_set": "special",
-      "bitsy_vs_torch_cpu": {
+      "bitsy_vs_torch": {
         "passed": true,
         "mode": "exact",
         "elements": 16,
@@ -374,6 +395,460 @@
       "torch_raised": true,
       "bitsy_raised": true,
       "bitsy_message": "BT_ERR_SHAPE_MISMATCH: bt_broadcast_shapes: 3 and 4 at dim 1 are not broadcastable (status 6)",
+      "passed": true
+    },
+    {
+      "name": "add_broadcast_vulkan",
+      "op": "add",
+      "device": "vulkan",
+      "shape": [
+        2,
+        3
+      ],
+      "dtype": "float32",
+      "value_set": "normal",
+      "bitsy_vs_torch": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 6,
+        "mismatches": 0
+      },
+      "passed": true
+    },
+    {
+      "name": "add_special_vulkan",
+      "op": "add",
+      "device": "vulkan",
+      "shape": [
+        8
+      ],
+      "dtype": "float32",
+      "value_set": "special",
+      "bitsy_vs_torch": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 8,
+        "mismatches": 0
+      },
+      "passed": true
+    },
+    {
+      "name": "add_large_vulkan",
+      "op": "add",
+      "device": "vulkan",
+      "shape": [
+        4096
+      ],
+      "dtype": "float32",
+      "value_set": "normal",
+      "bitsy_vs_torch": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 4096,
+        "mismatches": 0
+      },
+      "passed": true
+    },
+    {
+      "name": "add_empty_vulkan",
+      "op": "add",
+      "device": "vulkan",
+      "shape": [
+        0,
+        2
+      ],
+      "dtype": "float32",
+      "value_set": "normal",
+      "bitsy_vs_torch": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 0,
+        "mismatches": 0
+      },
+      "passed": true
+    },
+    {
+      "name": "add_cpu",
+      "op": "add",
+      "device": "cpu",
+      "shape": [
+        7,
+        13
+      ],
+      "dtype": "float32",
+      "value_set": "normal",
+      "bitsy_vs_torch": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 91,
+        "mismatches": 0
+      },
+      "torch_cuda_vs_torch_cpu": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 91,
+        "mismatches": 0
+      },
+      "bitsy_vs_torch_cuda": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 91,
+        "mismatches": 0
+      },
+      "passed": true
+    },
+    {
+      "name": "sub_cpu",
+      "op": "sub",
+      "device": "cpu",
+      "shape": [
+        7,
+        13
+      ],
+      "dtype": "float32",
+      "value_set": "normal",
+      "bitsy_vs_torch": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 91,
+        "mismatches": 0
+      },
+      "torch_cuda_vs_torch_cpu": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 91,
+        "mismatches": 0
+      },
+      "bitsy_vs_torch_cuda": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 91,
+        "mismatches": 0
+      },
+      "passed": true
+    },
+    {
+      "name": "mul_cpu",
+      "op": "mul",
+      "device": "cpu",
+      "shape": [
+        7,
+        13
+      ],
+      "dtype": "float32",
+      "value_set": "normal",
+      "bitsy_vs_torch": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 91,
+        "mismatches": 0
+      },
+      "torch_cuda_vs_torch_cpu": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 91,
+        "mismatches": 0
+      },
+      "bitsy_vs_torch_cuda": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 91,
+        "mismatches": 0
+      },
+      "passed": true
+    },
+    {
+      "name": "div_cpu",
+      "op": "div",
+      "device": "cpu",
+      "shape": [
+        7,
+        13
+      ],
+      "dtype": "float32",
+      "value_set": "normal",
+      "bitsy_vs_torch": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 91,
+        "mismatches": 0
+      },
+      "torch_cuda_vs_torch_cpu": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 91,
+        "mismatches": 0
+      },
+      "bitsy_vs_torch_cuda": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 91,
+        "mismatches": 0
+      },
+      "passed": true
+    },
+    {
+      "name": "relu_cpu",
+      "op": "relu",
+      "device": "cpu",
+      "shape": [
+        7,
+        13
+      ],
+      "dtype": "float32",
+      "value_set": "normal",
+      "bitsy_vs_torch": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 91,
+        "mismatches": 0
+      },
+      "torch_cuda_vs_torch_cpu": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 91,
+        "mismatches": 0
+      },
+      "bitsy_vs_torch_cuda": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 91,
+        "mismatches": 0
+      },
+      "passed": true
+    },
+    {
+      "name": "sigmoid_cpu",
+      "op": "sigmoid",
+      "device": "cpu",
+      "shape": [
+        7,
+        13
+      ],
+      "dtype": "float32",
+      "value_set": "normal",
+      "bitsy_vs_torch": {
+        "passed": true,
+        "mode": "rtol_atol",
+        "elements": 91,
+        "mismatches": 0
+      },
+      "torch_cuda_vs_torch_cpu": {
+        "passed": true,
+        "mode": "rtol_atol",
+        "elements": 91,
+        "mismatches": 0
+      },
+      "bitsy_vs_torch_cuda": {
+        "passed": true,
+        "mode": "rtol_atol",
+        "elements": 91,
+        "mismatches": 0
+      },
+      "passed": true
+    },
+    {
+      "name": "tanh_cpu",
+      "op": "tanh",
+      "device": "cpu",
+      "shape": [
+        7,
+        13
+      ],
+      "dtype": "float32",
+      "value_set": "normal",
+      "bitsy_vs_torch": {
+        "passed": true,
+        "mode": "rtol_atol",
+        "elements": 91,
+        "mismatches": 0
+      },
+      "torch_cuda_vs_torch_cpu": {
+        "passed": true,
+        "mode": "rtol_atol",
+        "elements": 91,
+        "mismatches": 0
+      },
+      "bitsy_vs_torch_cuda": {
+        "passed": true,
+        "mode": "rtol_atol",
+        "elements": 91,
+        "mismatches": 0
+      },
+      "passed": true
+    },
+    {
+      "name": "exp_cpu",
+      "op": "exp",
+      "device": "cpu",
+      "shape": [
+        7,
+        13
+      ],
+      "dtype": "float32",
+      "value_set": "normal",
+      "bitsy_vs_torch": {
+        "passed": true,
+        "mode": "rtol_atol",
+        "elements": 91,
+        "mismatches": 0
+      },
+      "torch_cuda_vs_torch_cpu": {
+        "passed": true,
+        "mode": "rtol_atol",
+        "elements": 91,
+        "mismatches": 0
+      },
+      "bitsy_vs_torch_cuda": {
+        "passed": true,
+        "mode": "rtol_atol",
+        "elements": 91,
+        "mismatches": 0
+      },
+      "passed": true
+    },
+    {
+      "name": "add_vulkan",
+      "op": "add",
+      "device": "vulkan",
+      "shape": [
+        7,
+        13
+      ],
+      "dtype": "float32",
+      "value_set": "normal",
+      "bitsy_vs_torch": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 91,
+        "mismatches": 0
+      },
+      "passed": true
+    },
+    {
+      "name": "sub_vulkan",
+      "op": "sub",
+      "device": "vulkan",
+      "shape": [
+        7,
+        13
+      ],
+      "dtype": "float32",
+      "value_set": "normal",
+      "bitsy_vs_torch": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 91,
+        "mismatches": 0
+      },
+      "passed": true
+    },
+    {
+      "name": "mul_vulkan",
+      "op": "mul",
+      "device": "vulkan",
+      "shape": [
+        7,
+        13
+      ],
+      "dtype": "float32",
+      "value_set": "normal",
+      "bitsy_vs_torch": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 91,
+        "mismatches": 0
+      },
+      "passed": true
+    },
+    {
+      "name": "div_vulkan",
+      "op": "div",
+      "device": "vulkan",
+      "shape": [
+        7,
+        13
+      ],
+      "dtype": "float32",
+      "value_set": "normal",
+      "bitsy_vs_torch": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 91,
+        "mismatches": 0
+      },
+      "passed": true
+    },
+    {
+      "name": "relu_vulkan",
+      "op": "relu",
+      "device": "vulkan",
+      "shape": [
+        7,
+        13
+      ],
+      "dtype": "float32",
+      "value_set": "normal",
+      "bitsy_vs_torch": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 91,
+        "mismatches": 0
+      },
+      "passed": true
+    },
+    {
+      "name": "sigmoid_vulkan",
+      "op": "sigmoid",
+      "device": "vulkan",
+      "shape": [
+        7,
+        13
+      ],
+      "dtype": "float32",
+      "value_set": "normal",
+      "bitsy_vs_torch": {
+        "passed": true,
+        "mode": "rtol_atol",
+        "elements": 91,
+        "mismatches": 0
+      },
+      "passed": true
+    },
+    {
+      "name": "tanh_vulkan",
+      "op": "tanh",
+      "device": "vulkan",
+      "shape": [
+        7,
+        13
+      ],
+      "dtype": "float32",
+      "value_set": "normal",
+      "bitsy_vs_torch": {
+        "passed": true,
+        "mode": "rtol_atol",
+        "elements": 91,
+        "mismatches": 0
+      },
+      "passed": true
+    },
+    {
+      "name": "exp_vulkan",
+      "op": "exp",
+      "device": "vulkan",
+      "shape": [
+        7,
+        13
+      ],
+      "dtype": "float32",
+      "value_set": "normal",
+      "bitsy_vs_torch": {
+        "passed": true,
+        "mode": "rtol_atol",
+        "elements": 91,
+        "mismatches": 0
+      },
       "passed": true
     }
   ]

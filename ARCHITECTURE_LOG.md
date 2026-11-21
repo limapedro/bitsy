@@ -310,3 +310,75 @@ lazy imports.
 **Consequences.** Files get shorter and denser. Behaviour must not change:
 every refactor is re-verified with CTest and the 13-case PyTorch parity suite.
 This is a style change only, not a semantic deviation from PyTorch.
+
+---
+
+## 2026-11-21 — Vulkan backend: one device, one command buffer, one shader
+
+**Context.** M2 needs GPU compute on the GTX 1660 Super with Vulkan 1.2 features
+only. WDDM TDR makes long submissions dangerous, and descriptor churn is the
+usual first source of overhead.
+
+**Options considered.** (1) Per-dispatch command buffers, descriptor sets and
+pipelines, (2) one persistent command buffer, descriptor set and pipeline with
+a fence wait per dispatch, (3) timeline semaphores and multiple in-flight
+submissions from day one.
+
+**Decision.** Option 2 for bring-up. One `VkCommandBuffer`, one
+`VkDescriptorSet`, one compute pipeline from an embedded SPIR-V module, one
+fence. A single GLSL shader handles all eight fp32 elementwise ops via a push
+constant; the op code is uniform across invocations, so there is no branch
+divergence. Push constants carry the broadcast shape/strides, so no shape
+buffers are needed. Each dispatch is at most `ceil(n/256)` workgroups, bounded
+by tensor size and far below the TDR budget.
+
+**Consequences.** Correct and easy to audit; small-op latency is bounded by
+submit + fence wait (~0.06 ms) rather than kernel time. Asynchronous streams,
+timestamp queries and validation-layer integration are deliberately deferred
+and tracked as follow-up work, not claimed as done.
+
+---
+
+## 2026-11-21 — Device buffers are cached by size class (exp_001)
+
+**Context.** The first Vulkan benchmark showed 0.38–0.73 ms per elementwise op,
+mostly driver allocation calls, with a ratio of only ~0.07 versus PyTorch CUDA.
+
+**Options considered.** (1) Keep allocating per tensor, (2) cache whole device
+buffers by power-of-two size class, (3) build a byte-granular caching
+suballocator immediately.
+
+**Decision.** Option 2, as a hypothesis-first experiment (`experiments/exp_001`:
+`HYPOTHESIS.md`, before/after JSON, `FINDINGS.md`). It met its predictions:
+5–6x lower wall time and ratios of 0.20–0.45. Negative result preserved: the
+original numbers remain in `before.json`.
+
+**Consequences.** The §7.2 bandwidth target is still missed; `BENCHMARKS.md`
+says so plainly. A finer suballocator and fewer submissions are future
+experiments, not silent tweaks. Cached buffers are released at shutdown.
+
+---
+
+## 2026-11-21 — Vulkan fp32 division uses a float64 intermediate
+
+**Context.** The expanded 33-case parity suite found `div_vulkan` mismatching
+PyTorch CUDA at one ULP in 22 of 91 elements (e.g. -0.789525568 vs
+-0.789525628). PyTorch CPU and CUDA agree bit-for-bit, and `cpu_ref` div is
+exact, so the discrepancy is the GLSL division path, not a semantics error.
+The tolerance policy requires exact fp32 div; loosening it would hide a real
+precision difference.
+
+**Options considered.** (1) Switch div to rtol/atol, (2) Newton/fma refinement
+of the approximate quotient, (3) compute `float(double(a) / double(b))` using
+the optional `shaderFloat64` feature.
+
+**Decision.** Option 3, with the feature queried from
+`vkGetPhysicalDeviceFeatures` before enabling it. Turing exposes
+`shaderFloat64 = true`; the double intermediate is then rounded once to fp32,
+giving the correctly rounded result. `precise` alone (tried first) did not fix
+the mismatch.
+
+**Consequences.** All 33 parity cases now pass, including div on Vulkan. FP64
+division is slower than the fp32 path, so it should be replaced later by a
+documented correctly-rounded fp32 sequence if an experiment proves one exists
+on this driver. No tolerance was loosened.
