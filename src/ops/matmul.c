@@ -64,6 +64,27 @@ bt_status_t bt_matmul_bias(const bt_tensor_t* a, const bt_tensor_t* b,
   return bt_add(prod, bias, out);
 }
 
+bt_status_t bt_matmul_bias_tanh(const bt_tensor_t* a, const bt_tensor_t* b,
+                                const bt_tensor_t* bias, bt_tensor_t** out) {
+  bt_clear_error();
+#ifdef BT_ENABLE_VULKAN
+  if (bt_tensor_device(a).type == BT_DEVICE_TYPE_VULKAN) {
+    /* Try the fused epilogue; fall back to matmul + bias + tanh otherwise. */
+    int64_t dims[2] = { bt_tensor_shape(a)->dims[0], bt_tensor_shape(b)->dims[1] };
+    bt_tensor_t* result = bt_tensor_empty(dims, 2, BT_FLOAT32, bt_tensor_device(a));
+    if (!result) return bt_fail(BT_ERR_OUT_OF_MEMORY, "bt_matmul_bias_tanh: allocation failed");
+    bt_status_t status = bt_vk_matmul_bias_tanh(a, b, bias, result);
+    if (status == BT_OK) { *out = result; return BT_OK; }
+    bt_tensor_release(result);
+    if (status != BT_ERR_NOT_IMPLEMENTED) return status;
+  }
+#endif
+  bt_tensor_t* tmp = NULL;
+  bt_status_t status = bt_matmul_bias(a, b, bias, &tmp);
+  if (status != BT_OK) return status;
+  return bt_tanh(tmp, out);
+}
+
 bt_status_t bt_transpose(const bt_tensor_t* a, bt_tensor_t** out) {
   bt_clear_error();
   if (!a || !out) return bt_fail(BT_ERR_INVALID_ARGUMENT, "bt_transpose: NULL");

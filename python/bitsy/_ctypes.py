@@ -85,6 +85,7 @@ _fn("bt_tanh_backward", [_ptr, _ptr, ctypes.POINTER(_ptr)], ctypes.c_int)
 _fn("bt_broadcast_grad", [_ptr, ctypes.POINTER(ctypes.c_int64), ctypes.c_int64, ctypes.POINTER(_ptr)], ctypes.c_int)
 _fn("bt_dual_mul", [_ptr, _ptr, _ptr, ctypes.POINTER(_ptr)], ctypes.c_int)
 _fn("bt_matmul_bias", [_ptr, _ptr, _ptr, ctypes.POINTER(_ptr)], ctypes.c_int)
+_fn("bt_matmul_bias_tanh", [_ptr, _ptr, _ptr, ctypes.POINTER(_ptr)], ctypes.c_int)
 _fn("bt_log_softmax", [_ptr, ctypes.POINTER(_ptr)], ctypes.c_int)
 _fn("bt_ce_loss", [_ptr, _ptr, ctypes.POINTER(_ptr)], ctypes.c_int)
 _fn("bt_sgd_step_fused", [ctypes.POINTER(_ptr), ctypes.POINTER(_ptr), ctypes.c_float, ctypes.POINTER(ctypes.POINTER(_ptr))], ctypes.c_int)
@@ -245,6 +246,14 @@ def log_softmax(x:Tensor) -> Tensor:
   shape = _lib.bt_tensor_shape(out)
   dims = tuple(int(shape.contents.dims[i]) for i in range(int(shape.contents.ndim)))
   return Tensor(out.value, dims, x._device)
+
+def matmul_bias_tanh(a:Tensor, b:Tensor, bias:Tensor) -> Tensor:
+  """Fused tanh(a @ b + bias) (exp_036)."""
+  out = _ptr()
+  _check(_lib.bt_matmul_bias_tanh(_ptr(a._ptr), _ptr(b._ptr), _ptr(bias._ptr), ctypes.byref(out)))
+  shape = _lib.bt_tensor_shape(out)
+  dims = tuple(int(shape.contents.dims[i]) for i in range(int(shape.contents.ndim)))
+  return Tensor(out.value, dims, a._device)
 
 def matmul_bias(a:Tensor, b:Tensor, bias:Tensor) -> Tensor:
   """Fused a @ b + bias (bias shape (1,N)), one dispatch when aligned."""

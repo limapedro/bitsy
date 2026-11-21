@@ -184,6 +184,15 @@ Linear was worth ~1.6×. The captured graph path improved from 0.30 to 0.34–0.
 but remains well below 0.85. Standalone GEMM (0.72) and elementwise (≤0.54)
 targets are still missed. See `experiments/exp_024/FINDINGS.md`.
 
+## exp_036 — fused bias+tanh epilogue (neutral)
+
+The final bounded fusion applied tanh in the Linear GEMM epilogue: dispatches
+19 → **18**, captured step 0.1457 → 0.1432–0.1447 ms (~1%, neutral), eager
+0.780–0.879 ms (ratio 1.14–1.29), graph ratio 0.46, GEMM/elementwise unchanged.
+44/44 parity incl. the training-scale gate; MNIST/CIFAR unchanged. This
+confirms the ceiling conclusion in `docs/PERFORMANCE_CEILING.md`. See
+`experiments/exp_036/FINDINGS.md`.
+
 ## exp_034 — training-scale gradient gate (CI)
 
 `tests/parity/train_scale.py` is now a required case (batch 64, 784→64→10), so

@@ -42,6 +42,18 @@ class Linear(Module):
               reduce_sum_op(g, 0, True))
     return x._op(ct, (x, self.W, self.b), back)
 
+  def forward_tanh(self, x:Tensor) -> Tensor:
+    """Fused forward for Linear followed by Tanh (exp_036)."""
+    ct = C.matmul_bias_tanh(x._t, self.W._t, self.b._t)
+    Wt = C.transpose_view(self.W._t)
+    xt = C.transpose_view(x._t)
+    def back(g):
+      pre = g._op(C.tanh_backward(g._t, ct), (), None)  # dL/d(x@W+b)
+      return (pre._op(C.matmul(pre._t, Wt), (), None),
+              pre._op(C.matmul(xt, pre._t), (), None),
+              reduce_sum_op(pre, 0, True))
+    return x._op(ct, (x, self.W, self.b), back)
+
 class Conv2d(Module):
   """NCHW 3x3 convolution with pad/stride; gradients run on the same device."""
   def __init__(self, in_ch:int, out_ch:int, rng, device:str="cpu", pad:int=1, stride:int=1) -> None:
@@ -73,7 +85,17 @@ class ReLU(Module):
 class Sequential(Module):
   def __init__(self, *layers:Module) -> None: self.layers = layers
   def forward(self, x:Tensor) -> Tensor:
-    for layer in self.layers: x = layer(x)
+    layers = self.layers
+    i = 0
+    while i < len(layers):
+      layer = layers[i]
+      if (isinstance(layer, Linear) and i + 1 < len(layers) and
+          isinstance(layers[i + 1], Tanh)):
+        x = layer.forward_tanh(x)  # one dispatch instead of GEMM+bias + tanh
+        i += 2
+      else:
+        x = layer(x)
+        i += 1
     return x
 
 def log_softmax(logits:Tensor) -> Tensor:

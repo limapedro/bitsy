@@ -416,6 +416,17 @@ Conclusion: the remaining elementwise gap is bandwidth/kernel-bound
 - Open gaps unchanged: captured graph ~0.46–0.55, standalone GEMM ~0.68,
   eager elementwise 0.39–0.52. Step-level fusion can resume under the gate.
 
+## Phase 6 update (exp_036)
+
+- Final bounded fusion: bias+tanh GEMM epilogue removed one dispatch
+  (19 → 18), captured step 0.1457 → 0.1432–0.1447 ms (~1%, neutral), graph
+  ratio 0.46, eager 0.780–0.879 ms (ratio 1.14–1.29), GEMM/elementwise unchanged.
+  44/44 parity incl. training-scale gate; MNIST/CIFAR W diffs unchanged.
+- Confirms `docs/PERFORMANCE_CEILING.md`: per-dispatch fusions are exhausted;
+  remaining gaps need a step-level graph compiler or tensor-core hardware.
+- Open gaps unchanged: captured graph ~0.46, standalone GEMM 0.71, eager
+  elementwise 0.41–0.53. Eager end-to-end target still MET.
+
 ## Honesty
 
 - Timestamp GPU time is a proxy, not the 1000-repeat isolated kernel time the
