@@ -21,6 +21,19 @@ typedef struct vk_buffer_t {
 
 #define CACHE_BUCKETS 24
 static vk_buffer_t* g_free[CACHE_BUCKETS];
+#define MAX_DEFERRED 64
+static void* g_deferred[MAX_DEFERRED];
+static int g_deferred_count;
+
+void bt_vk_defer_free(void* handle) {
+  if (!handle) return;
+  if (g_deferred_count < MAX_DEFERRED) g_deferred[g_deferred_count++] = handle;
+  else bt_vk_free(handle);
+}
+void bt_vk_deferred_release(void) {
+  for (int i = 0; i < g_deferred_count; ++i) bt_vk_free(g_deferred[i]);
+  g_deferred_count = 0;
+}
 
 static int bucket_of(size_t size) {
   int bucket = 0;

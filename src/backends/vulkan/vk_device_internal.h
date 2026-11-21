@@ -32,6 +32,8 @@ typedef struct {
   VkPipeline matmul_pipeline;
   VkPipeline conv_pipeline;
   VkPipeline gemm_tiled_pipeline;
+  VkPipeline gemm_rb_pipeline;
+  VkPipeline splitk_reduce_pipeline;
   VkPipeline fused_pipeline;
   VkQueryPool timestamp_pool;
   VkQueryPool profiler_pool;
@@ -66,6 +68,8 @@ double bt_vk_device_time_ms(void);
 void bt_vk_barrier(void);
 VkBuffer bt_vk_buffer_of(void* handle);
 void bt_vk_allocator_shutdown(void);
+void bt_vk_defer_free(void* handle);        /* free after the next flush waits */
+void bt_vk_deferred_release(void);
 
 #define VKCHECK(expr) do { \
   VkResult _r = (expr); \

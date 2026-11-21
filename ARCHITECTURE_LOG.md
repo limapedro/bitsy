@@ -510,3 +510,27 @@ ms (~2%). We kept it because it removes the CPU fence stall and exposes an
 explicit completion point, but we do not claim a speedup from it. Parity grew
 to 42/42 including exact fused cases; no tolerance was loosened. Performance
 targets remain missed and are reported in `BENCHMARKS.md`.
+
+---
+
+## 2026-11-21 — GEMM ladder and size-based autotune (exp_008)
+
+**Context.** `GAP_LEDGER.md` ranked GEMM first at 155.5 µs / ratio 0.29. The
+tiled kernel reached 496 GFLOPS (9% of FP32 peak); PyTorch profile showed
+`volta_sgemm_128x32_nn` plus a split-K reduction.
+
+**Options considered.** (1) Keep the 16×16 tiled kernel, (2) register-blocked
+128×128×8 with conflict-free shared memory, (3) add split-K, (4) autotune by
+shape from measured timings.
+
+**Decision.** All four variants are selectable with `BT_GEMM_VARIANT=0..3`;
+the default autotunes by shape: tiled for ≤512, register-blocked above. Split-K
+is kept but not selected automatically because it was slower (1.558 ms vs
+1.211 ms at 1024²). Matmul push constants gained `k_start`/`k_len` so split-K
+really partitions K. Scratch buffers use deferred free after the timeline wait.
+
+**Consequences.** At 1024², 4.329 → 1.224 ms (3.54×), 496 → 1754 GFLOPS,
+ratio 0.22 → 0.77. The ≥0.80 target is still missed by 0.03. Parity remains
+42/42 and the unit test caught an earlier split-K bug that wrote 4× the correct
+result. The autotune is a hard-coded threshold from these measurements, not a
+runtime cache; both facts are recorded in `experiments/exp_008/FINDINGS.md`.

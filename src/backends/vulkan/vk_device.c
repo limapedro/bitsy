@@ -11,6 +11,8 @@
 #include "matmul.spv.h"
 #include "conv.spv.h"
 #include "gemm_tiled.spv.h"
+#include "gemm_rb.spv.h"
+#include "splitk_reduce.spv.h"
 #include "fused.spv.h"
 
 vk_ctx_t g_vk;
@@ -102,7 +104,10 @@ static bt_status_t make_pipeline(void) {
   if ((status = pipeline_from_spv(conv_spv, conv_spv_bytes, &g_vk.conv_pipeline))) return status;
   if ((status = pipeline_from_spv(gemm_tiled_spv, gemm_tiled_spv_bytes,
                                   &g_vk.gemm_tiled_pipeline))) return status;
-  return pipeline_from_spv(fused_spv, fused_spv_bytes, &g_vk.fused_pipeline);
+  if ((status = pipeline_from_spv(fused_spv, fused_spv_bytes, &g_vk.fused_pipeline))) return status;
+  if ((status = pipeline_from_spv(gemm_rb_spv, gemm_rb_spv_bytes, &g_vk.gemm_rb_pipeline))) return status;
+  return pipeline_from_spv(splitk_reduce_spv, splitk_reduce_spv_bytes,
+                           &g_vk.splitk_reduce_pipeline);
 }
 
 bt_status_t bt_vk_init(void) {
@@ -177,6 +182,8 @@ void bt_vk_shutdown(void) {
   vkDestroyPipeline(g_vk.device, g_vk.conv_pipeline, NULL);
   vkDestroyPipeline(g_vk.device, g_vk.gemm_tiled_pipeline, NULL);
   vkDestroyPipeline(g_vk.device, g_vk.fused_pipeline, NULL);
+  vkDestroyPipeline(g_vk.device, g_vk.gemm_rb_pipeline, NULL);
+  vkDestroyPipeline(g_vk.device, g_vk.splitk_reduce_pipeline, NULL);
   vkDestroyPipelineLayout(g_vk.device, g_vk.pipeline_layout, NULL);
   if (g_vk.have_timestamps) {
     vkDestroyQueryPool(g_vk.device, g_vk.timestamp_pool, NULL);
@@ -224,6 +231,7 @@ bt_status_t bt_vk_wait(void) {
                                .semaphoreCount = 1, .pSemaphores = &g_vk.timeline,
                                .pValues = &g_vk.timeline_value };
   VKCHECK(vkWaitSemaphores(g_vk.device, &wait, UINT64_MAX));
+  bt_vk_deferred_release(); // scratch buffers are safe once the GPU is idle
 
   if (g_vk.have_timestamps && g_vk.query_index > g_vk.query_read_index) {
     int count = g_vk.query_index - g_vk.query_read_index;

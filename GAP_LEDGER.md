@@ -18,7 +18,7 @@ Calibrated ceilings from Phase 1: DRAM **304.4 GB/s**, FP32 **5.49 TFLOP/s**
 
 | Rank | Op | Wall gap (µs) | Bitsy GPU/dispatch (µs) | PyTorch kernel (µs/call) | Classification | Evidence |
 |---:|---|---:|---:|---:|---|---|
-| 1 | matmul 256² | **155.5** | 165.8 | 18.0 (`volta_sgemm_128x32_nn`) + 5.1 splitK | compute/method + wave quantization | `trace_matmul_prof.json`, 3.7% of FP32 peak |
+| 1 | matmul 256² | **155.5** | 165.8 | 18.0 (`volta_sgemm_128x32_nn`) + 5.1 splitK | compute/method + wave quantization | `trace_matmul_prof.json`, 3.7% of FP32 peak (exp_008 improved 1024² 3.54× but the three-way 256² case still uses tiled) |
 | 2 | mul 1M | **52.8** | 52.2 | 46.1 (`vectorized_elementwise_kernel<4>`) | bandwidth + launch/sync | 79.1% of DRAM ceiling; host overhead 52.8 µs |
 | 3 | relu 1M | **37.0** | 48.9 | 33.3 (`vectorized_elementwise_kernel<4>`) | launch/sync + bandwidth | 84.6% of DRAM ceiling |
 | 4 | add 1M | **12.9** | 48.4 | 42.3 (`vectorized_elementwise_kernel<4>`) | launch/sync | 85.5% of DRAM ceiling |

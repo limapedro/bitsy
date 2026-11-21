@@ -6,6 +6,14 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added (TOGISHI Phase 6, exp_008)
+
+- GEMM ladder: register-blocked 128×128×8 kernel, conflict-free shared memory,
+  split-K variant (negative result), and shape-based autotune.
+- 1024² GEMM: 4.329 → 1.224 ms (3.54×), 496 → 1754 GFLOPS, ratio 0.22 → 0.77;
+  target 0.80 still missed. Parity 42/42. Raw variant snapshots in
+  `experiments/exp_008/`.
+
 ### Added (TOGISHI Phase 2, exp_007)
 
 - Opt-in `hg.profiler`: per-dispatch GPU timestamps, CPU enqueue time,

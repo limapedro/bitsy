@@ -27,20 +27,23 @@ is dominated by PyTorch's small-op timing variance (PyTorch add 1M: 0.0868 ms in
 exp_003, 0.0556 ms here). See `experiments/exp_001` (allocator), `exp_003`
 (batching/timestamps), `exp_004` (async/fusion) for before/after snapshots.
 
-## GEMM results (updated 2026-11-21, exp_004)
+## GEMM results (updated 2026-11-21, exp_008)
 
 `python benchmarks/ops/gemm.py`, median of 30 iterations after 5 warm-ups,
 `bt.flush()` + `bt.wait()` + `torch.cuda.synchronize()` per iteration.
-`BT_GEMM_TILED` selects the kernel.
+`BT_GEMM_VARIANT=0..3` selects naive / tiled / register-blocked /
+register-blocked+split-K; the default is an autotuned shape threshold.
 
 | n | kernel | Bitsy ms | PyTorch ms | Bitsy device ms | ratio (target ≥ 0.80) | Bitsy GFLOPS |
 |---:|---|---:|---:|---:|---:|---:|
-| 256 | tiled | 0.177 | 0.047 | 0.070 | 0.27 | 190 |
-| 1024 | tiled | 4.329 | 0.950 | 4.088 | 0.22 | 496 |
+| 256 | tiled (autotune) | 0.164 | 0.063 | 0.070 | 0.38 | 205 |
+| 1024 | register-blocked (autotune) | 1.224 | 0.942 | 1.064 | **0.77** | 1754 |
 
-Naive baseline at n=1024 was 10.224 ms / 0.09 ratio (`experiments/exp_002`).
-**GEMM target missed** (0.22 vs ≥ 0.80). Raw before/after snapshots are in
-`experiments/exp_002` and `experiments/exp_004`.
+Before exp_008 (16×16 tiled): 0.177 ms / 0.27 at 256² and 4.329 ms / 0.22 at
+1024². Register blocking is **3.54× faster** at 1024² (496 → 1754 GFLOPS).
+Split-K was slower (1.558 ms, ratio 0.57) and is kept as a documented negative
+result. **GEMM target still missed** (0.77 vs ≥ 0.80). Raw variant and
+before/after snapshots: `experiments/exp_008/`.
 
 ## Batched and async submissions
 

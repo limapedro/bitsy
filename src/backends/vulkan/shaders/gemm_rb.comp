@@ -1,0 +1,93 @@
+#version 450
+/* exp_008: register-blocked SGEMM. 128x128 tile, 8x8 thread tile (16x16
+ * workgroup), 8-deep K step, conflict-free transposed A in shared memory. */
+layout(local_size_x = 16, local_size_y = 16) in;
+
+layout(std430, binding = 0) readonly buffer A { float a[]; };
+layout(std430, binding = 1) readonly buffer B { float b[]; };
+layout(std430, binding = 2) writeonly buffer C { float c[]; };
+
+layout(push_constant) uniform PC {
+  uint M, N, K;
+  int sa0, sa1, sb0, sb1, sc0, sc1;
+  int offa, offb, offc;
+  int k_start, k_len;
+} pc;
+
+shared float As[8][128];   // [k][row] -> consecutive threads read consecutive rows
+shared float Bs[8][128];   // [k][col]
+
+void main() {
+  int i0 = int(gl_WorkGroupID.y) * 128;
+  int j0 = int(gl_WorkGroupID.x) * 128;
+  int ti = int(gl_LocalInvocationID.y);
+  int tj = int(gl_LocalInvocationID.x);
+  int tid = ti * 16 + tj;
+
+  float acc[64];
+  for (int i = 0; i < 64; ++i) acc[i] = 0.0;
+
+  int k_end = pc.k_start + pc.k_len;
+  for (int k0 = pc.k_start; k0 < k_end; k0 += 8) {
+    for (int e = tid; e < 1024; e += 256) {
+      int r = e >> 3, k = e & 7;
+      int row = i0 + r;
+      As[k][r] = (row < int(pc.M) && k0 + k < k_end)
+        ? a[pc.offa + row * pc.sa0 + (k0 + k) * pc.sa1] : 0.0;
+      int col = j0 + r;
+      Bs[k][r] = (col < int(pc.N) && k0 + k < k_end)
+        ? b[pc.offb + (k0 + k) * pc.sb0 + col * pc.sb1] : 0.0;
+    }
+    barrier();
+    for (int kk = 0; kk < 8; ++kk) {
+      float av0 = As[kk][ti * 8 + 0], av1 = As[kk][ti * 8 + 1];
+      float av2 = As[kk][ti * 8 + 2], av3 = As[kk][ti * 8 + 3];
+      float av4 = As[kk][ti * 8 + 4], av5 = As[kk][ti * 8 + 5];
+      float av6 = As[kk][ti * 8 + 6], av7 = As[kk][ti * 8 + 7];
+      float bv0 = Bs[kk][tj * 8 + 0], bv1 = Bs[kk][tj * 8 + 1];
+      float bv2 = Bs[kk][tj * 8 + 2], bv3 = Bs[kk][tj * 8 + 3];
+      float bv4 = Bs[kk][tj * 8 + 4], bv5 = Bs[kk][tj * 8 + 5];
+      float bv6 = Bs[kk][tj * 8 + 6], bv7 = Bs[kk][tj * 8 + 7];
+      acc[0] = fma(av0, bv0, acc[0]); acc[1] = fma(av0, bv1, acc[1]);
+      acc[2] = fma(av0, bv2, acc[2]); acc[3] = fma(av0, bv3, acc[3]);
+      acc[4] = fma(av0, bv4, acc[4]); acc[5] = fma(av0, bv5, acc[5]);
+      acc[6] = fma(av0, bv6, acc[6]); acc[7] = fma(av0, bv7, acc[7]);
+      acc[8] = fma(av1, bv0, acc[8]); acc[9] = fma(av1, bv1, acc[9]);
+      acc[10] = fma(av1, bv2, acc[10]); acc[11] = fma(av1, bv3, acc[11]);
+      acc[12] = fma(av1, bv4, acc[12]); acc[13] = fma(av1, bv5, acc[13]);
+      acc[14] = fma(av1, bv6, acc[14]); acc[15] = fma(av1, bv7, acc[15]);
+      acc[16] = fma(av2, bv0, acc[16]); acc[17] = fma(av2, bv1, acc[17]);
+      acc[18] = fma(av2, bv2, acc[18]); acc[19] = fma(av2, bv3, acc[19]);
+      acc[20] = fma(av2, bv4, acc[20]); acc[21] = fma(av2, bv5, acc[21]);
+      acc[22] = fma(av2, bv6, acc[22]); acc[23] = fma(av2, bv7, acc[23]);
+      acc[24] = fma(av3, bv0, acc[24]); acc[25] = fma(av3, bv1, acc[25]);
+      acc[26] = fma(av3, bv2, acc[26]); acc[27] = fma(av3, bv3, acc[27]);
+      acc[28] = fma(av3, bv4, acc[28]); acc[29] = fma(av3, bv5, acc[29]);
+      acc[30] = fma(av3, bv6, acc[30]); acc[31] = fma(av3, bv7, acc[31]);
+      acc[32] = fma(av4, bv0, acc[32]); acc[33] = fma(av4, bv1, acc[33]);
+      acc[34] = fma(av4, bv2, acc[34]); acc[35] = fma(av4, bv3, acc[35]);
+      acc[36] = fma(av4, bv4, acc[36]); acc[37] = fma(av4, bv5, acc[37]);
+      acc[38] = fma(av4, bv6, acc[38]); acc[39] = fma(av4, bv7, acc[39]);
+      acc[40] = fma(av5, bv0, acc[40]); acc[41] = fma(av5, bv1, acc[41]);
+      acc[42] = fma(av5, bv2, acc[42]); acc[43] = fma(av5, bv3, acc[43]);
+      acc[44] = fma(av5, bv4, acc[44]); acc[45] = fma(av5, bv5, acc[45]);
+      acc[46] = fma(av5, bv6, acc[46]); acc[47] = fma(av5, bv7, acc[47]);
+      acc[48] = fma(av6, bv0, acc[48]); acc[49] = fma(av6, bv1, acc[49]);
+      acc[50] = fma(av6, bv2, acc[50]); acc[51] = fma(av6, bv3, acc[51]);
+      acc[52] = fma(av6, bv4, acc[52]); acc[53] = fma(av6, bv5, acc[53]);
+      acc[54] = fma(av6, bv6, acc[54]); acc[55] = fma(av6, bv7, acc[55]);
+      acc[56] = fma(av7, bv0, acc[56]); acc[57] = fma(av7, bv1, acc[57]);
+      acc[58] = fma(av7, bv2, acc[58]); acc[59] = fma(av7, bv3, acc[59]);
+      acc[60] = fma(av7, bv4, acc[60]); acc[61] = fma(av7, bv5, acc[61]);
+      acc[62] = fma(av7, bv6, acc[62]); acc[63] = fma(av7, bv7, acc[63]);
+    }
+    barrier();
+  }
+
+  for (int r = 0; r < 8; ++r)
+    for (int cc = 0; cc < 8; ++cc) {
+      int row = i0 + ti * 8 + r, col = j0 + tj * 8 + cc;
+      if (row < int(pc.M) && col < int(pc.N))
+        c[pc.offc + row * pc.sc0 + col * pc.sc1] = acc[r * 8 + cc];
+    }
+}
