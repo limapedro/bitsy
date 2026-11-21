@@ -1,5 +1,9 @@
 # GAP_LEDGER — ranked performance gaps
 
+**Final assessment:** see `docs/PERFORMANCE_CEILING.md` (exp_035) for the
+evidence-backed, conditional conclusion on this GPU/backend stack. Every gap
+below remains a measured miss, not an estimate.
+
 **Phase:** TOGISHI Phase 2 (profiling only; no framework optimization yet)
 **Evidence:** `benchmarks/results/three_way.json`, `benchmarks/results/torch_kernels.json`,
 per-op Chrome traces `benchmarks/results/trace_*.json`, `experiments/exp_007/`.

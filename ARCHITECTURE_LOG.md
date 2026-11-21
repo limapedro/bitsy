@@ -1115,6 +1115,27 @@ and the parity failure blocks the approach regardless.
 
 ---
 
+## 2026-11-21 — Performance ceiling assessment (exp_035)
+
+**Context.** After 34 experiments the GEMM ladder, elementwise kernels and
+per-op fusion paths were exhausted; one target (eager end-to-end) was met.
+
+**Options considered.** (1) Another ad-hoc fusion attempt, (2) consolidate all
+measurements into an evidence-backed conditional ceiling conclusion.
+
+**Decision.** Option 2, recorded in `experiments/exp_035/HYPOTHESIS.md`, with
+`docs/PERFORMANCE_CEILING.md` as the deliverable. No kernel change.
+
+**Consequences.** Final numbers reproduce prior reports: eager end-to-end 1.19
+(target met), elementwise eager 0.46–0.54 but captured 0.87–0.93, GEMM 0.71,
+captured full step 0.51 — all still missed. Each gap maps to a measured
+mechanism (host launch, exhausted GEMM ladder, dispatch count vs fused PyTorch
+graph kernels). Further progress requires a step-level graph compiler with
+training-scale parity or tensor-core hardware. The conclusion is explicitly
+conditional on this GPU/driver/backend stack; 44/44 parity holds.
+
+---
+
 ## 2026-11-21 — Training-scale gradient gate in CI (exp_034)
 
 **Context.** exp_019 and exp_033 both passed the 43-case gate while training

@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-21T21:42:36.469473+00:00",
+  "generated_at": "2026-11-21T22:27:17.291956+00:00",
   "gpu": "NVIDIA GeForce GTX 1660 SUPER",
   "torch": "2.11.0+cu126",
   "config": {
@@ -20,54 +20,54 @@
   "measurements": {
     "4096": {
       "add": {
-        "bitsy_eager_ms": 0.058293000038247555,
-        "bitsy_captured_ms": 0.010502000222913921,
-        "torch_eager_ms": 0.01122200017562136,
-        "torch_graph_ms": 0.025840000016614795,
-        "eager_ratio_torch_over_bitsy": 0.19251025283067116,
-        "captured_ratio_graph_over_bitsy": 2.460483666743357
+        "bitsy_eager_ms": 0.05088900012196973,
+        "bitsy_captured_ms": 0.009588999964762479,
+        "torch_eager_ms": 0.011664000048767775,
+        "torch_graph_ms": 0.024394000065512955,
+        "eager_ratio_torch_over_bitsy": 0.22920474013660586,
+        "captured_ratio_graph_over_bitsy": 2.5439566331375203
       },
       "mul": {
-        "bitsy_eager_ms": 0.06117400014773011,
-        "bitsy_captured_ms": 0.011341999925207347,
-        "torch_eager_ms": 0.03055799985304475,
-        "torch_graph_ms": 0.008354000165127218,
-        "eager_ratio_torch_over_bitsy": 0.49952593878526375,
-        "captured_ratio_graph_over_bitsy": 0.7365544189927771
+        "bitsy_eager_ms": 0.05120800022268668,
+        "bitsy_captured_ms": 0.014193000097293407,
+        "torch_eager_ms": 0.009932999964803457,
+        "torch_graph_ms": 0.009923999896273017,
+        "eager_ratio_torch_over_bitsy": 0.1939735963444798,
+        "captured_ratio_graph_over_bitsy": 0.6992179122274166
       },
       "relu": {
-        "bitsy_eager_ms": 0.06349300005240366,
-        "bitsy_captured_ms": 0.010135000047739595,
-        "torch_eager_ms": 0.01117900013923645,
-        "torch_graph_ms": 0.009516999998595566,
-        "eager_ratio_torch_over_bitsy": 0.17606665506449393,
-        "captured_ratio_graph_over_bitsy": 0.9390231824141074
+        "bitsy_eager_ms": 0.047011999995447695,
+        "bitsy_captured_ms": 0.010010999976657331,
+        "torch_eager_ms": 0.012929000076837838,
+        "torch_graph_ms": 0.009643000084906816,
+        "eager_ratio_torch_over_bitsy": 0.27501489147642705,
+        "captured_ratio_graph_over_bitsy": 0.9632404462482689
       }
     },
     "1048576": {
       "add": {
-        "bitsy_eager_ms": 0.11476099985884503,
-        "bitsy_captured_ms": 0.047858000034466386,
-        "torch_eager_ms": 0.04525099997408688,
-        "torch_graph_ms": 0.05062799988081679,
-        "eager_ratio_torch_over_bitsy": 0.39430642840115715,
-        "captured_ratio_graph_over_bitsy": 1.0578795571138682
+        "bitsy_eager_ms": 0.09423399984370917,
+        "bitsy_captured_ms": 0.047962999960873276,
+        "torch_eager_ms": 0.04468400002224371,
+        "torch_graph_ms": 0.04458299983525649,
+        "eager_ratio_torch_over_bitsy": 0.47418129439855994,
+        "captured_ratio_graph_over_bitsy": 0.9295290092701856
       },
       "mul": {
-        "bitsy_eager_ms": 0.11276000004727393,
-        "bitsy_captured_ms": 0.05399799993028864,
-        "torch_eager_ms": 0.044723000028170645,
-        "torch_graph_ms": 0.04647499998100102,
-        "eager_ratio_torch_over_bitsy": 0.39662114233257184,
-        "captured_ratio_graph_over_bitsy": 0.8606800259454089
+        "bitsy_eager_ms": 0.10198400006629527,
+        "bitsy_captured_ms": 0.05123599985381588,
+        "torch_eager_ms": 0.0446409999858588,
+        "torch_graph_ms": 0.044704999891109765,
+        "eager_ratio_torch_over_bitsy": 0.43772552514943197,
+        "captured_ratio_graph_over_bitsy": 0.872531033231711
       },
       "relu": {
-        "bitsy_eager_ms": 0.08812200016109273,
-        "bitsy_captured_ms": 0.03421899979002774,
-        "torch_eager_ms": 0.03370000020368025,
-        "torch_graph_ms": 0.030909999914001673,
-        "eager_ratio_torch_over_bitsy": 0.3824243678318066,
-        "captured_ratio_graph_over_bitsy": 0.9032993396554394
+        "bitsy_eager_ms": 0.07920400006696582,
+        "bitsy_captured_ms": 0.0344470000709407,
+        "torch_eager_ms": 0.03091499995207414,
+        "torch_graph_ms": 0.03153199999360368,
+        "eager_ratio_torch_over_bitsy": 0.39032119496409223,
+        "captured_ratio_graph_over_bitsy": 0.9153772441334854
       }
     }
   },

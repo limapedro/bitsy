@@ -1,0 +1,125 @@
+{
+  "generated_at": "2026-11-21T22:27:14.798451+00:00",
+  "gpu": "NVIDIA GeForce GTX 1660 SUPER",
+  "torch": "2.11.0+cu126",
+  "cuda": "12.6",
+  "bitsy": "0.2.0-bitsy",
+  "vulkan_device": "GTX 1660 SUPER (queried via vulkaninfo)",
+  "method": "wall time with bt.flush()+torch.cuda.synchronize() per iteration; Bitsy device time from Vulkan timestamp queries",
+  "results": [
+    {
+      "op": "add",
+      "elements": 4096,
+      "bitsy_ms": 0.07059999916236848,
+      "torch_ms": 0.027050002245232463,
+      "bitsy_device_ms": 0.0014399999999999999,
+      "bitsy_spread_ms": [
+        0.06289998418651521,
+        0.17369998386129737
+      ],
+      "torch_spread_ms": [
+        0.025899993488565087,
+        0.10350000229664147
+      ],
+      "ratio": 0.38314451226864565,
+      "bitsy_GiB_s": 0.6483904777707126,
+      "torch_GiB_s": 1.692287001401933,
+      "clockMHz": 1530.0
+    },
+    {
+      "op": "mul",
+      "elements": 4096,
+      "bitsy_ms": 0.0678999931551516,
+      "torch_ms": 0.035649980418384075,
+      "bitsy_device_ms": 0.002016,
+      "bitsy_spread_ms": [
+        0.06299998494796455,
+        0.18420000560581684
+      ],
+      "torch_spread_ms": [
+        0.03320001997053623,
+        0.10159998782910407
+      ],
+      "ratio": 0.5250365833899836,
+      "bitsy_GiB_s": 0.674173369692408,
+      "torch_GiB_s": 1.2840502757722112,
+      "clockMHz": 1530.0
+    },
+    {
+      "op": "relu",
+      "elements": 4096,
+      "bitsy_ms": 0.06829999620094895,
+      "torch_ms": 0.046550005208700895,
+      "bitsy_device_ms": 0.001824,
+      "bitsy_spread_ms": [
+        0.066100008552894,
+        0.1669999910518527
+      ],
+      "torch_spread_ms": [
+        0.044899992644786835,
+        0.1204000145662576
+      ],
+      "ratio": 0.6815520907460041,
+      "bitsy_GiB_s": 0.44681668846968386,
+      "torch_GiB_s": 0.6555869969977105,
+      "clockMHz": 1530.0
+    },
+    {
+      "op": "add",
+      "elements": 1048576,
+      "bitsy_ms": 0.10605000716168433,
+      "torch_ms": 0.05684999632649124,
+      "bitsy_device_ms": 0.042336,
+      "bitsy_spread_ms": [
+        0.10000000474974513,
+        0.4219000111334026
+      ],
+      "torch_spread_ms": [
+        0.055899989092722535,
+        0.14359998749569058
+      ],
+      "ratio": 0.5360678216628262,
+      "bitsy_GiB_s": 110.50211417839454,
+      "torch_GiB_s": 206.13457796371466,
+      "clockMHz": 1530.0
+    },
+    {
+      "op": "mul",
+      "elements": 1048576,
+      "bitsy_ms": 0.12399999832268804,
+      "torch_ms": 0.06384999142028391,
+      "bitsy_device_ms": 0.043136,
+      "bitsy_spread_ms": [
+        0.10110001312568784,
+        0.3130999975837767
+      ],
+      "torch_spread_ms": [
+        0.05679999594576657,
+        0.16429999959655106
+      ],
+      "ratio": 0.5149192926126145,
+      "bitsy_GiB_s": 94.50604966545264,
+      "torch_GiB_s": 183.53565504594852,
+      "clockMHz": 1530.0
+    },
+    {
+      "op": "relu",
+      "elements": 1048576,
+      "bitsy_ms": 0.09455000690650195,
+      "torch_ms": 0.04359999729786068,
+      "bitsy_device_ms": 0.029568,
+      "bitsy_spread_ms": [
+        0.08900000830180943,
+        0.302100001135841
+      ],
+      "torch_spread_ms": [
+        0.0425000034738332,
+        0.1385000068694353
+      ],
+      "ratio": 0.46113161409893483,
+      "bitsy_GiB_s": 82.62823299130564,
+      "torch_GiB_s": 179.18579092167366,
+      "clockMHz": 1530.0
+    }
+  ]
+}
