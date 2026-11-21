@@ -354,6 +354,26 @@ static bt_status_t transpose_kernel(const bt_tensor_t* a, const bt_tensor_t* b, 
   return status;
 }
 
+/* exp_017: fused W - lr*grad in one dispatch; lr is a push constant. */
+typedef struct { uint32_t n; float lr; } vk_sgd_pc_t;
+
+bt_status_t bt_vk_sgd_step(const bt_tensor_t* w, const bt_tensor_t* grad,
+                           float lr, bt_tensor_t* out) {
+  if (!g_vk.ready) return bt_fail(BT_ERR_BACKEND, "bt_vk_sgd_step: Vulkan not ready");
+  int64_t n = bt_shape_numel(&out->shape);
+  if (!n) return BT_OK;
+  vk_sgd_pc_t pc = { .n = (uint32_t)n, .lr = lr };
+  VkBuffer buffers[4] = {
+    bt_vk_buffer_of(w->storage->gpu), bt_vk_buffer_of(grad->storage->gpu),
+    bt_vk_buffer_of(out->storage->gpu), bt_vk_buffer_of(w->storage->gpu),
+  };
+  bt_status_t status = dispatch(g_vk.sgd_step_pipeline, buffers, &pc, sizeof(pc),
+                                (uint32_t)((n + 255) / 256), 1, "sgd_step",
+                                3.0 * (double)n * 4.0, 2.0 * (double)n);
+  if (status == BT_OK) bt_storage_bump_version(out->storage);
+  return status;
+}
+
 /* *** convolution *** */
 
 typedef struct {

@@ -151,6 +151,25 @@ Conclusion: the remaining elementwise gap is bandwidth/kernel-bound
   optimizer op chains (or a fused step kernel) to cut dispatch count, then
   re-measure with full parity verification.
 
+## Phase 5/6 update (exp_017)
+
+- Profiler-guided fusion: 66 dispatches/step broke down as 22 scalar
+  elementwise, 20 tiled GEMM, **16 transpose**, 6 vec4 elementwise, 2 rb-vec4
+  GEMM. Added a zero-dispatch transpose **view** for matmul backward (GEMM
+  already consumes strides) and a fused `sgd_step` shader (lr as push
+  constant). **66 → 46 dispatches (30.3%)**, barriers 66 → 52.
+- Captured step 0.296–0.334 → **0.257 ms** (1.15–1.30×; 1.30× only against the
+  slower baseline run), graph ratio 0.20–0.23 → **0.259**. The ≥1.3× and ≥0.28
+  stretch predictions are **not reliably met** and are reported as misses.
+- Eager step 2.626 → **2.46 ms**, ratio vs PyTorch 0.41–0.47 — best eager
+  figure so far, but still far below ≥0.85.
+- Parity: 42/42; CTest 1/1 Vulkan and CPU-only (new SGD op has a CPU path);
+  MNIST W1 diff 1.79e-07, CIFAR conv1 W diff 6.63e-07 — small drift, no
+  systematic change (fused SGD keeps the multiply-then-subtract order).
+- Ranked remaining cost: **~20 tiled GEMM dispatches**, many of them tiny
+  ones-vector reductions from the interim autograd. Next: a dedicated
+  reduction kernel and fused loss/softmax backward, with parity re-verified.
+
 ## Honesty
 
 - Timestamp GPU time is a proxy, not the 1000-repeat isolated kernel time the

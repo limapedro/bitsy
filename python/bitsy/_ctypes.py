@@ -78,6 +78,8 @@ for _name in ("relu", "sigmoid", "tanh", "exp", "log"):
   _fn(f"bt_{_name}", [_ptr, ctypes.POINTER(_ptr)], ctypes.c_int)
 _fn("bt_matmul", [_ptr, _ptr, ctypes.POINTER(_ptr)], ctypes.c_int)
 _fn("bt_transpose", [_ptr, ctypes.POINTER(_ptr)], ctypes.c_int)
+_fn("bt_tensor_transpose_view", [_ptr, ctypes.POINTER(_ptr)], ctypes.c_int)
+_fn("bt_sgd_step", [_ptr, _ptr, ctypes.c_float, ctypes.POINTER(_ptr)], ctypes.c_int)
 _fn("bt_tensor_view", [_ptr, _i64p, ctypes.c_int64, ctypes.POINTER(_ptr)], ctypes.c_int)
 _fn("bt_conv2d", [_ptr, _ptr, _ptr, _ConvParams, ctypes.POINTER(_ptr)], ctypes.c_int)
 _fn("bt_conv2d_backward_x", [_ptr, _ptr, _Shape, _ConvParams, ctypes.POINTER(_ptr)], ctypes.c_int)
@@ -210,6 +212,20 @@ def conv2d_backward_b(dy:Tensor, out_channels:int) -> Tensor:
   out = _ptr()
   _check(_lib.bt_conv2d_backward_b(_ptr(dy._ptr), out_channels, ctypes.byref(out)))
   return _from_handle(out, dy._device)
+
+def sgd_step(w:Tensor, grad:Tensor, lr:float) -> Tensor:
+  """Fused w - lr*grad in one dispatch (exp_017)."""
+  out = _ptr()
+  _check(_lib.bt_sgd_step(_ptr(w._ptr), _ptr(grad._ptr), ctypes.c_float(lr), ctypes.byref(out)))
+  return Tensor(out.value, w.shape, w._device)
+
+def transpose_view(a:Tensor) -> Tensor:
+  """Zero-dispatch 2D transpose view (shares storage)."""
+  out = _ptr()
+  _check(_lib.bt_tensor_transpose_view(_ptr(a._ptr), ctypes.byref(out)))
+  shape = _lib.bt_tensor_shape(out)
+  dims = tuple(int(shape.contents.dims[i]) for i in range(int(shape.contents.ndim)))
+  return Tensor(out.value, dims, a._device)
 
 def transpose(a:Tensor) -> Tensor:
   out = _ptr()

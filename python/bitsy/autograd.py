@@ -102,7 +102,8 @@ class Tensor:
 
   def __matmul__(self, other) -> "Tensor":
     out = C.matmul(self._t, other._t)
-    aT, bT = C.transpose(self._t), C.transpose(other._t)
+    # exp_017: zero-dispatch strided views instead of materialising transposes.
+    aT, bT = C.transpose_view(self._t), C.transpose_view(other._t)
     def back(g):
       return (self._op(C.matmul(g._t, bT), (), None),
               self._op(C.matmul(aT, g._t), (), None))

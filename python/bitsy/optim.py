@@ -18,6 +18,6 @@ class SGD:
   def step(self) -> None:
     for p in self.params:
       if p.grad is None: continue
-      lr = Tensor.from_numpy(np.array(self.lr, np.float32), p.device)
-      p._t = C.sub(p._t, C.mul(p.grad._t, lr._t))
+      # exp_017: fused W - lr*grad (one dispatch, lr as a push constant).
+      p._t = C.sgd_step(p._t, p.grad._t, self.lr)
       p.grad = None

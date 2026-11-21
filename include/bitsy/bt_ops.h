@@ -36,6 +36,10 @@ BT_API bt_status_t bt_matmul(const bt_tensor_t* a, const bt_tensor_t* b,
 /* 2D transpose: (M,N) -> (N,M). Used by matmul backward. */
 BT_API bt_status_t bt_transpose(const bt_tensor_t* a, bt_tensor_t** out);
 
+/* exp_017: fused SGD update out = w - lr*grad (one dispatch, scalar lr). */
+BT_API bt_status_t bt_sgd_step(const bt_tensor_t* w, const bt_tensor_t* grad,
+                               float lr, bt_tensor_t** out);
+
 #ifdef __cplusplus
 }
 #endif

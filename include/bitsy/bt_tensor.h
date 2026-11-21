@@ -63,6 +63,12 @@ BT_API bt_status_t bt_tensor_copy_to_host(const bt_tensor_t* tensor, void* dst,
 BT_API bt_status_t bt_tensor_view(const bt_tensor_t* tensor, const int64_t* dims,
                                   int64_t ndim, bt_tensor_t** out);
 
+/* exp_017: 2D transpose as a strided view: shares storage, no copy, no Vulkan
+ * dispatch. GEMM consumes tensor strides directly, so backward can use this
+ * instead of materialising a transposed buffer. */
+BT_API bt_status_t bt_tensor_transpose_view(const bt_tensor_t* tensor,
+                                            bt_tensor_t** out);
+
 #ifdef __cplusplus
 }
 #endif

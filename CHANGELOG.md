@@ -6,6 +6,19 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added/Changed (TOGISHI Phase 5/6, exp_017)
+
+- `bt_tensor_transpose_view()` / `C.transpose_view()`: zero-dispatch 2D
+  transpose view; matmul backward now uses it instead of materialising a
+  transposed buffer.
+- Fused `sgd_step.comp` + `bt_sgd_step()` API: `w - lr*grad` in one dispatch
+  with lr as a push constant (CPU-only path uses existing ops).
+- Dispatch count per MLP step 66 → 46 (30.3%); captured step 0.296–0.334 →
+  0.257 ms (1.15–1.30×), graph ratio 0.20–0.23 → 0.259 (≥0.28 prediction
+  missed); eager step 2.626 → 2.46 ms, ratio 0.41–0.47 (best yet). Parity
+  42/42, CTest both builds, MNIST/CIFAR drift < 2e-7. Details in
+  `experiments/exp_017/FINDINGS.md`.
+
 ### Changed (TOGISHI Phase 6, exp_016)
 
 - Device-side unbroadcast reductions for 2D gradients replace the CPU roundtrip
