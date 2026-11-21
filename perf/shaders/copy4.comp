@@ -1,0 +1,14 @@
+#version 450
+/* 4 vec4 per lane = 64 B, more memory-level parallelism than copy.comp. */
+layout(local_size_x = 256) in;
+layout(std430, binding = 0) readonly buffer In { vec4 src[]; };
+layout(std430, binding = 1) writeonly buffer Out { vec4 dst[]; };
+layout(push_constant) uniform PC { uint n; } pc;
+void main() {
+  uint i = gl_GlobalInvocationID.x * 4u;
+  if (i + 3u >= pc.n) return;
+  dst[i] = src[i];
+  dst[i + 1u] = src[i + 1u];
+  dst[i + 2u] = src[i + 2u];
+  dst[i + 3u] = src[i + 3u];
+}

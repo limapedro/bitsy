@@ -1,0 +1,17 @@
+{
+  "device": "NVIDIA GeForce GTX 1660 SUPER",
+  "timestampPeriodNs": 1.000,
+  "maxComputeSharedMemorySize": 49152,
+  "maxPushConstantsSize": 256,
+  "maxComputeWorkGroupInvocations": 1024,
+  "copy": {"ms": 7.277664, "GBs": 295.079, "pctTheory": 87.821},
+  "copy4": {"ms": 1.982560, "GBs": 1083.187, "pctTheory": 322.377},
+  "fma32": {"ms": 0.144659, "GFLOPs": 927.820},
+  "fma32x8": {"ms": 0.261903, "GFLOPs": 4099.768},
+  "fma32x16": {"ms": 0.037943, "GFLOPs": 3537.378},
+  "shared": {"s1": 0.004717, "s2": 0.004769, "s32": 0.011712},
+  "reads": {"l2read": {"ms": 0.006191, "GBs": 169.379}, "dramread": {"ms": 0.221264, "GBs": 303.298}},
+  "emptyDispatchMs": 0.003796,
+  "cpu": {"barrierUs": 0.2694, "dispatchUs": 0.3168, "submitFenceUs": 35.1565, "timelineUs": 37.4405, "allocFreeUs": 390.3626},
+  "pcie": {"ms": 10.617830, "GBs": 12.641}
+}
