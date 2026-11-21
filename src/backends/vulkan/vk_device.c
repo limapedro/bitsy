@@ -188,8 +188,12 @@ bt_status_t bt_vk_init(void) {
   VKCHECK(vkCreateCommandPool(g_vk.device, &cpi, NULL, &g_vk.pool));
   VkCommandBufferAllocateInfo ai = { .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
                                      .commandPool = g_vk.pool, .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-                                     .commandBufferCount = 1 };
-  VKCHECK(vkAllocateCommandBuffers(g_vk.device, &ai, &g_vk.cmd));
+                                     .commandBufferCount = 2 };
+  VkCommandBuffer cmds[2];
+  VKCHECK(vkAllocateCommandBuffers(g_vk.device, &ai, cmds));
+  g_vk.cmd = cmds[0];
+  g_vk.main_cmd = cmds[0];
+  g_vk.replay_cmd = cmds[1];
   VkFenceCreateInfo fi = { .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO };
   VKCHECK(vkCreateFence(g_vk.device, &fi, NULL, &g_vk.fence));
   VkSemaphoreTypeCreateInfo sti = {
@@ -244,7 +248,8 @@ void bt_vk_shutdown(void) {
   vkDestroyDescriptorSetLayout(g_vk.device, g_vk.set_layout, NULL);
   vkDestroyFence(g_vk.device, g_vk.fence, NULL);
   vkDestroySemaphore(g_vk.device, g_vk.timeline, NULL);
-  vkFreeCommandBuffers(g_vk.device, g_vk.pool, 1, &g_vk.cmd);
+  VkCommandBuffer both_cmds[2] = { g_vk.cmd, g_vk.replay_cmd };
+  vkFreeCommandBuffers(g_vk.device, g_vk.pool, 2, both_cmds);
   vkDestroyCommandPool(g_vk.device, g_vk.pool, NULL);
   vkDestroyDevice(g_vk.device, NULL);
   vkDestroyInstance(g_vk.instance, NULL);
@@ -256,6 +261,7 @@ const char* bt_vk_device_name(void) { return g_vk.ready ? g_vk.props.deviceName 
 
 /* Async submit: signal a timeline value, do not block the CPU. */
 bt_status_t bt_vk_flush(void) {
+  if (g_vk.capturing) return BT_OK; // capture owns the command buffer
   if (!g_vk.ready || !g_vk.recording) return BT_OK;
 
   VKCHECK(vkEndCommandBuffer(g_vk.cmd));
@@ -340,3 +346,45 @@ void bt_vk_timestamp_end(void) {
 }
 
 double bt_vk_device_time_ms(void) { return g_vk.device_time_ms; }
+
+bt_status_t bt_vk_capture_begin(void) {
+  if (!g_vk.ready) return bt_fail(BT_ERR_BACKEND, "capture_begin: Vulkan not ready");
+  if (g_vk.capturing) return bt_fail(BT_ERR_INVALID_ARGUMENT, "capture_begin: already capturing");
+  bt_status_t status = bt_vk_flush();
+  if (status != BT_OK) return status;
+  bt_vk_hazard_reset();
+  g_vk.set_index = 0;
+  g_vk.query_index = 0;
+  VkCommandBufferBeginInfo bi = { .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+                                  .flags = VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT };
+  VKCHECK(vkBeginCommandBuffer(g_vk.replay_cmd, &bi));
+  g_vk.cmd = g_vk.replay_cmd;
+  g_vk.recording = 1;
+  g_vk.capturing = 1;
+  return BT_OK;
+}
+
+bt_status_t bt_vk_capture_end(void) {
+  if (!g_vk.capturing) return bt_fail(BT_ERR_INVALID_ARGUMENT, "capture_end: no capture active");
+  VKCHECK(vkEndCommandBuffer(g_vk.replay_cmd));
+  g_vk.cmd = g_vk.main_cmd;
+  g_vk.recording = 0;
+  g_vk.capturing = 0;
+  return BT_OK;
+}
+
+bt_status_t bt_vk_replay(int count) {
+  if (!g_vk.ready || count <= 0) return bt_fail(BT_ERR_INVALID_ARGUMENT, "replay: bad arguments");
+  if (g_vk.capturing) return bt_fail(BT_ERR_INVALID_ARGUMENT, "replay: capture still active");
+  for (int i = 0; i < count; ++i) {
+    uint64_t value = ++g_vk.timeline_value;
+    VkTimelineSemaphoreSubmitInfo tsi = {
+      .sType = VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO,
+      .signalSemaphoreValueCount = 1, .pSignalSemaphoreValues = &value };
+    VkSubmitInfo si = { .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO, .pNext = &tsi,
+                        .commandBufferCount = 1, .pCommandBuffers = &g_vk.replay_cmd,
+                        .signalSemaphoreCount = 1, .pSignalSemaphores = &g_vk.timeline };
+    VKCHECK(vkQueueSubmit(g_vk.queue, 1, &si, VK_NULL_HANDLE));
+  }
+  return BT_OK;
+}

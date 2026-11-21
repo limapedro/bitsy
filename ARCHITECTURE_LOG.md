@@ -631,3 +631,27 @@ speed prediction was not met overall (1.06–1.29×), recorded in
 `experiments/exp_012/FINDINGS.md`. Parity stays 42/42. This locks in the
 decision that further elementwise work should not chase bandwidth; the next
 target is submission overhead.
+
+---
+
+## 2026-11-21 — Record-once capture and timeline replay (exp_013)
+
+**Context.** exp_012 showed kernels at ~96% of DRAM ceiling while eager wall
+ratios stayed 0.43–0.49; ~36 µs/op of submit+fence remained.
+
+**Options considered.** (1) Accept the overhead, (2) add a dedicated reusable
+command buffer that is recorded once and submitted many times with timeline
+signals, keeping one host wait.
+
+**Decision.** Option 2, recorded in `experiments/exp_013/HYPOTHESIS.md`. New API
+`bt_vulkan_capture_begin/end/replay` flips recording into a reusable command
+buffer, submits it N times, and uses the existing timeline wait as the single
+completion point. Input lifetime during replay is documented publicly.
+
+**Consequences.** A 20-add chain drops 1.080 → 0.899 ms/chain (1.20×), and
+Bitsy replay versus PyTorch CUDA graph replay is **1.00×** — the first measured
+performance-parity result, limited to captured execution. The ≥1.5× prediction
+was not met because GPU work is now the floor (recorded as a negative result).
+Parity stays 42/42 and captured kernels are bit-identical. Default eager ratios
+are unchanged; the next step is to make deferred submission the default for
+chains and measure end-to-end training steps.

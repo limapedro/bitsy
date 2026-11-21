@@ -43,6 +43,13 @@ BT_API bt_status_t bt_vulkan_flush(void);
  * for wall-time comparisons; readback also waits internally. */
 BT_API bt_status_t bt_vulkan_wait(void);
 
+/* Record-once submission: capture dispatches between begin/end, then replay
+ * the captured command buffer `count` times with one timeline signal each.
+ * Inputs must stay alive until bt_vulkan_wait() completes. */
+BT_API bt_status_t bt_vulkan_capture_begin(void);
+BT_API bt_status_t bt_vulkan_capture_end(void);
+BT_API bt_status_t bt_vulkan_replay(int count);
+
 /* GPU time of the last flushed batch, measured with timestamp queries. */
 BT_API double bt_vulkan_device_time_ms(void);
 

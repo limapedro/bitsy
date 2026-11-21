@@ -29,6 +29,23 @@ path: a 20-add chain now moves 240 MiB in 0.858 ms device time = **293 GB/s,
 0.43–0.49 because ~36 µs/op of submit+fence overhead dominates. See
 `experiments/exp_012/FINDINGS.md`.
 
+## Captured execution (exp_013)
+
+20 chained adds of 1M elements, 1860 MHz (both paths measured in the same run),
+median per chain:
+
+| path | ms per chain | ratio vs PyTorch graph |
+|---|---:|---:|
+| Bitsy re-record each iteration | 1.080 | — |
+| Bitsy capture + replay | **0.899** | **1.00×** |
+| PyTorch eager | 0.913 | — |
+| PyTorch CUDA graph replay | 0.900 | 1.00× |
+
+Capture+replay is 1.20× faster than re-recording, and **matches PyTorch CUDA
+graph replay exactly (ratio 1.00)**. This applies only to the captured path;
+the ordinary eager API still shows the ratios in the tables above. Details in
+`experiments/exp_013/FINDINGS.md`.
+
 ## GEMM results (updated 2026-11-21, exp_008)
 
 `python benchmarks/ops/gemm.py`, median of 30 iterations after 5 warm-ups,

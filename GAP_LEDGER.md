@@ -89,6 +89,17 @@ Conclusion: the remaining elementwise gap is bandwidth/kernel-bound
   overhead (timeline semaphore without per-op host wait in the real API,
   record-once command buffers), not more elementwise tuning.
 
+## Phase 5 update (exp_013)
+
+- Record-once Vulkan command buffers + timeline replay: 20-add chain 1.080 →
+  0.899 ms/chain (1.20×). Bitsy replay versus PyTorch CUDA graph replay is
+  **1.00×** — first measured performance parity, but only on the captured
+  execution path. Default eager API ratios are unchanged (elementwise
+  0.40–0.64, GEMM 0.71 at 1530 MHz).
+- The ≥1.5× replay speed prediction was not met because GPU work (~0.86 ms) is
+  now the floor. Next: make deferred/captured submission the default for
+  chains and measure end-to-end training steps.
+
 ## Honesty
 
 - Timestamp GPU time is a proxy, not the 1000-repeat isolated kernel time the
