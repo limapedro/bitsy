@@ -50,6 +50,11 @@ BT_API bt_status_t bt_vulkan_capture_begin(void);
 BT_API bt_status_t bt_vulkan_capture_end(void);
 BT_API bt_status_t bt_vulkan_replay(int count);
 
+/* exp_014: number of host-visible staging buffer allocations since init.
+ * Deferred transfers are the default; this stops growing after the pool warms
+ * up. Set BITSY_DEFERRED_UPLOAD=0 to restore the synchronous A/B baseline. */
+BT_API unsigned long bt_vulkan_stage_alloc_count(void);
+
 /* GPU time of the last flushed batch, measured with timestamp queries. */
 BT_API double bt_vulkan_device_time_ms(void);
 

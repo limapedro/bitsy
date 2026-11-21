@@ -655,3 +655,31 @@ was not met because GPU work is now the floor (recorded as a negative result).
 Parity stays 42/42 and captured kernels are bit-identical. Default eager ratios
 are unchanged; the next step is to make deferred submission the default for
 chains and measure end-to-end training steps.
+
+---
+
+## 2026-11-21 — Deferred transfers as the default (exp_014)
+
+**Context.** exp_013's 1.00× result required explicit capture. The ordinary API
+still paid two forced flush+waits per training step from `from_numpy()`, and a
+fresh staging buffer allocation on every upload/readback. No end-to-end
+training wall-time measurement existed.
+
+**Options considered.** (1) Keep synchronous uploads, (2) pool host-visible
+staging buffers, enqueue the copy into the current command buffer, and release
+the slot only after the submitted timeline value is waited on — making the
+default API stream-like (block only on readback).
+
+**Decision.** Option 2, recorded in `experiments/exp_014/HYPOTHESIS.md`. Staging
+slots transition used → submitted (on flush) → pooled (on wait), which prevents
+reuse while the GPU can still access a copy. `BITSY_DEFERRED_UPLOAD=0` keeps the
+old path as an A/B escape hatch. The default was flipped to deferred because
+the speed prediction was met.
+
+**Consequences.** Training-step wall time drops 9.575 → 3.220 ms/step at matched
+1530 MHz (2.97×), with 0 staging allocations during 200 timed steps. The ≥0.85
+end-to-end throughput target is **missed** (0.34–0.37) — the remainder is
+per-op Python/ctypes dispatch and autograd construction, recorded as a negative
+result. Numeric parity holds: 42/42, MNIST report identical, CIFAR Bitsy losses
+bit-identical between modes; the small torch-side variation is cuDNN benchmark
+nondeterminism. Next: full-step capture/replay against PyTorch CUDA graphs.

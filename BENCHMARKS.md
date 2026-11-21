@@ -92,6 +92,26 @@ target still missed.** Raw snapshots: `experiments/exp_008/`, `exp_009/`,
 **1.97x faster** with fusion; first fused pointwise kernel, not yet a general
 fusion pass. Raw JSON: `experiments/exp_004/fusion.json`.
 
+## End-to-end training step (updated 2026-11-21, exp_014)
+
+`python benchmarks/models/train_step_bench.py`: MLP 784→64→10, batch 64,
+synthetic data, 20 warmup + 200 timed steps, median of per-step wall time.
+Bitsy's implicit readback sync and PyTorch's `synchronize()`+`item()` are both
+inside the timed region. Deferred transfers are now the default;
+`BITSY_DEFERRED_UPLOAD=0` restores the synchronous baseline.
+
+| mode | clock | Bitsy ms/step | PyTorch ms/step | PyTorch/Bitsy throughput | stage allocs / 200 steps |
+|---|---:|---:|---:|---:|---:|
+| baseline (`=0`) | 1530 MHz | 9.575 | 1.215 | 0.127 | 0 (old path) |
+| deferred (default) | 1530 MHz | 3.220 | 1.200 | **0.373** | **0** |
+
+**2.97× faster** at matched clock (a second pair gave 2.83× at a lower deferred
+clock), and zero staging allocations during the timed steps. **The ≥0.85
+end-to-end target is still missed (0.34–0.37)**: the remaining ~3.1 ms/step is
+per-op Python/ctypes dispatch and autograd construction, not transfer sync.
+Numeric parity is unchanged — MNIST/CIFAR bitsy losses are bit-identical
+between modes (see `experiments/exp_014/FINDINGS.md`).
+
 ## Comparison target
 
 PyTorch CUDA on the **same** GTX 1660 Super, in the same machine, with warm-up,
