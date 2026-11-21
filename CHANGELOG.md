@@ -6,6 +6,15 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added (TOGISHI Phase 2, exp_034)
+
+- Required training-scale gradient parity case (`tests/parity/train_scale.py`,
+  batch 64, 784→64→10) in run.py and CI: suite now **44/44**. Proven to fail on
+  an injected wrong gradient. It exposed and fixed a real bug: `ce_loss.comp`
+  summed only the first 256 of 640 elements (loss 0.9907 vs 2.4377). MNIST/CIFAR
+  loss curves and W1 diffs unchanged; no performance claim. Details in
+  `experiments/exp_034/FINDINGS.md`.
+
 ### Reverted (TOGISHI Phase 5/6, exp_033)
 
 - Fused softmax-cross-entropy backward cut dispatches 19 → 14 and captured step

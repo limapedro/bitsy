@@ -1112,3 +1112,24 @@ small-config gradient gate missed a training-scale gradient error, so a
 training-scale gate in CI is now a locked prerequisite for further autograd or
 view changes. The ≥1.05× / ≥0.50 captured predictions were not reliably met
 and the parity failure blocks the approach regardless.
+
+---
+
+## 2026-11-21 — Training-scale gradient gate in CI (exp_034)
+
+**Context.** exp_019 and exp_033 both passed the 43-case gate while training
+diverged; ARCHITECTURE_log locked a training-scale gate as a prerequisite.
+
+**Options considered.** (1) Extend the small gradient-flow config, (2) add a
+dedicated training-configuration case (batch 64, 784→64→10) to run.py and CI.
+
+**Decision.** Option 2, recorded in `experiments/exp_034/HYPOTHESIS.md`.
+
+**Consequences.** Suite is now 44/44. The gate passes on the clean tree and
+fails on an injected wrong gradient (loss still passing) — the exact signature
+of the two earlier misses. It immediately exposed a real bug: `ce_loss.comp`
+summed only the first 256 of 640 `onehot*log_softmax` products (Bitsy loss
+0.9907 vs PyTorch 2.4377); fixed by looping over all elements. MNIST/CIFAR
+loss curves and W1 diffs unchanged (3.278e-07 / 7.302e-07). No performance
+change claimed (captured 0.1443 ms, eager 0.892 ms). Step-level fusion can now
+proceed with a gate that would have caught exp_033.

@@ -18,6 +18,7 @@ from tests.parity.cases import BINARY, CASES, ParityCase, UNARY, VALUE_SETS  # n
 from tests.parity.compare import compare  # noqa: E402
 from tests.parity.config import CONFIG, ParityConfig  # noqa: E402
 from tests.parity.grad_flow import CONFIG as GF_CONFIG, compare as grad_flow_compare  # noqa: E402
+from tests.parity.train_scale import CONFIG as TS_CONFIG, compare as train_scale_compare  # noqa: E402
 from tests.parity.tolerances import tolerance_for  # noqa: E402
 
 # *** environment ***
@@ -106,6 +107,13 @@ def run(config:ParityConfig = CONFIG) -> int:
   results.append({"name": "end_to_end_gradient_flow", "grad_flow": gf,
                   "passed": gf["passed"]})
   print(f"[{'PASS' if gf['passed'] else 'FAIL'}] end_to_end_gradient_flow")
+
+  # exp_034: training-scale gate (batch 64, 784->64->10) — the small-config
+  # gradient gate missed two training-scale failures (exp_019, exp_033).
+  ts = train_scale_compare(TS_CONFIG)
+  results.append({"name": "training_scale_gradients", "train_scale": ts,
+                  "passed": ts["passed"]})
+  print(f"[{'PASS' if ts['passed'] else 'FAIL'}] training_scale_gradients")
 
   passed = sum(r["passed"] for r in results)
   report = {

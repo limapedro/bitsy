@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-11-21T21:56:08.231006+00:00",
-  "gpu_clock_mhz": 1740.0,
+  "generated_at": "2026-11-21T22:16:14.652884+00:00",
+  "gpu_clock_mhz": 1590.0,
   "environment": {
     "torch": "2.11.0+cu126",
     "gpu": "NVIDIA GeForce GTX 1660 SUPER",
@@ -19,22 +19,22 @@
     "result_path": "E:\\__PROJECTS__\\Hagane\\benchmarks\\results\\graph_step.json"
   },
   "numeric_check": {
-    "eager_loss": 0.9906730651855469,
-    "captured_loss": 0.9906730651855469,
+    "eager_loss": 2.437649965286255,
+    "captured_loss": 2.437649965286255,
     "abs_diff": 0.0
   },
   "bitsy": {
-    "median_ms": 0.13938499992946163,
-    "stdev_ms": 0.009013723470414863,
-    "min_ms": 0.13214599981438369,
-    "max_ms": 0.1566500001354143
+    "median_ms": 0.14426050009205937,
+    "stdev_ms": 0.004817152457921122,
+    "min_ms": 0.1352690000203438,
+    "max_ms": 0.15160100010689348
   },
   "torch": {
-    "median_ms": 0.06800000017392449,
-    "stdev_ms": 0.006644502734376824,
-    "min_ms": 0.06617600010940805,
-    "max_ms": 0.08892400015611202
+    "median_ms": 0.07967649988131598,
+    "stdev_ms": 0.0027943684616581624,
+    "min_ms": 0.0786139999399893,
+    "max_ms": 0.08748299995204434
   },
-  "graph_throughput_ratio_torch_over_bitsy": 0.48785737495668224,
+  "graph_throughput_ratio_torch_over_bitsy": 0.5523098826807801,
   "note": "replay uses static input buffers (CUDA-graph semantics); timed region is N replays + one completion wait; Bitsy captures once, and after the first wait recycled staging resources may make later replays stale (timing only - numerics verified separately by numeric_check)"
 }
