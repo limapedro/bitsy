@@ -180,6 +180,16 @@ Linear was worth ~1.6×. The captured graph path improved from 0.30 to 0.34–0.
 but remains well below 0.85. Standalone GEMM (0.72) and elementwise (≤0.54)
 targets are still missed. See `experiments/exp_024/FINDINGS.md`.
 
+## exp_034 — training-scale gradient gate (CI)
+
+`tests/parity/train_scale.py` is now a required case (batch 64, 784→64→10), so
+the suite is **44/44** and CI checks training-scale loss, gradients and
+post-step parameters. Proven to fail on an injected wrong gradient. It
+immediately exposed a real bug: `ce_loss.comp` summed only the first 256 of 640
+elements (loss 0.9907 vs 2.4377); fixed by looping over all elements. MNIST/CIFAR
+loss curves and W1 diffs unchanged after the fix. No performance change claimed.
+See `experiments/exp_034/FINDINGS.md`.
+
 ## exp_033 — fused softmax-cross-entropy backward (reverted)
 
 A fused output-layer backward kernel cut dispatches 19 → 14 and captured step

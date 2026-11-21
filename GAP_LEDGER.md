@@ -398,6 +398,20 @@ Conclusion: the remaining elementwise gap is bandwidth/kernel-bound
   Open gaps unchanged: GEMM 0.68, elementwise eager 0.39–0.52, captured graph
   ~0.46–0.49. Eager end-to-end target still MET.
 
+## Phase 2 update (exp_034)
+
+- Added training-scale gradient parity gate (batch 64, 784→64→10) to run.py and
+  CI: **44/44** cases. Proven sensitive to an injected wrong gradient with the
+  same signature as exp_019/exp_033. The coverage gap that allowed two parity
+  failures is closed.
+- The new gate found a real numeric bug: `ce_loss.comp` summed only the first
+  256 of 640 `onehot*log_softmax` products (loss 0.9907 vs 2.4377). Fixed with a
+  strided loop; MNIST/CIFAR loss curves and W1 diffs unchanged.
+- Performance unchanged: captured step 0.1443 ms, eager 0.892 ms (ratio 1.165),
+  GEMM/elementwise unchanged. No speed claim.
+- Open gaps unchanged: captured graph ~0.46–0.55, standalone GEMM ~0.68,
+  eager elementwise 0.39–0.52. Step-level fusion can resume under the gate.
+
 ## Honesty
 
 - Timestamp GPU time is a proxy, not the 1000-repeat isolated kernel time the

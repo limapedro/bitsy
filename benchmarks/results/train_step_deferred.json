@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-21T21:56:13.199213+00:00",
+  "generated_at": "2026-11-21T22:16:19.513318+00:00",
   "gpu_clock_mhz": 1530.0,
   "environment": {
     "torch": "2.11.0+cu126",
@@ -19,18 +19,18 @@
     "result_path": "E:\\__PROJECTS__\\Hagane\\benchmarks\\results\\train_step_deferred.json"
   },
   "bitsy": {
-    "median_ms": 0.8063499990385026,
-    "stdev_ms": 0.3347199909302795,
-    "p10_ms": 0.6921000021975487,
-    "p90_ms": 1.170099974842742
+    "median_ms": 0.8922999986680225,
+    "stdev_ms": 0.2087967315269785,
+    "p10_ms": 0.7633999921381474,
+    "p90_ms": 1.2006000033579767
   },
   "torch": {
-    "median_ms": 1.031799998600036,
-    "stdev_ms": 0.2919168928272092,
-    "p10_ms": 0.7959999784361571,
-    "p90_ms": 1.4343000075314194
+    "median_ms": 1.0393499978818,
+    "stdev_ms": 0.21360076166224534,
+    "p10_ms": 0.770999991800636,
+    "p90_ms": 1.3652000052388757
   },
-  "throughput_ratio_torch_over_bitsy": 1.2795932285364437,
+  "throughput_ratio_torch_over_bitsy": 1.1647988338375947,
   "bitsy_stage_allocs_during_timed_steps": 0,
   "note": "wall time includes one completion wait per step on each side; stage_allocs is the host-visible staging allocation count during the 200 timed steps (after warmup)"
 }

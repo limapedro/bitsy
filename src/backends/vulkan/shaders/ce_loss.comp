@@ -9,7 +9,9 @@ layout(push_constant) uniform PC { uint n; float invB; uint offls, offoh, offo; 
 shared float partial[256];
 void main() {
   uint tid = gl_LocalInvocationID.x;
-  float v = (tid < pc.n) ? ls[pc.offls + tid] * onehot[pc.offoh + tid] : 0.0;
+  float v = 0.0;
+  for (uint k = tid; k < pc.n; k += 256)
+    v += ls[pc.offls + k] * onehot[pc.offoh + k];
   partial[tid] = v;
   barrier();
   for (uint stride = 128; stride > 0; stride >>= 1) {
