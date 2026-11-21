@@ -557,3 +557,28 @@ kernel with identical numerics.
 missed** and recorded as such in `experiments/exp_009/FINDINGS.md`. An initial
 incorrect vec4 mapping produced up to 216 absolute error; it was caught by a
 direct PyTorch comparison and fixed before any commit. Parity stays 42/42.
+
+---
+
+## 2026-11-21 — On-disk autotune cache; 16-deep K step rejected (exp_010)
+
+**Context.** exp_009 left the GEMM target missed and listed larger K steps and
+a runtime autotune cache as the next rungs.
+
+**Options considered.** (1) Keep the hard-coded size threshold, (2) write an
+on-disk per-shape cache from measured benchmarks, (3) add a 16-deep K-step
+variant, (4) both 2 and 3.
+
+**Decision.** Option 4, recorded in `experiments/exp_010/HYPOTHESIS.md`.
+`benchmarks/ops/gemm.py` variants are measured by `gemm_tune.py`, which writes
+`benchmarks/results/gemm_autotune.txt` (`M N K variant`). The C runtime reads
+it on each matmul; a miss falls back to the measured size threshold. Variant 5
+(16-deep K, 32 KB shared memory) is selectable but not auto-selected.
+
+**Consequences.** The cache works: profiler traces show `gemm_tiled` at 256²
+and `gemm_rb_vec4` at 1024². The k16 variant is **1.59× slower** than the
+8-deep kernel (1.562 vs 0.985 ms in the tuning run) and is recorded as a
+negative result. Final ratio is 0.69–0.78 depending on GPU clock
+(1530–1950 MHz sampled), still below the 0.80 target. Two bugs found while
+building the cache (static env caching, GPU name with spaces in the key) were
+fixed before commit. Parity remains 42/42.

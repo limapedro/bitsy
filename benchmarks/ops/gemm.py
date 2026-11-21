@@ -60,7 +60,7 @@ def bench(n:int, config:GemmConfig) -> dict:
 
 def run(config:GemmConfig = CONFIG) -> int:
   mode = { "0": "naive", "1": "tiled", "2": "rb", "3": "rb_splitk",
-           "4": "rb_vec4" }.get(
+           "4": "rb_vec4", "5": "rb_vec4_k16" }.get(
       os.environ.get("BT_GEMM_VARIANT", ""), "auto")
   rows = [bench(n, config) for n in config.sizes]
   report = {"generated_at": datetime.now(timezone.utc).isoformat(),

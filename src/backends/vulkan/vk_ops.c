@@ -4,6 +4,7 @@
 #include <windows.h>
 #endif
 #include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
 
 #include "../../core/conv_dispatch_internal.h"
@@ -150,6 +151,29 @@ typedef struct {
   int32_t k_start, k_len;
 } vk_matmul_pc_t;
 
+/* On-disk autotune cache written by benchmarks/ops/gemm_tune.py.
+ * Format: "M N K variant" (one shape per line). Returns -1 on a miss. */
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable : 4996) /* fscanf: this probe uses a fixed local cache format */
+#endif
+static int cached_gemm_variant(uint32_t m, uint32_t n, uint32_t k) {
+  const char* path = getenv("BITSY_GEMM_CACHE");
+  if (!path) path = "benchmarks/results/gemm_autotune.txt";
+  FILE* f = fopen(path, "r");
+  if (!f) return -1;
+  uint32_t cm, cn, ck;
+  int variant, found = -1;
+  while (fscanf(f, "%u %u %u %d", &cm, &cn, &ck, &variant) == 4) {
+    if (cm == m && cn == n && ck == k) { found = variant; break; }
+  }
+  fclose(f);
+  return found;
+}
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
+
 static bt_status_t matmul_kernel(const bt_tensor_t* a, const bt_tensor_t* b, bt_tensor_t* out) {
   if (!g_vk.ready) return bt_fail(BT_ERR_BACKEND, "bt_vk_matmul: Vulkan not initialized");
   vk_matmul_pc_t pc = {
@@ -166,18 +190,19 @@ static bt_status_t matmul_kernel(const bt_tensor_t* a, const bt_tensor_t* b, bt_
     bt_vk_buffer_of(a->storage->gpu), bt_vk_buffer_of(b->storage->gpu),
     bt_vk_buffer_of(out->storage->gpu), bt_vk_buffer_of(a->storage->gpu),
   };
-  static int variant = -1;
-  if (variant < 0) {
-    const char* env = getenv("BT_GEMM_VARIANT");
-    variant = env ? atoi(env) : -1; // -1 = autotuned selection by shape
-  }
+  const char* env = getenv("BT_GEMM_VARIANT");
+  int variant = env ? atoi(env) : -1; // read every call so tuning loops work
   int vec4_ok = a->strides[1] == 1 && b->strides[1] == 1 &&
                 a->strides[0] % 4 == 0 && b->strides[0] % 4 == 0;
   int chosen = variant;
   // Measured autotune (exp_008/009): tiled at small sizes, vec4 register-blocked
   // at large sizes when strides are 4-float aligned, scalar rb otherwise.
-  if (chosen < 0) chosen = (pc.M <= 512 && pc.N <= 512) ? 1 : (vec4_ok ? 4 : 2);
-  if (chosen == 4 && !vec4_ok) chosen = 2;
+  if (chosen < 0) {
+    int cached = cached_gemm_variant(pc.M, pc.N, pc.K);
+    chosen = cached >= 0 ? cached
+                         : ((pc.M <= 512 && pc.N <= 512) ? 1 : (vec4_ok ? 4 : 2));
+  }
+  if ((chosen == 4 || chosen == 5) && !vec4_ok) chosen = 2;
 
   double m = pc.M, n = pc.N, k = pc.K;
   double gemm_bytes = (m * k + k * n + m * n) * 4.0;
@@ -198,6 +223,10 @@ static bt_status_t matmul_kernel(const bt_tensor_t* a, const bt_tensor_t* b, bt_
     status = dispatch(g_vk.gemm_rb_vec4_pipeline, buffers, &pc, sizeof(pc),
                       (pc.N + 127) / 128, (pc.M + 127) / 128,
                       "gemm_rb_vec4", gemm_bytes, gemm_flops);
+  } else if (chosen == 5) {
+    status = dispatch(g_vk.gemm_rb_vec4_k16_pipeline, buffers, &pc, sizeof(pc),
+                      (pc.N + 127) / 128, (pc.M + 127) / 128,
+                      "gemm_rb_vec4_k16", gemm_bytes, gemm_flops);
   } else {
     const uint32_t splits = 4;
     size_t partial_bytes = (size_t)splits * pc.M * pc.N * sizeof(float);
