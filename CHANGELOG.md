@@ -6,6 +6,14 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Campaign closed (2026-11-21)
+
+- TOGISHI accepted the documented performance ceiling after 36 experiments.
+  One target met (eager end-to-end 1.14–1.29 vs ≥0.85); GEMM ~0.71, elementwise
+  eager 0.41–0.53 (captured 0.87–0.93), and captured full step ~0.46 remain
+  measured misses. Parity intact under 44 gates. No further perf work on this
+  GPU/backend; see `docs/PERFORMANCE_CEILING.md`.
+
 ### Added (TOGISHI Phase 6, exp_036)
 
 - Fused bias+tanh GEMM epilogue with a CPU fallback; `Sequential` merges a
