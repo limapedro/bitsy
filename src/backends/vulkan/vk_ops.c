@@ -374,6 +374,26 @@ bt_status_t bt_vk_sgd_step(const bt_tensor_t* w, const bt_tensor_t* grad,
   return status;
 }
 
+/* exp_018: dedicated 2D axis reduction (one workgroup, no ones-vector GEMM). */
+typedef struct { uint32_t M, N, axis; } vk_reduce_pc_t;
+
+bt_status_t bt_vk_reduce_sum(const bt_tensor_t* a, uint32_t axis, bt_tensor_t* out) {
+  if (!g_vk.ready) return bt_fail(BT_ERR_BACKEND, "bt_vk_reduce_sum: Vulkan not ready");
+  int64_t n = bt_shape_numel(&out->shape);
+  if (!n) return BT_OK;
+  vk_reduce_pc_t pc = { .M = (uint32_t)a->shape.dims[0],
+                        .N = (uint32_t)a->shape.dims[1], .axis = axis };
+  VkBuffer buffers[4] = {
+    bt_vk_buffer_of(a->storage->gpu), bt_vk_buffer_of(a->storage->gpu),
+    bt_vk_buffer_of(out->storage->gpu), bt_vk_buffer_of(a->storage->gpu),
+  };
+  bt_status_t status = dispatch(g_vk.reduce_sum_pipeline, buffers, &pc, sizeof(pc),
+                                (uint32_t)((n + 255) / 256), 1, "reduce_sum",
+                                (double)bt_shape_numel(&a->shape) * 4.0, 0.0);
+  if (status == BT_OK) bt_storage_bump_version(out->storage);
+  return status;
+}
+
 /* *** convolution *** */
 
 typedef struct {

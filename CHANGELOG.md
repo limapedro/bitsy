@@ -6,6 +6,17 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added (TOGISHI Phase 6, exp_018)
+
+- `reduce_sum.comp` + `bt_reduce_sum()` C/Python API with an autograd-aware
+  `reduce_sum_op` backward; ones-vector GEMM reductions in `sum`,
+  `log_softmax`, `cross_entropy`, `mse_loss` and `_unbroadcast` replaced.
+- Tiled GEMMs per step 20 → 10, total dispatches 46 → 43. Eager step 2.46 →
+  1.898–1.955 ms (1.26–1.30×, ratio 0.55–0.56 — best yet); captured step
+  0.257 → 0.234–0.246 ms, graph ratio 0.259 → 0.277–0.287 (≥0.29 just missed).
+  Parity 42/42, CTest both builds, MNIST identical, CIFAR W diff 6.4e-07.
+  Details in `experiments/exp_018/FINDINGS.md`.
+
 ### Added/Changed (TOGISHI Phase 5/6, exp_017)
 
 - `bt_tensor_transpose_view()` / `C.transpose_view()`: zero-dispatch 2D

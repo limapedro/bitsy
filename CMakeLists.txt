@@ -21,7 +21,7 @@ set(BT_SOURCES
   src/core/storage.c src/core/tensor.c src/core/dispatcher.c src/core/init.c
   src/backends/cpu_ref/elementwise.c src/backends/cpu_ref/matmul.c
   src/backends/cpu_ref/register.c
-  src/ops/elementwise.c src/ops/matmul.c src/ops/conv.c src/ops/sgd.c
+  src/ops/elementwise.c src/ops/matmul.c src/ops/conv.c src/ops/sgd.c src/ops/reduce.c
   src/core/conv_dispatch.c src/core/profiler.c src/backends/cpu_ref/conv.c)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
@@ -32,7 +32,7 @@ if(BT_ENABLE_VULKAN)
   find_package(Python3 COMPONENTS Interpreter REQUIRED)
 
   set(SHADER_HEADERS "")
-  foreach(SHADER elementwise elementwise_vec4 matmul conv gemm_tiled gemm_rb gemm_rb_vec4 gemm_rb_vec4_k16 splitk_reduce fused sgd_step)
+  foreach(SHADER elementwise elementwise_vec4 matmul conv gemm_tiled gemm_rb gemm_rb_vec4 gemm_rb_vec4_k16 splitk_reduce fused sgd_step reduce_sum)
     set(SHADER_SRC ${CMAKE_CURRENT_SOURCE_DIR}/src/backends/vulkan/shaders/${SHADER}.comp)
     set(SHADER_SPV ${CMAKE_BINARY_DIR}/generated/${SHADER}.spv)
     set(SHADER_HEADER ${CMAKE_BINARY_DIR}/generated/${SHADER}.spv.h)

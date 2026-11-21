@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 
 from . import _ctypes as C
-from .autograd import Tensor
+from .autograd import Tensor, reduce_sum_op
 
 class Parameter(Tensor):
   def __init__(self, tensor:Tensor) -> None:
@@ -72,18 +72,17 @@ class Sequential(Module):
     return x
 
 def log_softmax(logits:Tensor) -> Tensor:
-  col = Tensor.from_numpy(np.ones((logits.shape[1], 1), np.float32), logits.device)
-  return logits - (logits.exp() @ col).log()
+  # exp_018: row-sum via dedicated reduction (was logits.exp() @ ones col).
+  return logits - reduce_sum_op(logits.exp(), 1, True).log()
 
 def cross_entropy(logits:Tensor, onehot:Tensor) -> Tensor:
   B = logits.shape[0]
-  col = Tensor.from_numpy(np.ones((logits.shape[1], 1), np.float32), logits.device)
-  row = Tensor.from_numpy(np.ones((1, B), np.float32), logits.device)
-  return row @ ((-onehot * log_softmax(logits)) @ col) * (1.0 / B)
+  # exp_018: both reductions via the dedicated kernel (autograd-aware).
+  per_row = reduce_sum_op(-onehot * log_softmax(logits), 1, True)
+  return reduce_sum_op(per_row, 0, True) * (1.0 / B)
 
 def mse_loss(pred:Tensor, target:Tensor) -> Tensor:
   d = pred - target
   sq = d * d
-  col = Tensor.from_numpy(np.ones((sq.shape[1], 1), np.float32), sq.device)
-  row = Tensor.from_numpy(np.ones((1, sq.shape[0]), np.float32), sq.device)
-  return row @ (sq @ col) * 0.5
+  per_row = reduce_sum_op(sq, 1, True)
+  return reduce_sum_op(per_row, 0, True) * 0.5

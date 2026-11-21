@@ -1,0 +1,21 @@
+#version 450
+/* exp_018: 2D axis reduction sum. One thread per output element loops over the
+ * reduced axis; replaces tiny ones-vector GEMMs with a single workgroup. */
+layout(local_size_x = 256) in;
+layout(std430, binding = 0) readonly buffer A { float a[]; };
+layout(std430, binding = 2) writeonly buffer O { float o[]; };
+layout(push_constant) uniform PC { uint M, N, axis; } pc;
+void main() {
+  uint i = gl_GlobalInvocationID.x;
+  if (pc.axis == 1) {          // sum rows -> M outputs
+    if (i >= pc.M) return;
+    float s = 0.0;
+    for (uint j = 0; j < pc.N; ++j) s += a[i * pc.N + j];
+    o[i] = s;
+  } else {                     // sum columns -> N outputs
+    if (i >= pc.N) return;
+    float s = 0.0;
+    for (uint r = 0; r < pc.M; ++r) s += a[r * pc.N + i];
+    o[i] = s;
+  }
+}

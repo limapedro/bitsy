@@ -170,6 +170,22 @@ Conclusion: the remaining elementwise gap is bandwidth/kernel-bound
   ones-vector reductions from the interim autograd. Next: a dedicated
   reduction kernel and fused loss/softmax backward, with parity re-verified.
 
+## Phase 6 update (exp_018)
+
+- Dedicated 2D axis-reduction shader (`reduce_sum`) replaces ones-vector GEMMs
+  in `sum`, `log_softmax`, `cross_entropy`, `mse_loss` and `_unbroadcast`.
+  Tiled GEMMs per step 20 → 10; total dispatches 46 → 43.
+- Eager step 2.46 → **1.898–1.955 ms** (1.26–1.30×), ratio vs PyTorch
+  **0.55–0.56** — the best eager figure yet. Captured step 0.257 →
+  **0.234–0.246 ms**, graph ratio 0.259 → **0.277–0.287** (the ≥0.29 stretch
+  target was just missed).
+- Parity: 42/42; CTest 1/1 both builds; MNIST report identical, CIFAR conv1
+  W diff 6.41e-07; captured step bit-identical to eager (diff 0.0). The new
+  reduction has an autograd-aware backward with broadcast gradient.
+- Ranked remaining cost: ~19 scalar elementwise + 10 GEMM dispatches per step.
+  Next: a general fused elementwise-chain kernel (multiple ops per dispatch),
+  with full parity re-verification.
+
 ## Honesty
 
 - Timestamp GPU time is a proxy, not the 1000-repeat isolated kernel time the

@@ -80,6 +80,7 @@ _fn("bt_matmul", [_ptr, _ptr, ctypes.POINTER(_ptr)], ctypes.c_int)
 _fn("bt_transpose", [_ptr, ctypes.POINTER(_ptr)], ctypes.c_int)
 _fn("bt_tensor_transpose_view", [_ptr, ctypes.POINTER(_ptr)], ctypes.c_int)
 _fn("bt_sgd_step", [_ptr, _ptr, ctypes.c_float, ctypes.POINTER(_ptr)], ctypes.c_int)
+_fn("bt_reduce_sum", [_ptr, ctypes.c_uint32, ctypes.c_int, ctypes.POINTER(_ptr)], ctypes.c_int)
 _fn("bt_tensor_view", [_ptr, _i64p, ctypes.c_int64, ctypes.POINTER(_ptr)], ctypes.c_int)
 _fn("bt_conv2d", [_ptr, _ptr, _ptr, _ConvParams, ctypes.POINTER(_ptr)], ctypes.c_int)
 _fn("bt_conv2d_backward_x", [_ptr, _ptr, _Shape, _ConvParams, ctypes.POINTER(_ptr)], ctypes.c_int)
@@ -212,6 +213,15 @@ def conv2d_backward_b(dy:Tensor, out_channels:int) -> Tensor:
   out = _ptr()
   _check(_lib.bt_conv2d_backward_b(_ptr(dy._ptr), out_channels, ctypes.byref(out)))
   return _from_handle(out, dy._device)
+
+def reduce_sum(a:Tensor, axis:int, keepdim:bool) -> Tensor:
+  """Dedicated 2D axis reduction (exp_018), replacing ones-vector GEMMs."""
+  out = _ptr()
+  _check(_lib.bt_reduce_sum(_ptr(a._ptr), ctypes.c_uint32(axis),
+                            ctypes.c_int(1 if keepdim else 0), ctypes.byref(out)))
+  shape = _lib.bt_tensor_shape(out)
+  dims = tuple(int(shape.contents.dims[i]) for i in range(int(shape.contents.ndim)))
+  return Tensor(out.value, dims, a._device)
 
 def sgd_step(w:Tensor, grad:Tensor, lr:float) -> Tensor:
   """Fused w - lr*grad in one dispatch (exp_017)."""
