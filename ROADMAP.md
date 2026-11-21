@@ -10,7 +10,7 @@ Status legend: **done** / **in progress** / **planned**.
 |---|---|---|---|
 | M0 | Anvil | Repository, CMake, CI, conventions, empty Python package, parity harness skeleton, first `add` on `cpu_ref`; renamed to Bitsy and restyled | **done** (`v0.2.0-bitsy`, supersedes `v0.1.0-m0`) |
 | M1 | Ingot | Tensor core on `cpu_ref`: storage, views, strides, broadcasting, creation, elementwise, reductions, full parity | planned |
-| M2 | Forge | Vulkan bring-up: device, allocator, streams, pipelines, shader build, transfers, first elementwise kernels | planned |
+| M2 | Forge | Vulkan bring-up: device, allocator, streams, pipelines, shader build, transfers, first elementwise kernels | **in progress** |
 | M3 | Quench | Core op coverage on Vulkan: reductions, indexing, movement, sorting, cumulative, RNG parity | planned |
 | M4 | Strike | Autograd: graph, engine, backward formulas, hooks, `no_grad`, version counters, gradcheck | planned |
 | M5 | Temper | GEMM: naive → tiled → register-blocked, batched, FP16-storage, fused epilogues | planned |
@@ -42,3 +42,17 @@ Exit criteria:
 
 See `docs/m0_status.md` for the evidence and known limitations. The prior exact
 name `bitsy` was preserved as `limapedro/bitsy-legacy-2023`, not deleted.
+
+## Current work: M2 "Forge"
+
+- [x] Vulkan instance/device selection on the GTX 1660 Super
+- [x] Device buffers, staging upload/readback, one command stream with fence waits
+- [x] Build-time GLSL → SPIR-V embedded into the shared library
+- [x] 8 fp32 elementwise kernels (add, sub, mul, div, relu, sigmoid, tanh, exp)
+- [x] Parity vs PyTorch CUDA: 19/19 cases including 9 Vulkan cases
+- [x] First benchmark against CUDA, published honestly in `BENCHMARKS.md`
+- [x] exp_001 caching allocator: 5–6x faster, ratios 0.20–0.45 (target still missed)
+- [ ] Timestamp queries, validation layers in CI, asynchronous streams
+- [ ] M2 status report and tagged release
+
+Performance targets are not met; see `experiments/exp_001/FINDINGS.md`.

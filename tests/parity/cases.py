@@ -1,4 +1,4 @@
-"""Declarative parity cases: one entry per op configuration, not per test."""
+"""Declarative parity cases: one entry per op/device configuration."""
 
 from __future__ import annotations
 
@@ -8,13 +8,15 @@ from typing import Callable
 import torch
 
 ValueGenerator = Callable[[tuple[int, ...], torch.dtype, int], torch.Tensor]
+BINARY = ("add", "sub", "mul", "div")
+UNARY = ("relu", "sigmoid", "tanh", "exp")
 
 # *** value sets ***
 
 def _tile(values:list[float], shape:tuple[int, ...], dtype:torch.dtype) -> torch.Tensor:
   n = 1
   for dim in shape: n *= dim
-  if not n: return torch.empty(shape, dtype=dtype)  # zero-size tensors do no work
+  if not n: return torch.empty(shape, dtype=dtype)
   base = torch.tensor(values, dtype=dtype)
   return base[torch.arange(n) % base.numel()].reshape(shape)
 
@@ -40,6 +42,14 @@ class ParityCase:
   value_set:str
   dtype:str = "float32"
   expect_error:bool = False
+  device:str = "cpu"
+
+def _op_cases(device:str) -> tuple[ParityCase, ...]:
+  out = []
+  for op in BINARY + UNARY:
+    shape = (7, 13)
+    out.append(ParityCase(f"{op}_{device}", op, shape, shape, "normal", device=device))
+  return tuple(out)
 
 CASES:tuple[ParityCase, ...] = (
   ParityCase("add_scalar_scalar", "add", (), (), "normal"),
@@ -55,4 +65,8 @@ CASES:tuple[ParityCase, ...] = (
   ParityCase("add_large", "add", (4096,), (4096,), "normal"),
   ParityCase("add_broadcast_special", "add", (2, 8), (8,), "special"),
   ParityCase("add_shape_error", "add", (2, 3), (4,), "normal", expect_error=True),
-)
+  ParityCase("add_broadcast_vulkan", "add", (2, 3), (3,), "normal", device="vulkan"),
+  ParityCase("add_special_vulkan", "add", (8,), (8,), "special", device="vulkan"),
+  ParityCase("add_large_vulkan", "add", (4096,), (4096,), "normal", device="vulkan"),
+  ParityCase("add_empty_vulkan", "add", (0, 2), (1, 2), "normal", device="vulkan"),
+) + _op_cases("cpu") + _op_cases("vulkan")
