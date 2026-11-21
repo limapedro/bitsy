@@ -534,3 +534,26 @@ ratio 0.22 → 0.77. The ≥0.80 target is still missed by 0.03. Parity remains
 42/42 and the unit test caught an earlier split-K bug that wrote 4× the correct
 result. The autotune is a hard-coded threshold from these measurements, not a
 runtime cache; both facts are recorded in `experiments/exp_008/FINDINGS.md`.
+
+---
+
+## 2026-11-21 — vec4 + double-buffered GEMM (exp_009)
+
+**Context.** exp_008 missed the GEMM target by 0.03 and listed vec4 loads and
+double buffering as the next rungs.
+
+**Options considered.** (1) Stop tuning and move to elementwise, (2) add a
+vec4/double-buffered specialization of the register-blocked kernel with a
+stride check and safe fallback, (3) rewrite the GEMM in inline PTX (not
+available for Vulkan).
+
+**Decision.** Option 2, recorded in `experiments/exp_009/HYPOTHESIS.md`. The new
+variant is selectable with `BT_GEMM_VARIANT=4` and is auto-selected for large
+aligned matrices; misaligned inputs fall back to the scalar register-blocked
+kernel with identical numerics.
+
+**Consequences.** 1024² improves 1.224 → 1.178 ms and 1754 → 1823 GFLOPS
+(ratio 0.77 → 0.78). The ≥1.08× prediction and the ≥0.80 target are **both
+missed** and recorded as such in `experiments/exp_009/FINDINGS.md`. An initial
+incorrect vec4 mapping produced up to 216 absolute error; it was caught by a
+direct PyTorch comparison and fixed before any commit. Parity stays 42/42.

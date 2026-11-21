@@ -59,7 +59,8 @@ def bench(n:int, config:GemmConfig) -> dict:
           "bitsy_spread_ms": [min(bt_times), max(bt_times)]}
 
 def run(config:GemmConfig = CONFIG) -> int:
-  mode = { "0": "naive", "1": "tiled", "2": "rb", "3": "rb_splitk" }.get(
+  mode = { "0": "naive", "1": "tiled", "2": "rb", "3": "rb_splitk",
+           "4": "rb_vec4" }.get(
       os.environ.get("BT_GEMM_VARIANT", ""), "auto")
   rows = [bench(n, config) for n in config.sizes]
   report = {"generated_at": datetime.now(timezone.utc).isoformat(),
