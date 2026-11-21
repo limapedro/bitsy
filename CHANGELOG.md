@@ -6,6 +6,16 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added (TOGISHI Phase 6, exp_026)
+
+- `gemm_tune.py` now takes the **median of 3 samples** per variant; two runs
+  picked the same winners, removing exp_025's noise-flip window.
+- Added 64×128×8 vec4 GEMM (variant 8), now the autotune choice at 256² and
+  1024²: 1024² median 0.982 / 1.001 ms vs 1.069 / 1.016 ms for the prior
+  winner (1.02–1.09×). GEMM ratio still 0.72–0.76 vs ≥0.80; ≥1.05× met in one
+  of two runs. Parity 43/43 incl. gradient gate, CTest both builds; end-to-end
+  target remains met. Details in `experiments/exp_026/FINDINGS.md`.
+
 ### Added (TOGISHI Phase 6, exp_025)
 
 - `gemm_rb_vec4_128x64` (variant 7): measured and **rejected** — 1.15× slower

@@ -285,6 +285,21 @@ Conclusion: the remaining elementwise gap is bandwidth/kernel-bound
 - Next: packed f16, other tile dimensions, or backward-GEMM fusion; all changes
   must pass the 43-case gate.
 
+## Phase 6 update (exp_026)
+
+- `gemm_tune.py` now uses the median of 3 samples; two consecutive runs picked
+  the same winners, closing the exp_025 noise-flip window (a 0.3% sample had
+  earlier preferred a variant measured 21% slower).
+- Added 64×128×8 vec4 GEMM (variant 8), the third aspect-ratio/L2 rung. It won
+  1024² in both median runs: 0.982 / 1.001 ms vs 1.069 / 1.016 ms for variant 4
+  (1.02–1.09×). Autotune cache now selects variant 8 at 256² and 1024².
+- GEMM ratio still 0.72–0.76 vs ≥0.80 (clock-dependent); ≥1.05× prediction
+  only met in one of two runs, reported as a range.
+- End-to-end target remains MET (eager 0.979 ms, ratio 1.17); captured graph
+  0.194 ms / ratio 0.343. Parity 43/43 incl. gradient gate, CTest both builds.
+- Next: packed f16 or backward-GEMM fusion; median tuner is now the baseline
+  for any variant promotion.
+
 ## Honesty
 
 - Timestamp GPU time is a proxy, not the 1000-repeat isolated kernel time the

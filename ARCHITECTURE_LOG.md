@@ -939,3 +939,24 @@ which exp_021 had measured as 21% slower; the cache was restored to the
 established variant 4 rather than accept a noise-driven regression — a
 methodology note for a future median-based tuner. Parity holds (43/43, CTest
 both builds) and the end-to-end target from exp_024 remains met.
+
+---
+
+## 2026-11-21 — Median GEMM tuning and 64x128 tile (exp_026)
+
+**Context.** exp_025 showed single-sample tuning can select a 21%-slower
+kernel; the 64×128×8 aspect ratio was the remaining unmeasured tile rung.
+
+**Options considered.** (1) Keep single-sample tuning, (2) median of 3 samples
+and evaluate 64×128 under that reliable measurement.
+
+**Decision.** Option 2, recorded in `experiments/exp_026/HYPOTHESIS.md`. No
+kernel arithmetic or tolerance change.
+
+**Consequences.** Two consecutive median tuner runs selected the same winners,
+closing the noise-flip window. Variant 8 (64×128×8) won 1024² in both runs
+(0.982 / 1.001 ms vs 1.069 / 1.016 ms for variant 4; 1.02–1.09×) and is now the
+autotune choice at both shapes. The ≥1.05× prediction was met in one run only
+and the GEMM ratio remains 0.72–0.76 (≥0.80 missed); both reported as ranges.
+Parity holds (43/43, CTest both builds) and the end-to-end target remains met.
+Median tuning is now the baseline for promoting any future variant.
