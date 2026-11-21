@@ -180,6 +180,17 @@ Linear was worth ~1.6×. The captured graph path improved from 0.30 to 0.34–0.
 but remains well below 0.85. Standalone GEMM (0.72) and elementwise (≤0.54)
 targets are still missed. See `experiments/exp_024/FINDINGS.md`.
 
+## exp_025 — 128x64 tile aspect ratio (negative result)
+
+A 128×64×8 register-blocked variant (variant 7) was measured against the
+current winners: 256² 0.148 vs 0.129 ms and 1024² 1.091 vs **1.005 ms** —
+1.09–1.15× slower. It is never auto-selected and is kept as a negative-result
+variant. The 1024² GEMM ratio remains 0.68–0.76 (target ≥0.80). The tuner's
+single-sample noise also flipped its 1024² winner to variant 6 by 0.3%; since
+exp_021 measured that variant as 21% slower, the cache was restored to the
+established winner rather than accepting a noise-driven regression. See
+`experiments/exp_025/FINDINGS.md`.
+
 ## exp_023 — zero-dispatch broadcast views rejected again
 
 The exp_019 broadcast-view optimisation was retried after exp_022 fixed view

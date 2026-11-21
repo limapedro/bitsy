@@ -6,6 +6,15 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added (TOGISHI Phase 6, exp_025)
+
+- `gemm_rb_vec4_128x64` (variant 7): measured and **rejected** — 1.15× slower
+  at 256² and 1.09× slower at 1024² than the current winners. Kept as a
+  negative-result variant; the autotune cache is unchanged. Noted that
+  single-sample tuner noise can flip winners by <1%, so the established cache
+  was restored. Parity 43/43 incl. gradient gate, CTest both builds; end-to-end
+  target from exp_024 remains met. Details in `experiments/exp_025/FINDINGS.md`.
+
 ### Added (TOGISHI Phase 6, exp_024)
 
 - Fused GEMM+bias epilogue for `nn.Linear.forward` (tiled/vec4 shape selection,

@@ -16,6 +16,7 @@
 #include "gemm_rb_vec4.spv.h"
 #include "gemm_rb_vec4_k16.spv.h"
 #include "gemm_rb_vec4_swz.spv.h"
+#include "gemm_rb_vec4_128x64.spv.h"
 #include "gemm_bias.spv.h"
 #include "gemm_tiled_bias.spv.h"
 #include "sgd_step.spv.h"
@@ -162,6 +163,8 @@ static bt_status_t make_pipeline(void) {
                                   &g_vk.gemm_rb_vec4_k16_pipeline))) return status;
   if ((status = pipeline_from_spv(gemm_rb_vec4_swz_spv, gemm_rb_vec4_swz_spv_bytes,
                                   &g_vk.gemm_rb_vec4_swz_pipeline))) return status;
+  if ((status = pipeline_from_spv(gemm_rb_vec4_128x64_spv, gemm_rb_vec4_128x64_spv_bytes,
+                                  &g_vk.gemm_rb_vec4_128x64_pipeline))) return status;
   if ((status = pipeline_from_spv(gemm_bias_spv, gemm_bias_spv_bytes,
                                   &g_vk.gemm_bias_pipeline))) return status;
   if ((status = pipeline_from_spv(gemm_tiled_bias_spv, gemm_tiled_bias_spv_bytes,
@@ -262,6 +265,7 @@ void bt_vk_shutdown(void) {
   vkDestroyPipeline(g_vk.device, g_vk.gemm_rb_vec4_pipeline, NULL);
   vkDestroyPipeline(g_vk.device, g_vk.gemm_rb_vec4_k16_pipeline, NULL);
   vkDestroyPipeline(g_vk.device, g_vk.gemm_rb_vec4_swz_pipeline, NULL);
+  vkDestroyPipeline(g_vk.device, g_vk.gemm_rb_vec4_128x64_pipeline, NULL);
   vkDestroyPipeline(g_vk.device, g_vk.gemm_bias_pipeline, NULL);
   vkDestroyPipeline(g_vk.device, g_vk.gemm_tiled_bias_pipeline, NULL);
   vkDestroyPipeline(g_vk.device, g_vk.splitk_reduce_pipeline, NULL);
