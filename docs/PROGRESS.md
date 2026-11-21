@@ -86,12 +86,14 @@ Sources: `benchmarks/results/elementwise.json`, `benchmarks/results/gemm.json`,
 | relu | 1,048,576 | 0.1840 | 0.0429 | 0.0492 | 0.23 | ≥0.95 / ≥90% peak | miss 0.72 |
 | GEMM (naive) | 1024² | 12.722 | 0.908 | 12.464 | 0.07 | ≥0.80 | miss 0.73 |
 | GEMM (tiled) | 1024² | 4.329 | 0.950 | 4.088 | 0.22 | ≥0.80 | miss 0.58 |
-| GEMM (rb vec4 + double buffer, autotune) | 1024² | 1.178 | 0.913 | 1.024 | 0.78 | ≥0.80 | miss 0.02 |
+| GEMM (rb vec4 + double buffer, autotune) | 1024² | 1.289 | 0.893 | 1.035 | 0.69 | ≥0.80 | miss 0.11 |
 | GEMM (tiled, autotune) | 256² | 0.134 | 0.042 | 0.070 | 0.31 | ≥0.80 | miss 0.49 |
 
 Achieved throughput: large elementwise peaks at ~77 GiB/s vs PyTorch ~211 GiB/s;
-register-blocked vec4 GEMM reaches 1823 GFLOPS vs PyTorch 2352 GFLOPS at n=1024
-(up from 496 GFLOPS with the tiled kernel).
+register-blocked vec4 GEMM reaches 1666–1823 GFLOPS depending on GPU clock
+(1530–1950 MHz) versus PyTorch 2350–2400 GFLOPS at n=1024 (up from 496 GFLOPS
+with the tiled kernel). exp_010's 16-deep K-step variant was 1.59× slower and
+is excluded by the measured autotune cache.
 
 **No performance target is met.** Conv2d performance has not been benchmarked
 at all — only its numerics. Ratios vary between snapshots mainly because

@@ -1,0 +1,156 @@
+#version 450
+/* exp_010: 16-deep K step, double-buffered vec4 shared tiles (32 KB). */
+layout(local_size_x = 16, local_size_y = 16) in;
+
+layout(std430, binding = 0) readonly buffer A { vec4 avec[]; };
+layout(std430, binding = 1) readonly buffer B { vec4 bvec[]; };
+layout(std430, binding = 2) writeonly buffer C { float c[]; };
+
+layout(push_constant) uniform PC {
+  uint M, N, K;
+  int sa0, sa1, sb0, sb1, sc0, sc1;
+  int offa, offb, offc;
+  int k_start, k_len;
+} pc;
+
+shared float As[2][16][128];
+shared float Bs[2][16][128];
+
+void load_tile(int buf, int k0) {
+  int tid = int(gl_LocalInvocationID.y) * 16 + int(gl_LocalInvocationID.x);
+  int k_end = pc.k_start + pc.k_len;
+  int i0 = int(gl_WorkGroupID.y) * 128;
+  int j0 = int(gl_WorkGroupID.x) * 128;
+  for (int e = tid; e < 1024; e += 256) {
+    if (e < 512) {
+      int g = e / 128;
+      int row = i0 + (e % 128);
+      int kval = k0 + 4 * g;
+      vec4 v = vec4(0.0);
+      if (row < int(pc.M) && kval + 3 < k_end)
+        v = avec[(pc.offa + row * pc.sa0 + kval * pc.sa1) / 4];
+      As[buf][4 * g + 0][e % 128] = v.x;
+      As[buf][4 * g + 1][e % 128] = v.y;
+      As[buf][4 * g + 2][e % 128] = v.z;
+      As[buf][4 * g + 3][e % 128] = v.w;
+    } else {
+      int q = e - 512;
+      int kk = q / 32;
+      int col = j0 + (q % 32) * 4;
+      vec4 v = vec4(0.0);
+      if (col + 3 < int(pc.N) && k0 + kk < k_end)
+        v = bvec[(pc.offb + (k0 + kk) * pc.sb0 + col * pc.sb1) / 4];
+      Bs[buf][kk][(q % 32) * 4 + 0] = v.x;
+      Bs[buf][kk][(q % 32) * 4 + 1] = v.y;
+      Bs[buf][kk][(q % 32) * 4 + 2] = v.z;
+      Bs[buf][kk][(q % 32) * 4 + 3] = v.w;
+    }
+  }
+}
+
+void main() {
+  int ti = int(gl_LocalInvocationID.y);
+  int tj = int(gl_LocalInvocationID.x);
+  int i0 = int(gl_WorkGroupID.y) * 128;
+  int j0 = int(gl_WorkGroupID.x) * 128;
+  int k_end = pc.k_start + pc.k_len;
+  float acc[64];
+  for (int i = 0; i < 64; ++i) acc[i] = 0.0;
+  if (k_end > pc.k_start) load_tile(0, pc.k_start);
+  barrier();
+  for (int k0 = pc.k_start; k0 < k_end; k0 += 16) {
+    int cur = ((k0 - pc.k_start) / 16) & 1;
+    int nxt = cur ^ 1;
+    if (k0 + 16 < k_end) load_tile(nxt, k0 + 16);
+    barrier();
+    for (int kk = 0; kk < 16; ++kk) {
+      float av0 = As[cur][kk][ti * 8 + 0];
+      float av1 = As[cur][kk][ti * 8 + 1];
+      float av2 = As[cur][kk][ti * 8 + 2];
+      float av3 = As[cur][kk][ti * 8 + 3];
+      float av4 = As[cur][kk][ti * 8 + 4];
+      float av5 = As[cur][kk][ti * 8 + 5];
+      float av6 = As[cur][kk][ti * 8 + 6];
+      float av7 = As[cur][kk][ti * 8 + 7];
+      float bv0 = Bs[cur][kk][tj * 8 + 0];
+      float bv1 = Bs[cur][kk][tj * 8 + 1];
+      float bv2 = Bs[cur][kk][tj * 8 + 2];
+      float bv3 = Bs[cur][kk][tj * 8 + 3];
+      float bv4 = Bs[cur][kk][tj * 8 + 4];
+      float bv5 = Bs[cur][kk][tj * 8 + 5];
+      float bv6 = Bs[cur][kk][tj * 8 + 6];
+      float bv7 = Bs[cur][kk][tj * 8 + 7];
+      acc[0] = fma(av0, bv0, acc[0]);
+      acc[1] = fma(av0, bv1, acc[1]);
+      acc[2] = fma(av0, bv2, acc[2]);
+      acc[3] = fma(av0, bv3, acc[3]);
+      acc[4] = fma(av0, bv4, acc[4]);
+      acc[5] = fma(av0, bv5, acc[5]);
+      acc[6] = fma(av0, bv6, acc[6]);
+      acc[7] = fma(av0, bv7, acc[7]);
+      acc[8] = fma(av1, bv0, acc[8]);
+      acc[9] = fma(av1, bv1, acc[9]);
+      acc[10] = fma(av1, bv2, acc[10]);
+      acc[11] = fma(av1, bv3, acc[11]);
+      acc[12] = fma(av1, bv4, acc[12]);
+      acc[13] = fma(av1, bv5, acc[13]);
+      acc[14] = fma(av1, bv6, acc[14]);
+      acc[15] = fma(av1, bv7, acc[15]);
+      acc[16] = fma(av2, bv0, acc[16]);
+      acc[17] = fma(av2, bv1, acc[17]);
+      acc[18] = fma(av2, bv2, acc[18]);
+      acc[19] = fma(av2, bv3, acc[19]);
+      acc[20] = fma(av2, bv4, acc[20]);
+      acc[21] = fma(av2, bv5, acc[21]);
+      acc[22] = fma(av2, bv6, acc[22]);
+      acc[23] = fma(av2, bv7, acc[23]);
+      acc[24] = fma(av3, bv0, acc[24]);
+      acc[25] = fma(av3, bv1, acc[25]);
+      acc[26] = fma(av3, bv2, acc[26]);
+      acc[27] = fma(av3, bv3, acc[27]);
+      acc[28] = fma(av3, bv4, acc[28]);
+      acc[29] = fma(av3, bv5, acc[29]);
+      acc[30] = fma(av3, bv6, acc[30]);
+      acc[31] = fma(av3, bv7, acc[31]);
+      acc[32] = fma(av4, bv0, acc[32]);
+      acc[33] = fma(av4, bv1, acc[33]);
+      acc[34] = fma(av4, bv2, acc[34]);
+      acc[35] = fma(av4, bv3, acc[35]);
+      acc[36] = fma(av4, bv4, acc[36]);
+      acc[37] = fma(av4, bv5, acc[37]);
+      acc[38] = fma(av4, bv6, acc[38]);
+      acc[39] = fma(av4, bv7, acc[39]);
+      acc[40] = fma(av5, bv0, acc[40]);
+      acc[41] = fma(av5, bv1, acc[41]);
+      acc[42] = fma(av5, bv2, acc[42]);
+      acc[43] = fma(av5, bv3, acc[43]);
+      acc[44] = fma(av5, bv4, acc[44]);
+      acc[45] = fma(av5, bv5, acc[45]);
+      acc[46] = fma(av5, bv6, acc[46]);
+      acc[47] = fma(av5, bv7, acc[47]);
+      acc[48] = fma(av6, bv0, acc[48]);
+      acc[49] = fma(av6, bv1, acc[49]);
+      acc[50] = fma(av6, bv2, acc[50]);
+      acc[51] = fma(av6, bv3, acc[51]);
+      acc[52] = fma(av6, bv4, acc[52]);
+      acc[53] = fma(av6, bv5, acc[53]);
+      acc[54] = fma(av6, bv6, acc[54]);
+      acc[55] = fma(av6, bv7, acc[55]);
+      acc[56] = fma(av7, bv0, acc[56]);
+      acc[57] = fma(av7, bv1, acc[57]);
+      acc[58] = fma(av7, bv2, acc[58]);
+      acc[59] = fma(av7, bv3, acc[59]);
+      acc[60] = fma(av7, bv4, acc[60]);
+      acc[61] = fma(av7, bv5, acc[61]);
+      acc[62] = fma(av7, bv6, acc[62]);
+      acc[63] = fma(av7, bv7, acc[63]);
+    }
+    barrier();
+  }
+  for (int r = 0; r < 8; ++r)
+    for (int cc = 0; cc < 8; ++cc) {
+      int row = i0 + ti * 8 + r, col = j0 + tj * 8 + cc;
+      if (row < int(pc.M) && col < int(pc.N))
+        c[pc.offc + row * pc.sc0 + col * pc.sc1] = acc[r * 8 + cc];
+    }
+}

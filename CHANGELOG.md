@@ -6,6 +6,16 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added (TOGISHI Phase 6, exp_010)
+
+- On-disk GEMM autotune cache (`benchmarks/results/gemm_autotune.txt`) written
+  by `benchmarks/ops/gemm_tune.py` and read by the Vulkan backend; verified by
+  profiler trace names.
+- 16-deep K-step vec4 GEMM variant: measured **1.59× slower** than the 8-deep
+  kernel and kept only as a documented negative result.
+- GEMM ratio remains 0.69–0.78 across GPU clocks 1530–1950 MHz; target 0.80
+  still missed. Parity 42/42. Details in `experiments/exp_010/`.
+
 ### Added (TOGISHI Phase 6, exp_009)
 
 - vec4 global loads and double-buffered shared tiles for the register-blocked
