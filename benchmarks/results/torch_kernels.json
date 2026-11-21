@@ -1,0 +1,166 @@
+{
+  "torch": "2.11.0+cu126",
+  "gpu": "NVIDIA GeForce GTX 1660 SUPER",
+  "config": {
+    "iters": 20,
+    "warmup": 5,
+    "result_path": "E:\\__PROJECTS__\\Hagane\\benchmarks\\results\\torch_kernels.json"
+  },
+  "ops": {
+    "add": [
+      {
+        "name": "aten::add",
+        "calls": 20,
+        "device_us_total": 886.7920000000022,
+        "device_us_per_call": 44.33960000000011,
+        "cpu_us_total": 2434.4999999999995
+      },
+      {
+        "name": "_ZN2at6native29vectorized_elementwise_kernelILi4ENS0_15CUDAFunctor_addIfEESt5arrayIPcLy3EEEEviT0_T1_",
+        "calls": 20,
+        "device_us_total": 845.291000000002,
+        "device_us_per_call": 42.2645500000001,
+        "cpu_us_total": 0
+      },
+      {
+        "name": "Unrecognized",
+        "calls": 1,
+        "device_us_total": 41.501000000000204,
+        "device_us_per_call": 41.501000000000204,
+        "cpu_us_total": 1557.2
+      },
+      {
+        "name": "cudaLaunchKernel",
+        "calls": 20,
+        "device_us_total": 0,
+        "device_us_per_call": 0.0,
+        "cpu_us_total": 672.2999999999997
+      },
+      {
+        "name": "cudaDeviceSynchronize",
+        "calls": 2,
+        "device_us_total": 0,
+        "device_us_per_call": 0.0,
+        "cpu_us_total": 1977.6
+      }
+    ],
+    "mul": [
+      {
+        "name": "aten::mul",
+        "calls": 20,
+        "device_us_total": 964.5519999999988,
+        "device_us_per_call": 48.22759999999994,
+        "cpu_us_total": 1189.8
+      },
+      {
+        "name": "_ZN2at6native29vectorized_elementwise_kernelILi4ENS0_13BinaryFunctorIfffNS0_15binary_internal10MulFunctorIfEEEESt5arrayIPcLy3EEEEviT0_T1_",
+        "calls": 20,
+        "device_us_total": 922.3479999999988,
+        "device_us_per_call": 46.11739999999994,
+        "cpu_us_total": 0
+      },
+      {
+        "name": "cudaDeviceSynchronize",
+        "calls": 2,
+        "device_us_total": 92.85500000000002,
+        "device_us_per_call": 46.42750000000001,
+        "cpu_us_total": 631.4999999999995
+      },
+      {
+        "name": "Unrecognized",
+        "calls": 1,
+        "device_us_total": 42.20399999999995,
+        "device_us_per_call": 42.20399999999995,
+        "cpu_us_total": 860.6
+      },
+      {
+        "name": "cudaLaunchKernel",
+        "calls": 20,
+        "device_us_total": 0,
+        "device_us_per_call": 0.0,
+        "cpu_us_total": 162.0
+      }
+    ],
+    "relu": [
+      {
+        "name": "aten::relu",
+        "calls": 20,
+        "device_us_total": 665.171,
+        "device_us_per_call": 33.25855,
+        "cpu_us_total": 980.8
+      },
+      {
+        "name": "aten::clamp_min",
+        "calls": 20,
+        "device_us_total": 665.171,
+        "device_us_per_call": 33.25855,
+        "cpu_us_total": 240.69999999999982
+      },
+      {
+        "name": "_ZN2at6native29vectorized_elementwise_kernelILi4EZZZNS0_49_GLOBAL__N__97375e57_16_TensorCompare_cu_71e06f4e19launch_clamp_scalarERNS_18TensorIteratorBaseEN3c106ScalarES6_NS0_6detail11ClampLimitsEENKUlvE_clEvENKUlvE5_clEvEUlfE_St5arrayIPcLy2EEEEviT0_T1_",
+        "calls": 20,
+        "device_us_total": 665.171,
+        "device_us_per_call": 33.25855,
+        "cpu_us_total": 0
+      },
+      {
+        "name": "cudaLaunchKernel",
+        "calls": 20,
+        "device_us_total": 0,
+        "device_us_per_call": 0.0,
+        "cpu_us_total": 135.0
+      },
+      {
+        "name": "cudaDeviceSynchronize",
+        "calls": 2,
+        "device_us_total": 0,
+        "device_us_per_call": 0.0,
+        "cpu_us_total": 418.0
+      }
+    ],
+    "matmul": [
+      {
+        "name": "aten::mm",
+        "calls": 20,
+        "device_us_total": 486.30699999999956,
+        "device_us_per_call": 24.315349999999977,
+        "cpu_us_total": 1693.4999999999995
+      },
+      {
+        "name": "volta_sgemm_128x32_nn",
+        "calls": 20,
+        "device_us_total": 360.298,
+        "device_us_per_call": 18.0149,
+        "cpu_us_total": 0
+      },
+      {
+        "name": "_ZN8cublasLt19splitKreduce_kernelILi32ELi16EifffLb0EfffLb1ELb0ELb0EEEvNS_18cublasSplitKParamsIT4_EEPKT2_PKT7_PT6_PT3_PKS2_SF_PKT8_S6_PSG_PvxPS2_PiSL_SF_SF_SF_SF_",
+        "calls": 20,
+        "device_us_total": 101.21099999999956,
+        "device_us_per_call": 5.060549999999978,
+        "cpu_us_total": 0
+      },
+      {
+        "name": "Unrecognized",
+        "calls": 1,
+        "device_us_total": 24.798000000000002,
+        "device_us_per_call": 24.798000000000002,
+        "cpu_us_total": 811.8000000000001
+      },
+      {
+        "name": "cudaLaunchKernel",
+        "calls": 40,
+        "device_us_total": 0,
+        "device_us_per_call": 0.0,
+        "cpu_us_total": 598.6000000000001
+      },
+      {
+        "name": "cudaDeviceSynchronize",
+        "calls": 2,
+        "device_us_total": 0,
+        "device_us_per_call": 0.0,
+        "cpu_us_total": 127.90000000000009
+      }
+    ]
+  }
+}

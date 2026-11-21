@@ -9,10 +9,12 @@ from . import autograd, nn, optim
 from ._ctypes import (BitsyError, Tensor, add, add_relu, sub, mul, div, relu, sigmoid,
                       tanh, exp, log, matmul, mm, transpose, view, conv2d,
                       conv2d_backward_x, conv2d_backward_w, conv2d_backward_b,
-                      device, dtype_size, has_vulkan, flush, wait, device_time_ms,
+                      device, dtype_size, has_vulkan, flush, wait, profile,
+                      profile_reset, profile_dump, device_time_ms,
                       last_error, shutdown, version)
 
 __version__ = "0.2.0-bitsy"
 __all__ = ["BitsyError", "Tensor", "add", "add_relu", "sub", "mul", "div", "relu", "sigmoid",
            "tanh", "exp", "log", "matmul", "mm", "transpose", "view", "conv2d", "device", "dtype_size", "has_vulkan",
-           "flush", "wait", "device_time_ms", "last_error", "shutdown", "version", "__version__"]
+           "flush", "wait", "profile", "profile_reset", "profile_dump",
+           "device_time_ms", "last_error", "shutdown", "version", "__version__"]

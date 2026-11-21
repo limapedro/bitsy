@@ -5,6 +5,7 @@
 #include <string.h>
 
 #include "../../core/error_internal.h"
+#include <bitsy/bt_profiler.h>
 #include "vk_device_internal.h"
 #include "elementwise.spv.h"
 #include "matmul.spv.h"
@@ -152,6 +153,11 @@ bt_status_t bt_vk_init(void) {
                                   .queryCount = 2 * BT_VK_MAX_DISPATCHES,
                                   .flags = VK_QUERY_POOL_CREATE_RESET_BIT_KHR };
     VKCHECK(vkCreateQueryPool(g_vk.device, &qi2, NULL, &g_vk.timestamp_pool));
+    VkQueryPoolCreateInfo qi3 = { .sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO,
+                                  .queryType = VK_QUERY_TYPE_TIMESTAMP,
+                                  .queryCount = 2 * 2048,
+                                  .flags = VK_QUERY_POOL_CREATE_RESET_BIT_KHR };
+    VKCHECK(vkCreateQueryPool(g_vk.device, &qi3, NULL, &g_vk.profiler_pool));
   }
 
   status = make_pipeline();
@@ -172,7 +178,10 @@ void bt_vk_shutdown(void) {
   vkDestroyPipeline(g_vk.device, g_vk.gemm_tiled_pipeline, NULL);
   vkDestroyPipeline(g_vk.device, g_vk.fused_pipeline, NULL);
   vkDestroyPipelineLayout(g_vk.device, g_vk.pipeline_layout, NULL);
-  if (g_vk.have_timestamps) vkDestroyQueryPool(g_vk.device, g_vk.timestamp_pool, NULL);
+  if (g_vk.have_timestamps) {
+    vkDestroyQueryPool(g_vk.device, g_vk.timestamp_pool, NULL);
+    vkDestroyQueryPool(g_vk.device, g_vk.profiler_pool, NULL);
+  }
   vkDestroyDescriptorPool(g_vk.device, g_vk.descriptor_pool, NULL);
   vkDestroyDescriptorSetLayout(g_vk.device, g_vk.set_layout, NULL);
   vkDestroyFence(g_vk.device, g_vk.fence, NULL);
@@ -202,6 +211,7 @@ bt_status_t bt_vk_flush(void) {
                           .signalSemaphoreCount = 1,
                           .pSignalSemaphores = &g_vk.timeline };
   VKCHECK(vkQueueSubmit(g_vk.queue, 1, &submit, VK_NULL_HANDLE));
+  bt_profiler_submit();
   g_vk.recording = 0;
   return BT_OK;
 }
@@ -231,6 +241,21 @@ bt_status_t bt_vk_wait(void) {
     vkResetQueryPool(g_vk.device, g_vk.timestamp_pool,
                      (uint32_t)g_vk.query_read_index, (uint32_t)count);
   }
+  if (bt_profiler_enabled() && g_vk.have_timestamps && g_vk.profiler_query_count > 0) {
+    uint32_t n = g_vk.profiler_query_count;
+    if (n > 2048) n = 2048;
+    uint64_t stamps[4096];
+    VkResult pr = vkGetQueryPoolResults(g_vk.device, g_vk.profiler_pool, 0, 2 * n,
+                                        sizeof(stamps), stamps, sizeof(uint64_t),
+                                        VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT);
+    if (pr == VK_SUCCESS)
+      for (uint32_t i = 0; i < n; ++i)
+        bt_profiler_set_gpu_ms(g_vk.profiler_events[i],
+          (double)(stamps[2 * i + 1] - stamps[2 * i]) * g_vk.props.limits.timestampPeriod / 1e6);
+    vkResetQueryPool(g_vk.device, g_vk.profiler_pool, 0, 2 * n);
+    g_vk.profiler_query_count = 0; // queries 0..n-1 are now available again
+  }
+
   g_vk.query_read_index = 0;
   g_vk.query_index = 0;
   g_vk.set_index = 0;

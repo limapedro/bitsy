@@ -1,9 +1,13 @@
 #include "vk_internal.h"
 
+#ifdef _WIN32
+#include <windows.h>
+#endif
 #include <stdlib.h>
 #include <string.h>
 
 #include "../../core/error_internal.h"
+#include <bitsy/bt_profiler.h>
 #include "vk_device_internal.h"
 
 /* exp_001: reuse device-local buffers by power-of-two size class. This removes
@@ -74,9 +78,22 @@ void bt_vk_barrier(void) {
                          .dstAccessMask = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT };
   vkCmdPipelineBarrier(g_vk.cmd, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
                        VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 0, 1, &mb, 0, NULL, 0, NULL);
+  bt_profiler_barrier();
+}
+
+static double alloc_now_ms(void) {
+#ifdef _WIN32
+  static LARGE_INTEGER freq;
+  if (freq.QuadPart == 0) QueryPerformanceFrequency(&freq);
+  LARGE_INTEGER t; QueryPerformanceCounter(&t);
+  return (double)t.QuadPart * 1e3 / (double)freq.QuadPart;
+#else
+  return 0.0;
+#endif
 }
 
 void* bt_vk_alloc(size_t nbytes) {
+  double t0 = alloc_now_ms();
   size_t size = 1;
   while (size < nbytes) size <<= 1; // size classes make buffers reusable
   int bucket = bucket_of(size);
@@ -84,6 +101,7 @@ void* bt_vk_alloc(size_t nbytes) {
   if (b) {
     g_free[bucket] = b->next;
     b->next = NULL;
+    bt_profiler_alloc(1, alloc_now_ms() - t0);
     return b;
   }
   b = calloc(1, sizeof(*b));
@@ -94,6 +112,7 @@ void* bt_vk_alloc(size_t nbytes) {
     free(b);
     return NULL;
   }
+  bt_profiler_alloc(0, alloc_now_ms() - t0);
   return b;
 }
 

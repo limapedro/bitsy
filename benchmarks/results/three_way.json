@@ -1,0 +1,102 @@
+{
+  "generated_at": "2026-11-21T12:04:11",
+  "environment": {
+    "torch": "2.11.0+cu126",
+    "gpu": "NVIDIA GeForce GTX 1660 SUPER",
+    "bitsy": "0.2.0-bitsy"
+  },
+  "config": {
+    "iters": 50,
+    "warmup": 5,
+    "cases": [
+      "add",
+      "mul",
+      "relu",
+      "matmul"
+    ],
+    "result_path": "E:\\__PROJECTS__\\Hagane\\benchmarks\\results\\three_way.json",
+    "trace_dir": "E:\\__PROJECTS__\\Hagane\\benchmarks\\results"
+  },
+  "results": [
+    {
+      "op": "add",
+      "torch_wall_ms": 0.08795000030659139,
+      "torch_device_ms": 0.06014399975538254,
+      "bitsy_wall_ms": 0.10089999705087394,
+      "bitsy_profiled_wall_ms": 0.10369998926762491,
+      "profiler_overhead_us": 2.7999922167509794,
+      "bitsy_gpu_ms_total": 2.41856,
+      "bitsy_gpu_us_per_dispatch": 48.3712,
+      "gap_us_wall": 12.949996744282544,
+      "ratio": 0.8716551325789124,
+      "dispatch_count": 50,
+      "barrier_count": 50,
+      "submit_count": 50,
+      "alloc_count": 0,
+      "alloc_hits": 50,
+      "pct_dram_ceiling": 85.457,
+      "pct_fp32_ceiling": 0.79,
+      "note": "GPU time is per-dispatch timestamp sum (kernel proxy, not a 1000-repeat isolated measurement)"
+    },
+    {
+      "op": "mul",
+      "torch_wall_ms": 0.08685000648256391,
+      "torch_device_ms": 0.059408001601696014,
+      "bitsy_wall_ms": 0.13964998652227223,
+      "bitsy_profiled_wall_ms": 0.11860000086016953,
+      "profiler_overhead_us": -21.0499856621027,
+      "bitsy_gpu_ms_total": 2.612096,
+      "bitsy_gpu_us_per_dispatch": 52.24192,
+      "gap_us_wall": 52.799980039708316,
+      "ratio": 0.6219120291050837,
+      "dispatch_count": 50,
+      "barrier_count": 50,
+      "submit_count": 50,
+      "alloc_count": 0,
+      "alloc_hits": 50,
+      "pct_dram_ceiling": 79.126,
+      "pct_fp32_ceiling": 0.731,
+      "note": "GPU time is per-dispatch timestamp sum (kernel proxy, not a 1000-repeat isolated measurement)"
+    },
+    {
+      "op": "relu",
+      "torch_wall_ms": 0.06764999125152826,
+      "torch_device_ms": 0.043007999658584595,
+      "bitsy_wall_ms": 0.10465001105330884,
+      "bitsy_profiled_wall_ms": 0.10885001393035054,
+      "profiler_overhead_us": 4.2000028770416975,
+      "bitsy_gpu_ms_total": 2.444384,
+      "bitsy_gpu_us_per_dispatch": 48.88768,
+      "gap_us_wall": 37.00001980178058,
+      "ratio": 0.6464403641301794,
+      "dispatch_count": 50,
+      "barrier_count": 50,
+      "submit_count": 50,
+      "alloc_count": 0,
+      "alloc_hits": 50,
+      "pct_dram_ceiling": 84.555,
+      "pct_fp32_ceiling": 0.781,
+      "note": "GPU time is per-dispatch timestamp sum (kernel proxy, not a 1000-repeat isolated measurement)"
+    },
+    {
+      "op": "matmul",
+      "torch_wall_ms": 0.06309998570941389,
+      "torch_device_ms": 0.043007999658584595,
+      "bitsy_wall_ms": 0.21860000560991466,
+      "bitsy_profiled_wall_ms": 0.23385000531561673,
+      "profiler_overhead_us": 15.249999705702066,
+      "bitsy_gpu_ms_total": 8.291712,
+      "bitsy_gpu_us_per_dispatch": 165.83424,
+      "gap_us_wall": 155.50001990050077,
+      "ratio": 0.2886550049866603,
+      "dispatch_count": 50,
+      "barrier_count": 50,
+      "submit_count": 50,
+      "alloc_count": 0,
+      "alloc_hits": 50,
+      "pct_dram_ceiling": 1.558,
+      "pct_fp32_ceiling": 3.686,
+      "note": "GPU time is per-dispatch timestamp sum (kernel proxy, not a 1000-repeat isolated measurement)"
+    }
+  ]
+}
