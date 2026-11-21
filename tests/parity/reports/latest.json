@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-21T19:55:07.122191+00:00",
+  "generated_at": "2026-11-21T20:08:08.643543+00:00",
   "environment": {
     "platform": "Windows-10-10.0.26300-SP0",
     "python": "3.10.11",
@@ -1067,7 +1067,7 @@
     {
       "name": "end_to_end_gradient_flow",
       "grad_flow": {
-        "generated_at": "2026-11-21T19:55:07.121191+00:00",
+        "generated_at": "2026-11-21T20:08:08.642542+00:00",
         "environment": {
           "torch": "2.11.0+cu126",
           "torch_device": "cuda",

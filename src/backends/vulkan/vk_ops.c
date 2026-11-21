@@ -275,7 +275,7 @@ static bt_status_t matmul_kernel(const bt_tensor_t* a, const bt_tensor_t* b, bt_
     chosen = cached >= 0 ? cached
                          : ((pc.M <= 512 && pc.N <= 512) ? 1 : (vec4_ok ? 4 : 2));
   }
-  if ((chosen == 4 || chosen == 5 || chosen == 6) && !vec4_ok) chosen = 2;
+  if ((chosen == 4 || chosen == 5 || chosen == 6 || chosen == 7) && !vec4_ok) chosen = 2;
 
   double m = pc.M, n = pc.N, k = pc.K;
   double gemm_bytes = (m * k + k * n + m * n) * 4.0;
@@ -304,6 +304,10 @@ static bt_status_t matmul_kernel(const bt_tensor_t* a, const bt_tensor_t* b, bt_
     uint32_t tx = (pc.N + 127) / 128, ty = (pc.M + 127) / 128;
     status = dispatch(g_vk.gemm_rb_vec4_swz_pipeline, buffers, &pc, sizeof(pc),
                       tx * ty, 1, "gemm_rb_vec4_swz", gemm_bytes, gemm_flops);
+  } else if (chosen == 7) {
+    status = dispatch(g_vk.gemm_rb_vec4_128x64_pipeline, buffers, &pc, sizeof(pc),
+                      (pc.N + 63) / 64, (pc.M + 127) / 128,
+                      "gemm_rb_vec4_128x64", gemm_bytes, gemm_flops);
   } else {
     const uint32_t splits = 4;
     size_t partial_bytes = (size_t)splits * pc.M * pc.N * sizeof(float);

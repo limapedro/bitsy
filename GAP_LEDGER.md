@@ -270,6 +270,21 @@ Conclusion: the remaining elementwise gap is bandwidth/kernel-bound
   `*out = result` in the fallback that returned zeros for unaligned shapes.
   The 43-case gate stayed green throughout.
 
+## Phase 6 update (exp_025)
+
+- 128×64×8 vec4 GEMM tile (variant 7) measured and **rejected**: 1.15× slower
+  at 256² (0.148 vs 0.129 ms) and 1.09× slower at 1024² (1.091 vs 1.005 ms).
+  Never auto-selected; kept as a negative-result variant. 1024² ratio still
+  0.68–0.76 vs ≥0.80.
+- Tuner methodology issue found: single-sample runs can flip winners by <1%
+  (this run preferred variant 6 at 1024², which exp_021 measured 21% slower).
+  Cache restored to the established variant 4; a future tuner should use the
+  median of several samples.
+- End-to-end target remains MET (eager 1.006 ms, ratio 1.01); captured graph
+  0.196 ms / ratio 0.339. Parity 43/43 incl. gradient gate, CTest both builds.
+- Next: packed f16, other tile dimensions, or backward-GEMM fusion; all changes
+  must pass the 43-case gate.
+
 ## Honesty
 
 - Timestamp GPU time is a proxy, not the 1000-repeat isolated kernel time the

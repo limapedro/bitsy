@@ -918,3 +918,24 @@ Standalone GEMM 0.72 and elementwise ≤0.54 remain missed. Two implementation
 bugs (`self._op` on the module; stale fallback result) were found and fixed
 before merge, with the 43-case gate green throughout. Next: apply epilogue
 fusion to backward/optimizer chains or another GEMM rung.
+
+---
+
+## 2026-11-21 — 128x64 GEMM tile rejected (exp_025)
+
+**Context.** The standalone 1024² GEMM remained 0.72 of PyTorch CUDA; the
+ladder lists 128×64×8 as an untried register-blocked tile aspect ratio.
+
+**Options considered.** (1) Keep 128×128×8, (2) add a 128×64×8 vec4 variant
+with a 16×8 workgroup and select it by autotune.
+
+**Decision.** Option 2 was implemented as variant 7 and measured with the
+tuner, recorded in `experiments/exp_025/HYPOTHESIS.md`.
+
+**Consequences.** Controlled A/B: 256² 0.148 vs 0.129 ms (1.15× slower), 1024²
+1.091 vs 1.005 ms (1.09× slower). Rejected; kept as a negative-result variant.
+The tuner's single-sample noise flipped its 1024² winner to variant 6 by 0.3%,
+which exp_021 had measured as 21% slower; the cache was restored to the
+established variant 4 rather than accept a noise-driven regression — a
+methodology note for a future median-based tuner. Parity holds (43/43, CTest
+both builds) and the end-to-end target from exp_024 remains met.
