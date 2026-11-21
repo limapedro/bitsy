@@ -216,6 +216,16 @@ Conclusion: the remaining elementwise gap is bandwidth/kernel-bound
   Next: multi-stage elementwise fusion or the GEMM class; all changes must pass
   the new gradient gate.
 
+## Phase 6 update (exp_021)
+
+- GEMM ladder L2 block order measured and **closed as negative**: 4×4 group
+  swizzle (variant 6) was 1.32× slower at 256² (0.227 vs 0.172 ms) and 1.21×
+  slower at 1024² (1.193 vs 0.985 ms) than the current vec4 winner. Cache keeps
+  variant 4; no training-step change. 1024² ratio still 0.68–0.76 vs ≥0.80.
+- Untried GEMM rungs: fused epilogues, packed f16, other tile aspect ratios.
+  Alternatively return to the ~15 scalar elementwise dispatches per step.
+  All changes must pass the 43-case gate including the gradient flow check.
+
 ## Honesty
 
 - Timestamp GPU time is a proxy, not the 1000-repeat isolated kernel time the

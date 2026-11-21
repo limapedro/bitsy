@@ -830,3 +830,23 @@ PASS on the correct path (`grad_flow_FAULT_detected.json`, `grad_flow_PASS.json`
 both builds, MNIST/CIFAR gradients within tolerance). The ≥3-dispatch and
 ≥0.31 stretch predictions are recorded as misses. Remaining cost: ~15 scalar
 elementwise and 10 tiled GEMM dispatches per step.
+
+---
+
+## 2026-11-21 — GEMM L2 block order rejected (exp_021)
+
+**Context.** The GEMM ladder had not tested the L2-friendly block order rung;
+1024² remained 0.68–0.76 of PyTorch CUDA (target ≥0.80).
+
+**Options considered.** (1) Keep row-major tile order, (2) add a 4×4 group
+swizzle over a linear workgroup grid.
+
+**Decision.** Option 2 was implemented as variant 6 and measured with the
+existing tuner, recorded in `experiments/exp_021/HYPOTHESIS.md`.
+
+**Consequences.** Controlled A/B: 256² 0.227 vs 0.172 ms (1.32× slower), 1024²
+1.193 vs 0.985 ms (1.21× slower). The swizzle is rejected by the autotune cache
+and kept only as a negative result, like the k16 variant in exp_010. Parity
+holds (43/43 incl. gradient gate, CTest both builds) and training throughput is
+unchanged within variance. The ≥1.05× / ≥0.80 predictions are recorded as
+misses. Remaining GEMM rungs: fused epilogues, packed f16, tile aspect ratio.
