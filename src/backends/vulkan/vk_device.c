@@ -27,6 +27,7 @@
 #include "log_softmax.spv.h"
 #include "ce_loss.spv.h"
 #include "dual_mul.spv.h"
+#include "sgd_fused.spv.h"
 #include "splitk_reduce.spv.h"
 #include "fused.spv.h"
 
@@ -117,6 +118,22 @@ static bt_status_t pipeline_from_spv(const uint32_t* code, size_t bytes, VkPipel
   return result == VK_SUCCESS ? BT_OK : bt_fail(BT_ERR_BACKEND, "vkCreateComputePipelines failed (%d)", (int)result);
 }
 
+static bt_status_t pipeline_from_spv_layout(const uint32_t* code, size_t bytes,
+                                            VkPipelineLayout layout, VkPipeline* pipeline) {
+  VkShaderModuleCreateInfo sci = { .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+                                   .codeSize = bytes, .pCode = code };
+  VkShaderModule module;
+  VKCHECK(vkCreateShaderModule(g_vk.device, &sci, NULL, &module));
+  VkPipelineShaderStageCreateInfo stage = { .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+                                             .stage = VK_SHADER_STAGE_COMPUTE_BIT,
+                                             .module = module, .pName = "main" };
+  VkComputePipelineCreateInfo cpi = { .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
+                                       .stage = stage, .layout = layout };
+  VkResult result = vkCreateComputePipelines(g_vk.device, g_vk.pipeline_cache, 1, &cpi, NULL, pipeline);
+  vkDestroyShaderModule(g_vk.device, module, NULL);
+  return result == VK_SUCCESS ? BT_OK : bt_fail(BT_ERR_BACKEND, "vkCreateComputePipelines(sgd) failed (%d)", (int)result);
+}
+
 static bt_status_t make_pipeline(void) {
   VkDescriptorSetLayoutBinding bindings[4];
   for (int i = 0; i < 4; ++i) {
@@ -130,9 +147,9 @@ static bt_status_t make_pipeline(void) {
   VKCHECK(vkCreateDescriptorSetLayout(g_vk.device, &dli, NULL, &g_vk.set_layout));
 
   VkDescriptorPoolSize size = { .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-                                .descriptorCount = 4 * BT_VK_MAX_DISPATCHES };
+                                .descriptorCount = 4 * BT_VK_MAX_DISPATCHES + 12 };
   VkDescriptorPoolCreateInfo dpi = { .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-                                     .maxSets = BT_VK_MAX_DISPATCHES,
+                                     .maxSets = BT_VK_MAX_DISPATCHES + 1,
                                      .poolSizeCount = 1, .pPoolSizes = &size };
   VKCHECK(vkCreateDescriptorPool(g_vk.device, &dpi, NULL, &g_vk.descriptor_pool));
   VkDescriptorSetLayout layouts[BT_VK_MAX_DISPATCHES];
@@ -188,7 +205,29 @@ static bt_status_t make_pipeline(void) {
                                   &g_vk.dual_mul_pipeline))) return status;
   if ((status = pipeline_from_spv(log_softmax_spv, log_softmax_spv_bytes,
                                   &g_vk.log_softmax_pipeline))) return status;
-  return pipeline_from_spv(ce_loss_spv, ce_loss_spv_bytes, &g_vk.ce_loss_pipeline);
+  if ((status = pipeline_from_spv(ce_loss_spv, ce_loss_spv_bytes,
+                                  &g_vk.ce_loss_pipeline))) return status;
+
+  /* exp_029: separate descriptor layout for the fused 4-parameter SGD. */
+  VkDescriptorSetLayoutBinding sbind[12];
+  for (int i = 0; i < 12; ++i)
+    sbind[i] = (VkDescriptorSetLayoutBinding){ .binding = (uint32_t)i,
+      .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, .descriptorCount = 1,
+      .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT };
+  VkDescriptorSetLayoutCreateInfo sdli = { .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+                                           .bindingCount = 12, .pBindings = sbind };
+  VKCHECK(vkCreateDescriptorSetLayout(g_vk.device, &sdli, NULL, &g_vk.sgd_set_layout));
+  VkDescriptorSetAllocateInfo sai = { .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+                                      .descriptorPool = g_vk.descriptor_pool,
+                                      .descriptorSetCount = 1, .pSetLayouts = &g_vk.sgd_set_layout };
+  VKCHECK(vkAllocateDescriptorSets(g_vk.device, &sai, &g_vk.sgd_set));
+  VkPushConstantRange spc = { .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT, .offset = 0, .size = 20 };
+  VkPipelineLayoutCreateInfo spli = { .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+                                      .setLayoutCount = 1, .pSetLayouts = &g_vk.sgd_set_layout,
+                                      .pushConstantRangeCount = 1, .pPushConstantRanges = &spc };
+  VKCHECK(vkCreatePipelineLayout(g_vk.device, &spli, NULL, &g_vk.sgd_pipeline_layout));
+  return pipeline_from_spv_layout(sgd_fused_spv, sgd_fused_spv_bytes,
+                                  g_vk.sgd_pipeline_layout, &g_vk.sgd_fused_pipeline);
 }
 
 bt_status_t bt_vk_init(void) {
@@ -286,6 +325,9 @@ void bt_vk_shutdown(void) {
   vkDestroyPipeline(g_vk.device, g_vk.dual_mul_pipeline, NULL);
   vkDestroyPipeline(g_vk.device, g_vk.log_softmax_pipeline, NULL);
   vkDestroyPipeline(g_vk.device, g_vk.ce_loss_pipeline, NULL);
+  vkDestroyPipeline(g_vk.device, g_vk.sgd_fused_pipeline, NULL);
+  vkDestroyPipelineLayout(g_vk.device, g_vk.sgd_pipeline_layout, NULL);
+  vkDestroyDescriptorSetLayout(g_vk.device, g_vk.sgd_set_layout, NULL);
   vkDestroyPipelineLayout(g_vk.device, g_vk.pipeline_layout, NULL);
   vkDestroyPipelineCache(g_vk.device, g_vk.pipeline_cache, NULL);
   if (g_vk.have_timestamps) {

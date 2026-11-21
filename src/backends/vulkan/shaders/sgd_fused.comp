@@ -1,0 +1,26 @@
+#version 450
+/* exp_029: all four SGD parameter updates in one dispatch. workgroup.y selects
+ * the parameter; 12 plain storage-buffer bindings avoid descriptor arrays. */
+layout(local_size_x = 256) in;
+layout(std430, binding = 0) readonly buffer W0 { float w0[]; };
+layout(std430, binding = 1) readonly buffer W1 { float w1[]; };
+layout(std430, binding = 2) readonly buffer W2 { float w2[]; };
+layout(std430, binding = 3) readonly buffer W3 { float w3[]; };
+layout(std430, binding = 4) readonly buffer G0 { float g0[]; };
+layout(std430, binding = 5) readonly buffer G1 { float g1[]; };
+layout(std430, binding = 6) readonly buffer G2 { float g2[]; };
+layout(std430, binding = 7) readonly buffer G3 { float g3[]; };
+layout(std430, binding = 8) writeonly buffer O0 { float o0[]; };
+layout(std430, binding = 9) writeonly buffer O1 { float o1[]; };
+layout(std430, binding = 10) writeonly buffer O2 { float o2[]; };
+layout(std430, binding = 11) writeonly buffer O3 { float o3[]; };
+layout(push_constant) uniform PC { uint n[4]; float lr; } pc;
+void main() {
+  uint p = gl_WorkGroupID.y;
+  uint i = gl_WorkGroupID.x * 256 + gl_LocalInvocationID.x;
+  if (i >= pc.n[p]) return;
+  if (p == 0) o0[i] = w0[i] - pc.lr * g0[i];
+  else if (p == 1) o1[i] = w1[i] - pc.lr * g1[i];
+  else if (p == 2) o2[i] = w2[i] - pc.lr * g2[i];
+  else o3[i] = w3[i] - pc.lr * g3[i];
+}

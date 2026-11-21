@@ -28,6 +28,8 @@ bt_status_t bt_vk_matmul_bias(const bt_tensor_t* a, const bt_tensor_t* b,
                               const bt_tensor_t* bias, bt_tensor_t* out);
 bt_status_t bt_vk_log_softmax(const bt_tensor_t* x, bt_tensor_t* out);
 bt_status_t bt_vk_ce_loss(const bt_tensor_t* ls, const bt_tensor_t* onehot, bt_tensor_t* out);
+bt_status_t bt_vk_sgd_fused(const bt_tensor_t* w[4], const bt_tensor_t* grad[4],
+                            const bt_tensor_t* out[4], float lr);
 double bt_vk_device_time_ms(void);
 
 void* bt_vk_alloc(size_t nbytes);

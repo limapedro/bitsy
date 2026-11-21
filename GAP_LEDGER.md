@@ -332,6 +332,20 @@ Conclusion: the remaining elementwise gap is bandwidth/kernel-bound
   Next: optimizer fusion, remaining reduction chains, or packed f16; all
   changes must pass the 43-case gate.
 
+## Phase 5/6 update (exp_029)
+
+- Fused the four SGD parameter updates into one dispatch (12-binding descriptor
+  layout, dedicated pipeline, CPU fallback). Dispatches/step 22 → **19** but
+  captured time unchanged (0.153–0.159 ms vs 0.156) — the ≥1.02× prediction was
+  **not met**; kept as a neutral result because it is correct and reduces
+  dispatch count. Three implementation bugs (descriptor pool size, C pointer
+  level, ctypes out-array) were caught by CTest/the gate and fixed.
+- Eager ratio 1.11–1.17 (end-to-end target still MET); graph ratio 0.43–0.45;
+  GEMM and elementwise targets still missed. Parity 43/43 incl. gradient gate,
+  CTest both builds, MNIST/CIFAR unchanged.
+- Next: packed f16 GEMM or a different step-level fusion; dispatch count alone
+  is not a reliable proxy for speed. All changes must pass the 43-case gate.
+
 ## Honesty
 
 - Timestamp GPU time is a proxy, not the 1000-repeat isolated kernel time the

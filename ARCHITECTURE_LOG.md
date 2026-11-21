@@ -1003,3 +1003,25 @@ below 0.85). Eager 0.906–1.042 ms (ratio 1.11–1.24, target met). Parity hold
 (43/43, CTest both builds) with the same small fp32 drift as exp_027. Standalone
 GEMM 0.68 and elementwise ≤0.75 remain missed. Next: optimizer fusion or
 packed f16, always behind the 43-case gate.
+
+---
+
+## 2026-11-21 — Fused SGD update, neutral result (exp_029)
+
+**Context.** Four separate `sgd_step` dispatches remained per training step.
+
+**Options considered.** (1) Keep four dispatches, (2) one dispatch with
+`workgroup.y` selecting the parameter and 12 storage bindings.
+
+**Decision.** Option 2, recorded in `experiments/exp_029/HYPOTHESIS.md`.
+`glslc` rejected descriptor-array SSBOs, so plain bindings with a 4-way
+if-chain were used.
+
+**Consequences.** Dispatches/step 22 → **19**, but captured time is unchanged
+(0.153–0.159 ms vs 0.156): the single kernel launches `max_workgroups × 4`
+workgroups with branching, offsetting the saved submit. The ≥1.02× prediction
+is a **miss**, recorded as a neutral result. Correctness held after three
+implementation bugs were found and fixed (descriptor pool size, C pointer
+level, ctypes out-array): 43/43 incl. gradient gate, CTest both builds, direct
+SGD comparison max diff < 2e-08. Eager ratio 1.11–1.17 (target met); graph
+ratio 0.43–0.45. Dispatch count is not a sufficient proxy for speed.

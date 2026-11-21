@@ -68,6 +68,10 @@ BT_API bt_status_t bt_log_softmax(const bt_tensor_t* x, bt_tensor_t** out);
 BT_API bt_status_t bt_ce_loss(const bt_tensor_t* ls, const bt_tensor_t* onehot,
                               bt_tensor_t** out);
 
+/* exp_029: update up to four parameters in one dispatch. NULL slots skipped. */
+BT_API bt_status_t bt_sgd_step_fused(const bt_tensor_t* w[4], const bt_tensor_t* grad[4],
+                                     float lr, bt_tensor_t** out[4]);
+
 #ifdef __cplusplus
 }
 #endif

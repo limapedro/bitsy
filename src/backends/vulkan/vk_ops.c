@@ -464,6 +464,58 @@ bt_status_t bt_vk_broadcast_grad(const bt_tensor_t* g, bt_tensor_t* out) {
   return status;
 }
 
+/* exp_029: four SGD updates in one dispatch via descriptor arrays. */
+typedef struct { uint32_t n[4]; float lr; } vk_sgd_fused_pc_t;
+
+bt_status_t bt_vk_sgd_fused(const bt_tensor_t* w[4], const bt_tensor_t* grad[4],
+                            const bt_tensor_t* out[4], float lr) {
+  if (!g_vk.ready) return bt_fail(BT_ERR_BACKEND, "bt_vk_sgd_fused: Vulkan not ready");
+  vk_sgd_fused_pc_t pc;
+  const bt_tensor_t* any = NULL;
+  for (int i = 0; i < 4; ++i) if (w[i]) { any = w[i]; break; }
+  if (!any) return BT_OK;
+  uint32_t max_wg = 1;
+  for (int i = 0; i < 4; ++i) {
+    int64_t n = w[i] ? bt_shape_numel(&w[i]->shape) : 0;
+    pc.n[i] = (uint32_t)n;
+    uint32_t wg = n ? (uint32_t)((n + 255) / 256) : 1;
+    if (wg > max_wg) max_wg = wg;
+  }
+  pc.lr = lr;
+  VkDescriptorBufferInfo info[12];
+  VkWriteDescriptorSet writes[12];
+  const bt_tensor_t* srcs[3][4] = { {w[0], w[1], w[2], w[3]},
+                                     {grad[0], grad[1], grad[2], grad[3]},
+                                     {out[0], out[1], out[2], out[3]} };
+  for (int b = 0; b < 3; ++b) {
+    for (int i = 0; i < 4; ++i) {
+      const bt_tensor_t* t = srcs[b][i] ? srcs[b][i] : any;
+      info[b * 4 + i] = (VkDescriptorBufferInfo){
+        .buffer = bt_vk_buffer_of(t->storage->gpu), .offset = 0, .range = VK_WHOLE_SIZE };
+    }
+  }
+  for (int k = 0; k < 12; ++k)
+    writes[k] = (VkWriteDescriptorSet){ .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+      .dstSet = g_vk.sgd_set, .dstBinding = (uint32_t)k, .dstArrayElement = 0,
+      .descriptorCount = 1, .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+      .pBufferInfo = &info[k] };
+  vkUpdateDescriptorSets(g_vk.device, 12, writes, 0, NULL);
+
+  double t0 = prof_now_us();
+  bt_vk_begin_cmd();
+  vkCmdBindPipeline(g_vk.cmd, VK_PIPELINE_BIND_POINT_COMPUTE, g_vk.sgd_fused_pipeline);
+  vkCmdBindDescriptorSets(g_vk.cmd, VK_PIPELINE_BIND_POINT_COMPUTE,
+                          g_vk.sgd_pipeline_layout, 0, 1, &g_vk.sgd_set, 0, NULL);
+  vkCmdPushConstants(g_vk.cmd, g_vk.sgd_pipeline_layout, VK_SHADER_STAGE_COMPUTE_BIT,
+                     0, (uint32_t)sizeof(pc), &pc);
+  bt_vk_barrier();
+  vkCmdDispatch(g_vk.cmd, max_wg, 4, 1);
+  bt_vk_barrier();
+  for (int i = 0; i < 4; ++i) if (out[i]) bt_storage_bump_version(out[i]->storage);
+  bt_profiler_record("sgd_fused", t0, prof_now_us(), 0, 0, -1);
+  return BT_OK;
+}
+
 /* exp_028: fused cross-entropy scalar reduction. */
 typedef struct { uint32_t n; float invB; uint32_t offls, offoh, offo; } vk_ce_pc_t;
 

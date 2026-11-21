@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-21T20:45:29.511309+00:00",
+  "generated_at": "2026-11-21T21:04:09.772255+00:00",
   "gpu_clock_mhz": 1740.0,
   "environment": {
     "torch": "2.11.0+cu126",
@@ -24,17 +24,17 @@
     "abs_diff": 0.0
   },
   "bitsy": {
-    "median_ms": 0.15555149991996586,
-    "stdev_ms": 0.002204766770685976,
-    "min_ms": 0.1518329998361878,
-    "max_ms": 0.1589909999165684
+    "median_ms": 0.1534705000813119,
+    "stdev_ms": 0.0034034796551062974,
+    "min_ms": 0.14510199980577454,
+    "max_ms": 0.1568000001134351
   },
   "torch": {
-    "median_ms": 0.08437550015514717,
-    "stdev_ms": 0.005220456371410115,
-    "min_ms": 0.08069699979387224,
-    "max_ms": 0.09847699984675273
+    "median_ms": 0.0691019999794662,
+    "stdev_ms": 0.002076015073653558,
+    "min_ms": 0.06617400009417906,
+    "max_ms": 0.07152699981816113
   },
-  "graph_throughput_ratio_torch_over_bitsy": 0.5424280717226123,
+  "graph_throughput_ratio_torch_over_bitsy": 0.4502624279119082,
   "note": "replay uses static input buffers (CUDA-graph semantics); timed region is N replays + one completion wait; Bitsy captures once, and after the first wait recycled staging resources may make later replays stale (timing only - numerics verified separately by numeric_check)"
 }
