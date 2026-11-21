@@ -146,6 +146,16 @@ kernel, taking it to **0.234–0.246 ms** and the graph ratio to 0.277–0.287.
 The ≥0.29 stretch ratio was just missed. Remaining cost: ~19 scalar elementwise
 and 10 GEMM dispatches. See `experiments/exp_015`–`exp_018/FINDINGS.md`.
 
+## exp_019 — negative result (kept for honesty)
+
+A zero-dispatch broadcast view for reduction gradients was tried. It improved
+captured step time to 0.213 ms and graph ratio to 0.312, **but broke end-to-end
+training** (MNIST loss 1.87 vs PyTorch 1.33, accuracy 0.434 vs 0.896) while the
+42-case op harness still passed. It was reverted and the API removed; only the
+bit-equivalent fused `tanh_backward` kernel was kept (dispatches 43 → 41, no
+measurable captured-graph gain). Every reported number above is from the
+parity-safe path. See `experiments/exp_019/FINDINGS.md`.
+
 ## Comparison target
 
 PyTorch CUDA on the **same** GTX 1660 Super, in the same machine, with warm-up,

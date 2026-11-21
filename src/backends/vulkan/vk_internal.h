@@ -20,6 +20,7 @@ bt_status_t bt_vk_capture_sync_chunk(void);
 bt_status_t bt_vk_sgd_step(const bt_tensor_t* w, const bt_tensor_t* grad,
                            float lr, bt_tensor_t* out);
 bt_status_t bt_vk_reduce_sum(const bt_tensor_t* a, uint32_t axis, bt_tensor_t* out);
+bt_status_t bt_vk_tanh_backward(const bt_tensor_t* g, const bt_tensor_t* t, bt_tensor_t* out);
 double bt_vk_device_time_ms(void);
 
 void* bt_vk_alloc(size_t nbytes);

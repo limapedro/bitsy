@@ -47,6 +47,7 @@ typedef struct {
   VkPipeline splitk_reduce_pipeline;
   VkPipeline sgd_step_pipeline;
   VkPipeline reduce_sum_pipeline;
+  VkPipeline tanh_backward_pipeline;
   VkPipeline fused_pipeline;
   VkPipelineCache pipeline_cache;
   VkQueryPool timestamp_pool;

@@ -355,14 +355,26 @@ static bt_status_t transpose_kernel(const bt_tensor_t* a, const bt_tensor_t* b, 
 }
 
 /* exp_017: fused W - lr*grad in one dispatch; lr is a push constant. */
-typedef struct { uint32_t n; float lr; } vk_sgd_pc_t;
+typedef struct { uint32_t n, M, N; float lr;
+                 int32_t sa0, sa1, sb0, sb1, sc0, sc1; } vk_sgd_pc_t;
 
 bt_status_t bt_vk_sgd_step(const bt_tensor_t* w, const bt_tensor_t* grad,
                            float lr, bt_tensor_t* out) {
   if (!g_vk.ready) return bt_fail(BT_ERR_BACKEND, "bt_vk_sgd_step: Vulkan not ready");
   int64_t n = bt_shape_numel(&out->shape);
   if (!n) return BT_OK;
-  vk_sgd_pc_t pc = { .n = (uint32_t)n, .lr = lr };
+  /* 2D uses real strides (broadcast gradients have stride 0); other ranks keep
+   * the original linear indexing. */
+  int two_d = w->shape.ndim == 2;
+  vk_sgd_pc_t pc = { .n = (uint32_t)n, .lr = lr,
+                     .M = two_d ? (uint32_t)w->shape.dims[0] : 1,
+                     .N = two_d ? (uint32_t)w->shape.dims[1] : (uint32_t)n,
+                     .sa0 = two_d ? (int32_t)w->strides[0] : 0,
+                     .sa1 = two_d ? (int32_t)w->strides[1] : 1,
+                     .sb0 = two_d ? (int32_t)grad->strides[0] : 0,
+                     .sb1 = two_d ? (int32_t)grad->strides[1] : 1,
+                     .sc0 = two_d ? (int32_t)out->strides[0] : 0,
+                     .sc1 = two_d ? (int32_t)out->strides[1] : 1 };
   VkBuffer buffers[4] = {
     bt_vk_buffer_of(w->storage->gpu), bt_vk_buffer_of(grad->storage->gpu),
     bt_vk_buffer_of(out->storage->gpu), bt_vk_buffer_of(w->storage->gpu),
@@ -375,14 +387,15 @@ bt_status_t bt_vk_sgd_step(const bt_tensor_t* w, const bt_tensor_t* grad,
 }
 
 /* exp_018: dedicated 2D axis reduction (one workgroup, no ones-vector GEMM). */
-typedef struct { uint32_t M, N, axis; } vk_reduce_pc_t;
+typedef struct { uint32_t M, N, axis; int32_t sa0, sa1; } vk_reduce_pc_t;
 
 bt_status_t bt_vk_reduce_sum(const bt_tensor_t* a, uint32_t axis, bt_tensor_t* out) {
   if (!g_vk.ready) return bt_fail(BT_ERR_BACKEND, "bt_vk_reduce_sum: Vulkan not ready");
   int64_t n = bt_shape_numel(&out->shape);
   if (!n) return BT_OK;
   vk_reduce_pc_t pc = { .M = (uint32_t)a->shape.dims[0],
-                        .N = (uint32_t)a->shape.dims[1], .axis = axis };
+                        .N = (uint32_t)a->shape.dims[1], .axis = axis,
+                        .sa0 = (int32_t)a->strides[0], .sa1 = (int32_t)a->strides[1] };
   VkBuffer buffers[4] = {
     bt_vk_buffer_of(a->storage->gpu), bt_vk_buffer_of(a->storage->gpu),
     bt_vk_buffer_of(out->storage->gpu), bt_vk_buffer_of(a->storage->gpu),
@@ -390,6 +403,25 @@ bt_status_t bt_vk_reduce_sum(const bt_tensor_t* a, uint32_t axis, bt_tensor_t* o
   bt_status_t status = dispatch(g_vk.reduce_sum_pipeline, buffers, &pc, sizeof(pc),
                                 (uint32_t)((n + 255) / 256), 1, "reduce_sum",
                                 (double)bt_shape_numel(&a->shape) * 4.0, 0.0);
+  if (status == BT_OK) bt_storage_bump_version(out->storage);
+  return status;
+}
+
+/* exp_019: fused tanh backward, g * (1 - t*t), in one dispatch. */
+typedef struct { uint32_t n; } vk_tanh_bwd_pc_t;
+
+bt_status_t bt_vk_tanh_backward(const bt_tensor_t* g, const bt_tensor_t* t, bt_tensor_t* out) {
+  if (!g_vk.ready) return bt_fail(BT_ERR_BACKEND, "bt_vk_tanh_backward: Vulkan not ready");
+  int64_t n = bt_shape_numel(&out->shape);
+  if (!n) return BT_OK;
+  vk_tanh_bwd_pc_t pc = { .n = (uint32_t)n };
+  VkBuffer buffers[4] = {
+    bt_vk_buffer_of(g->storage->gpu), bt_vk_buffer_of(t->storage->gpu),
+    bt_vk_buffer_of(out->storage->gpu), bt_vk_buffer_of(g->storage->gpu),
+  };
+  bt_status_t status = dispatch(g_vk.tanh_backward_pipeline, buffers, &pc, sizeof(pc),
+                                (uint32_t)((n + 255) / 256), 1, "tanh_backward",
+                                3.0 * (double)n * 4.0, 2.0 * (double)n);
   if (status == BT_OK) bt_storage_bump_version(out->storage);
   return status;
 }

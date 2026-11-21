@@ -136,6 +136,9 @@ bt_status_t bt_tensor_transpose_view(const bt_tensor_t* tensor, bt_tensor_t** ou
   return BT_OK;
 }
 
+/* exp_019: bt_tensor_broadcast_view was removed after it broke end-to-end
+ * training gradients while isolated 42-case parity stayed green. */
+
 bt_status_t bt_tensor_copy_to_host(const bt_tensor_t* tensor, void* dst, size_t dst_bytes) {
   if (!tensor || !dst) return bt_fail(BT_ERR_INVALID_ARGUMENT, "bt_tensor_copy_to_host: NULL");
   // Strided copy is a separate op; claiming contiguous-only here avoids wrong data.

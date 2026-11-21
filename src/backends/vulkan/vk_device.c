@@ -17,6 +17,7 @@
 #include "gemm_rb_vec4_k16.spv.h"
 #include "sgd_step.spv.h"
 #include "reduce_sum.spv.h"
+#include "tanh_backward.spv.h"
 #include "splitk_reduce.spv.h"
 #include "fused.spv.h"
 
@@ -158,7 +159,10 @@ static bt_status_t make_pipeline(void) {
                                   &g_vk.splitk_reduce_pipeline))) return status;
   if ((status = pipeline_from_spv(sgd_step_spv, sgd_step_spv_bytes,
                                   &g_vk.sgd_step_pipeline))) return status;
-  return pipeline_from_spv(reduce_sum_spv, reduce_sum_spv_bytes, &g_vk.reduce_sum_pipeline);
+  if ((status = pipeline_from_spv(reduce_sum_spv, reduce_sum_spv_bytes,
+                                  &g_vk.reduce_sum_pipeline))) return status;
+  return pipeline_from_spv(tanh_backward_spv, tanh_backward_spv_bytes,
+                           &g_vk.tanh_backward_pipeline);
 }
 
 bt_status_t bt_vk_init(void) {
@@ -246,6 +250,7 @@ void bt_vk_shutdown(void) {
   vkDestroyPipeline(g_vk.device, g_vk.splitk_reduce_pipeline, NULL);
   vkDestroyPipeline(g_vk.device, g_vk.sgd_step_pipeline, NULL);
   vkDestroyPipeline(g_vk.device, g_vk.reduce_sum_pipeline, NULL);
+  vkDestroyPipeline(g_vk.device, g_vk.tanh_backward_pipeline, NULL);
   vkDestroyPipelineLayout(g_vk.device, g_vk.pipeline_layout, NULL);
   vkDestroyPipelineCache(g_vk.device, g_vk.pipeline_cache, NULL);
   if (g_vk.have_timestamps) {
