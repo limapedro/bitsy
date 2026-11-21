@@ -6,6 +6,15 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added (TOGISHI Phase 6, exp_012)
+
+- vec4/aligned elementwise fast path with linear indexing and a safe scalar
+  fallback for broadcast/strided/odd shapes.
+- Large-tensor device bandwidth 269–284 GB/s; 20-add chain reaches 293 GB/s
+  (96% of measured DRAM ceiling). Wall ratios remain 0.43–0.49 because
+  submit+fence dominates; the ≥1.3× prediction was not met. Parity 42/42.
+  Details in `experiments/exp_012/FINDINGS.md`.
+
 ### Added (TOGISHI Phase 5, exp_011)
 
 - Per-run GPU clock logging in `gemm.py`/`elementwise.py` via

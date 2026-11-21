@@ -29,6 +29,7 @@ typedef struct {
   int recording;
   VkPipelineLayout pipeline_layout;
   VkPipeline pipeline;
+  VkPipeline elementwise_vec4_pipeline;
   VkPipeline matmul_pipeline;
   VkPipeline conv_pipeline;
   VkPipeline gemm_tiled_pipeline;

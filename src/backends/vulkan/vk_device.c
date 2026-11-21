@@ -8,6 +8,7 @@
 #include <bitsy/bt_profiler.h>
 #include "vk_device_internal.h"
 #include "elementwise.spv.h"
+#include "elementwise_vec4.spv.h"
 #include "matmul.spv.h"
 #include "conv.spv.h"
 #include "gemm_tiled.spv.h"
@@ -139,6 +140,8 @@ static bt_status_t make_pipeline(void) {
 
   bt_status_t status;
   if ((status = pipeline_from_spv(elementwise_spv, elementwise_spv_bytes, &g_vk.pipeline))) return status;
+  if ((status = pipeline_from_spv(elementwise_vec4_spv, elementwise_vec4_spv_bytes,
+                                  &g_vk.elementwise_vec4_pipeline))) return status;
   if ((status = pipeline_from_spv(matmul_spv, matmul_spv_bytes, &g_vk.matmul_pipeline))) return status;
   if ((status = pipeline_from_spv(conv_spv, conv_spv_bytes, &g_vk.conv_pipeline))) return status;
   if ((status = pipeline_from_spv(gemm_tiled_spv, gemm_tiled_spv_bytes,
@@ -222,6 +225,7 @@ void bt_vk_shutdown(void) {
   bt_vk_allocator_shutdown();
   vkDeviceWaitIdle(g_vk.device);
   vkDestroyPipeline(g_vk.device, g_vk.pipeline, NULL);
+  vkDestroyPipeline(g_vk.device, g_vk.elementwise_vec4_pipeline, NULL);
   vkDestroyPipeline(g_vk.device, g_vk.matmul_pipeline, NULL);
   vkDestroyPipeline(g_vk.device, g_vk.conv_pipeline, NULL);
   vkDestroyPipeline(g_vk.device, g_vk.gemm_tiled_pipeline, NULL);
