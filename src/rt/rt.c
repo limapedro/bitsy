@@ -750,10 +750,10 @@ static RTTensor* grad_wrt(RT* c, RTTensor* t, int s, RTTensor* g) {
       /* dw/db: sum over all leading axes, keep the last (feature) axis.
        * A 1-D input has no leading axes -> no reduction needed. */
       if(s==1){ RTTensor* gw=rt_mul(c,g,xhat);
-        for(int ax=x->ndim-2;ax>=0;--ax) gw=rt_reduce(c,gw,RT_REDUCE_SUM,ax,1);
+        for(int lead=x->ndim-2;lead>=0;--lead) gw=rt_reduce(c,gw,RT_REDUCE_SUM,lead,1);
         return rt_reshape(c,gw,w->ndim,w->dims); }
       if(s==2){ RTTensor* gb=g; RTTensor* bias=t->src[2];
-        for(int ax=x->ndim-2;ax>=0;--ax) gb=rt_reduce(c,gb,RT_REDUCE_SUM,ax,1);
+        for(int lead=x->ndim-2;lead>=0;--lead) gb=rt_reduce(c,gb,RT_REDUCE_SUM,lead,1);
         return rt_reshape(c,gb,bias->ndim,bias->dims); }
       RTTensor* dxh=rt_mul(c,g,w);
       RTTensor* s1=rt_reduce(c,dxh,RT_REDUCE_SUM,ax,1);
@@ -901,5 +901,10 @@ void rt_replay_submit_only(RT* c) {
 void rt_replay_submit_async(RT* c) {
   if (!c->vk) return;
   rt_vk_submit_async(c);
+  for (int i=0;i<c->capture_nout;++i) c->capture_outputs[i]->dirty = 1;
+}
+void rt_replay_n(RT* c, int n) {
+  if (!c->vk) return;
+  rt_vk_replay_n(c,n);
   for (int i=0;i<c->capture_nout;++i) c->capture_outputs[i]->dirty = 1;
 }

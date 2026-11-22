@@ -58,7 +58,30 @@ this GPU — see FINDINGS_PR15).
 
 ---
 
-## 2026-11-22 06:25 — PR #31 (in progress): GPU timestamp profiling — the definitive split
+## 2026-11-22 06:45 — PR #32 (in progress): batched graph replay — 4.2× faster than PyTorch at N=500
+
+PR #31 measured 73% host overhead in a single call. Added `rt_replay_n(RT*,n)`
+/ `Engine.replay_n(n)`: N graph executions in **ONE** `vkQueueSubmit2` (one
+timeline signal + one wait), then a single final read. New reproducible
+`benchmarks/compact/graph_replay_bench.py` (fused pointwise chain, 1M elements,
+warmup/median/spread/clock 1530→1935):
+```
+N= 10   batch 0.1764 ms/step | N-submits 0.1245 | torch 0.1907 | gap 0.92x
+N=100   batch 0.0592 ms/step | N-submits 0.0699 | torch 0.1238 | gap 0.48x
+N=500   batch 0.0289 ms/step | N-submits 0.0666 | torch 0.1214 | gap 0.24x  (4.2x FASTER)
+```
+Correctness diff 1.9e-06. **This directly attacks the measured 73% host
+overhead**: at N=500 the batch path is 2.31× faster than N separate submits and
+4.2× faster than PyTorch's loop.
+
+**Known limitation documented**: multi-dispatch GEMM/MLP capture currently
+produces zeros (single-dispatch fused capture works) — a pre-existing capture
+gap, not introduced here. The benchmark uses the proven fused-chain capture.
+
+Gates: v2 48/48, op 27/27, gradcheck 25/25, model 10/10, API 88/88, ctest 2/2.
+Core 2,747 lines. Fixed a variable-shadowing warning in LN backward.
+
+## 2026-11-22 06:25 — PR #31: GPU timestamp profiling — the definitive split
 
 Added Vulkan timestamp queries to the compact runtime (`rt_device_time_ms`,
 `rt_copy_time_ms`) and a reproducible script `benchmarks/compact/timestamp_profile.py`.

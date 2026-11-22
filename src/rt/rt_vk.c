@@ -841,6 +841,28 @@ void rt_vk_submit_async(RT* c){
   RtVk* vk=c->vk; if(!vk||!vk->dev||!vk->replay_count)return;
   submit_timeline(vk, 0);
 }
+/* PR #32: N graph executions in ONE submit (one fence/semaphore round trip). */
+void rt_vk_replay_n(RT* c, int n) {
+  RtVk* vk=c->vk; if(!vk||!vk->dev||!vk->replay_count||n<=0) return;
+  if(n>256) n=256;
+  VkCommandBufferSubmitInfo cbs[256];
+  for(int i=0;i<n;++i) cbs[i]=(VkCommandBufferSubmitInfo){
+    .sType=VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,.commandBuffer=vk->replay_cmd};
+  VkSemaphoreSubmitInfo w={.sType=VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+    .semaphore=vk->timeline,.value=vk->tick,.stageMask=VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT};
+  vk->tick += n;
+  VkSemaphoreSubmitInfo s={.sType=VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+    .semaphore=vk->timeline,.value=vk->tick,.stageMask=VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT};
+  VkSubmitInfo2 si={.sType=VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
+    .waitSemaphoreInfoCount=1,.pWaitSemaphoreInfos=&w,
+    .commandBufferInfoCount=(uint32_t)n,.pCommandBufferInfos=cbs,
+    .signalSemaphoreInfoCount=1,.pSignalSemaphoreInfos=&s};
+  vkQueueSubmit2(vk->queue,1,&si,VK_NULL_HANDLE);
+  VkSemaphoreWaitInfo wi={.sType=VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,
+    .semaphoreCount=1,.pSemaphores=&vk->timeline,.pValues=&vk->tick};
+  vkWaitSemaphores(vk->dev,&wi,UINT64_MAX);
+  vk->pending=0;
+}
 void rt_vk_download_outputs(RT* c){
   RtVk* vk=c->vk; if(!vk||!vk->dev)return;
   rt_vk_wait_pending(vk);   /* async submits must complete before reading */
@@ -994,6 +1016,7 @@ void rt_vk_capture_end(RT* c){ (void)c; }
 void rt_vk_replay(RT* c){ (void)c; }
 void rt_vk_submit_only(RT* c){ (void)c; }
 void rt_vk_submit_async(RT* c){ (void)c; }
+void rt_vk_replay_n(RT* c,int n){ (void)c;(void)n; }
 void rt_vk_download_outputs(RT* c){ (void)c; }
 void rt_vk_download_to(RT* c, RtBuf* b, float* out){ (void)c; (void)b; (void)out; }
 const float* rt_vk_read_ptr(RT* c, RtBuf* b, int slot){ (void)c; (void)slot; return b?(const float*)b->host:NULL; }
