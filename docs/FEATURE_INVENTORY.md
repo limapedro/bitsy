@@ -46,7 +46,7 @@ Per-function numeric and performance evidence lives in [PROGRESS.md](PROGRESS.md
 | `sin`, `cos`, `tan`, `asin`, `acos`, `atan`, `atan2`, `sinh`, `cosh`, `asinh`, `acosh`, `atanh` | missing |
 | `erf`, `erfc`, `erfinv`, `lgamma`, `gamma`, `digamma` | missing |
 | `clamp`, `clip`, `round`, `floor`, `ceil`, `trunc`, `frac`, `nan_to_num`, `nan_to_num_` | partial (PR #9: `clamp`/`clip`; PR #13: `clamp_min`/`clamp_max`; rounding family missing) |
-| `hypot`, `copysign`, `nextafter`, `lerp`, `addcmul`, `addcdiv` | partial (PR #9: `lerp`; PR #15: `hypot`/`copysign`; rest missing) |
+| `hypot`, `copysign`, `nextafter`, `lerp`, `addcmul`, `addcdiv` | partial (PR #9: `lerp`; PR #15: `hypot`/`copysign`; PR #28: `cosine_similarity`/`pairwise_distance` in functional; rest missing) |
 
 ## 4. Comparisons, logical, bitwise
 

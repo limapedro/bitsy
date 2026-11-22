@@ -238,9 +238,9 @@ RTTensor* rt_reduce(RT* c, RTTensor* a, int kind, int axis, int keepdim) {
   return t;
 }
 /* PR #24: fused softmax/log_softmax along the last axis (<=256 cols). */
-RTTensor* rt_softmax(RT* c, RTTensor* a, int kind) {
+RTTensor* rt_softmax(RT* c, RTTensor* a, RTTensor* bias, int kind) {
   if (!a || a->ndim<1 || a->dims[a->ndim-1]>256) return NULL;
-  RTTensor* t=node_new(c,RT_SOFTMAX,a->ndim,a->dims,1,a,NULL,NULL);
+  RTTensor* t=node_new(c,RT_SOFTMAX,a->ndim,a->dims,bias?2:1,a,bias,NULL);
   t->scalar=(float)kind;
   return t;
 }
@@ -622,14 +622,15 @@ static void realize_node(RT* c, RTTensor* t) {
   }
   if (t->op == RT_SOFTMAX) {
     RtBuf* in=t->src[0]->buf;
+    RtBuf* bias=t->nsrc>1?t->src[1]->buf:NULL;
     RtBuf* out=rt_buf_new(c,t->ndim,t->dims,c->device);
     int kind=(int)t->scalar;
-    if (c->device==RT_VULKAN && c->vk) rt_vk_softmax(c,in,out,kind);
+    if (c->device==RT_VULKAN && c->vk) rt_vk_softmax(c,in,bias,out,kind);
     else { /* CPU fallback: stable softmax row by row */
       int cols=(int)in->dims[in->ndim-1], rows=in->n/cols;
       for(int r=0;r<rows;++r){ float mx=-INFINITY;
-        for(int j=0;j<cols;++j) mx=fmaxf(mx,in->host[r*cols+j]);
-        float s=0.f; for(int j=0;j<cols;++j){ float e=expf(in->host[r*cols+j]-mx);
+        for(int j=0;j<cols;++j) mx=fmaxf(mx,in->host[r*cols+j]+(bias?bias->host[j]:0.f));
+        float s=0.f; for(int j=0;j<cols;++j){ float e=expf(in->host[r*cols+j]+(bias?bias->host[j]:0.f)-mx);
           out->host[r*cols+j]=e; s+=e; }
         for(int j=0;j<cols;++j){ float v=out->host[r*cols+j]/s;
           out->host[r*cols+j]=(kind==1)?logf(v):v; }
@@ -751,8 +752,9 @@ static RTTensor* grad_wrt(RT* c, RTTensor* t, int s, RTTensor* g) {
     case RT_SOFTMAX: {
       /* softmax: dx = y*(g - sum(g*y)); log_softmax: dx = g - exp(y)*sum(g) */
       int ax=t->ndim-1, kind=(int)t->scalar;
+      RTTensor* gy = (kind==0) ? rt_mul(c,g,t) : rt_mul(c,g,rt_exp(c,t));
+      if (s==1) return rt_reduce(c,gy,RT_REDUCE_SUM,0,1);  /* dbias */
       if (kind==0) {
-        RTTensor* gy=rt_mul(c,g,t);
         RTTensor* sumg=rt_reduce(c,gy,RT_REDUCE_SUM,ax,1);
         return rt_mul(c,t,rt_sub(c,g,sumg));
       } else {

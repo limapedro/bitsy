@@ -155,3 +155,16 @@ def poisson_nll_loss(input: Tensor, target: Tensor, log_input: bool = True) -> T
 def kl_div(input: Tensor, target: Tensor) -> Tensor:
   """target must be positive; mean(target*(log(target) - input))."""
   return (target * (target.log() - input)).mean()
+
+
+# ---- PR #28: similarity helpers (pure compositions) ----
+def cosine_similarity(a: Tensor, b: Tensor, dim: int = -1, eps: float = 1e-8) -> Tensor:
+  dot = (a * b).sum(axis=dim, keepdim=True)
+  na = (a * a).sum(axis=dim, keepdim=True)
+  nb = (b * b).sum(axis=dim, keepdim=True)
+  return dot / ((na * nb).sqrt() + Tensor.scalar(a.rt, eps))
+
+
+def pairwise_distance(a: Tensor, b: Tensor, p: float = 2.0) -> Tensor:
+  d = (a - b).abs()
+  return (d ** Tensor.scalar(a.rt, p)).sum(axis=-1) ** Tensor.scalar(a.rt, 1.0/p)

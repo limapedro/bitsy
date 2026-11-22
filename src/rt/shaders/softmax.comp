@@ -7,6 +7,7 @@
  * kind: 0 = softmax, 1 = log_softmax. */
 layout(local_size_x = 256) in;
 layout(constant_id = 0) const int KIND = 0;
+layout(constant_id = 1) const int HAS_BIAS = 0;
 
 layout(buffer_reference, std430, buffer_reference_align = 4) readonly buffer F32 {
   float v[];
@@ -14,7 +15,7 @@ layout(buffer_reference, std430, buffer_reference_align = 4) readonly buffer F32
 layout(buffer_reference, std430, buffer_reference_align = 4) writeonly buffer F32W {
   float v[];
 };
-/* params: [0]=rows [1]=cols [2]=Inaddr [4]=Outaddr */
+/* params: [0]=rows [1]=cols [2]=Inaddr [4]=Outaddr [6]=Biasaddr */
 layout(std430, binding = 0) readonly buffer Params { int param[]; };
 uint64_t paddr(int b){ return uint64_t(uint(param[b])) | (uint64_t(uint(param[b+1]))<<32); }
 
@@ -27,12 +28,13 @@ void main(){
   int tid=int(gl_LocalInvocationID.x);
   if(row>=rows) return;
   F32 In=F32(paddr(2)); F32W Out=F32W(paddr(4));
+  F32 Bias=F32(paddr(6));
 
   /* cooperative load: each thread handles cols/256 elements (strided) */
   int nchunks=(cols+255)/256;
   float local_max=-1.0/0.0;
   for(int c=0;c<nchunks;++c){ int i=c*256+tid;
-    if(i<cols) smem[i]=In.v[row*cols+i];
+    if(i<cols) smem[i]=In.v[row*cols+i]+(HAS_BIAS==1?Bias.v[i]:0.0);
   }
   barrier();
   for(int i=tid;i<cols;i+=256) local_max=max(local_max,smem[i]);
