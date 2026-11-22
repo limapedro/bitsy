@@ -54,6 +54,33 @@ static void run(RT* c, const char* tag) {
   RTTensor* cond=rt_gt(c,P,Q);
   float ow[4]; rt_to_host(rt_where(c,cond,P,Q),ow);
   CHECK(md(ow,(float[]){3,3,5,5},4)<1e-5f,"where");
+
+  /* ---- autograd: gradients of all primitives ---- */
+  int64_t s3[1]={3}; float gx[3]={2,3,4};
+  RTTensor* X=rt_from_host(c,gx,1,s3,1);
+  RTTensor* sum=rt_reduce(c,X,RT_REDUCE_SUM,0,0);
+  rt_backward(c,sum);
+  float gg[3]={0}; rt_to_host(rt_grad(X),gg);
+  CHECK(md(gg,(float[]){1,1,1},3)<1e-5f,"grad sum");
+
+  RTTensor* X2=rt_from_host(c,gx,1,s3,1);
+  RTTensor* mean=rt_reduce(c,X2,RT_REDUCE_MEAN,0,0);
+  rt_backward(c,mean);
+  float gm[3]={0}; rt_to_host(rt_grad(X2),gm);
+  CHECK(md(gm,(float[]){1.f/3,1.f/3,1.f/3},3)<1e-5f,"grad mean");
+
+  RTTensor* X3=rt_from_host(c,gx,1,s3,1);
+  RTTensor* mx=rt_reduce(c,X3,RT_REDUCE_MAX,0,0);
+  rt_backward(c,mx);
+  float gmx[3]={0}; rt_to_host(rt_grad(X3),gmx);
+  CHECK(md(gmx,(float[]){0,0,1},3)<1e-5f,"grad max");
+
+  RTTensor* X4=rt_from_host(c,gx,1,s3,1);
+  RTTensor* sq=rt_mul(c,X4,X4);
+  RTTensor* loss=rt_reduce(c,sq,RT_REDUCE_SUM,0,0);
+  rt_backward(c,loss);
+  float gsq[3]={0}; rt_to_host(rt_grad(X4),gsq);
+  CHECK(md(gsq,(float[]){4,6,8},3)<1e-4f,"grad chain x^2");
 }
 
 int main(void) {

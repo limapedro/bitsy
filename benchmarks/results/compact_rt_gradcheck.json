@@ -1,0 +1,176 @@
+{
+  "generated_at": "2026-11-22T02:40:37.712654+00:00",
+  "environment": {
+    "torch": "2.11.0+cu126",
+    "gpu": "NVIDIA GeForce GTX 1660 SUPER",
+    "device": "vulkan"
+  },
+  "config": {
+    "build_dir": "E:\\__PROJECTS__\\Hagane\\build-rtvk",
+    "device": 1,
+    "seed": 7,
+    "shape": [
+      4,
+      6
+    ],
+    "tol": 0.001,
+    "result_path": "E:\\__PROJECTS__\\Hagane\\benchmarks\\results\\compact_rt_gradcheck.json"
+  },
+  "summary": {
+    "total": 25,
+    "passed": 25,
+    "failed": 0
+  },
+  "cases": [
+    {
+      "name": "grad_exp",
+      "max_diff": 9.5367431640625e-07,
+      "tol": 0.001,
+      "passed": true
+    },
+    {
+      "name": "grad_log",
+      "max_diff": 1.1920928955078125e-07,
+      "tol": 0.001,
+      "passed": true
+    },
+    {
+      "name": "grad_sqrt",
+      "max_diff": 5.960464477539063e-08,
+      "tol": 0.001,
+      "passed": true
+    },
+    {
+      "name": "grad_tanh",
+      "max_diff": 5.960464477539063e-08,
+      "tol": 0.001,
+      "passed": true
+    },
+    {
+      "name": "grad_sigm",
+      "max_diff": 8.940696716308594e-08,
+      "tol": 0.001,
+      "passed": true
+    },
+    {
+      "name": "grad_relu",
+      "max_diff": 0.0,
+      "tol": 0.001,
+      "passed": true
+    },
+    {
+      "name": "grad_gelu",
+      "max_diff": 1.1920928955078125e-07,
+      "tol": 0.001,
+      "passed": true
+    },
+    {
+      "name": "grad_abs",
+      "max_diff": 0.0,
+      "tol": 0.001,
+      "passed": true
+    },
+    {
+      "name": "grad_neg",
+      "max_diff": 0.0,
+      "tol": 0.001,
+      "passed": true
+    },
+    {
+      "name": "grad_add",
+      "max_diff": 0.0,
+      "tol": 0.001,
+      "passed": true
+    },
+    {
+      "name": "grad_sub",
+      "max_diff": 0.0,
+      "tol": 0.001,
+      "passed": true
+    },
+    {
+      "name": "grad_mul",
+      "max_diff": 0.0,
+      "tol": 0.001,
+      "passed": true
+    },
+    {
+      "name": "grad_div",
+      "max_diff": 5.960464477539063e-08,
+      "tol": 0.001,
+      "passed": true
+    },
+    {
+      "name": "grad_pow",
+      "max_diff": 2.384185791015625e-07,
+      "tol": 0.001,
+      "passed": true
+    },
+    {
+      "name": "grad_maximum",
+      "max_diff": 0.0,
+      "tol": 0.001,
+      "passed": true
+    },
+    {
+      "name": "grad_minimum",
+      "max_diff": 0.0,
+      "tol": 0.001,
+      "passed": true
+    },
+    {
+      "name": "grad_reduce_sum",
+      "max_diff": 0.0,
+      "tol": 0.001,
+      "passed": true
+    },
+    {
+      "name": "grad_reduce_mean",
+      "max_diff": 0.0,
+      "tol": 0.001,
+      "passed": true
+    },
+    {
+      "name": "grad_reduce_max",
+      "max_diff": 0.0,
+      "tol": 0.001,
+      "passed": true
+    },
+    {
+      "name": "grad_reduce_min",
+      "max_diff": 0.0,
+      "tol": 0.001,
+      "passed": true
+    },
+    {
+      "name": "grad_matmul_A",
+      "max_diff": 0.0,
+      "tol": 0.001,
+      "passed": true
+    },
+    {
+      "name": "grad_transpose",
+      "max_diff": 0.0,
+      "tol": 0.001,
+      "passed": true
+    },
+    {
+      "name": "grad_reshape",
+      "max_diff": 0.0,
+      "tol": 0.001,
+      "passed": true
+    },
+    {
+      "name": "grad_where",
+      "max_diff": 0.0,
+      "tol": 0.001,
+      "passed": true
+    },
+    {
+      "name": "grad_gemm_bias",
+      "max_diff": 0.0,
+      "tol": 0.001,
+      "passed": true
+    }
+  ]
+}

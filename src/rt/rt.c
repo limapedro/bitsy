@@ -209,11 +209,13 @@ RTTensor* rt_reduce(RT* c, RTTensor* a, int kind, int axis, int keepdim) {
   if (axis < 0) axis += a->ndim;
   if (axis < 0 || axis >= a->ndim) { rt_errf(c, "reduce axis OOB"); return NULL; }
   int nd = keepdim ? a->ndim : a->ndim - 1;
+  if (nd < 1) nd = 1;  /* scalars are 1-element tensors (PyTorch/tinygrad convention) */
   int64_t d[RT_MAXDIMS]; int j = 0;
   for (int i = 0; i < a->ndim; ++i) {
     if (i == axis && keepdim) d[j++] = 1;
     else if (i != axis) d[j++] = a->dims[i];
   }
+  if (j == 0) d[j++] = 1;  /* reduced everything: 1-element scalar tensor */
   RTTensor* t = node_new(c, RT_REDUCE, nd, d, 1, a, NULL, NULL);
   t->axis = axis; t->keepdim = keepdim; t->scalar = (float)kind;
   return t;
@@ -557,29 +559,42 @@ static RTTensor* grad_wrt(RT* c, RTTensor* t, int s, RTTensor* g) {
     case RT_WHERE: return s == 1 ? rt_mul(c, g, t->src[0])
                                  : (s == 2 ? rt_mul(c, g, rt_sub(c, scalar(c,1.f), t->src[0])) : scalar(c,0.f));
     case RT_MATMUL: {
-      /* respect transpose flags: Y = opA(A) @ opB(B) */
+      /* Y = opA(A) @ opB(B), opX = transpose iff flag set.
+       * dY/dA' = g @ B'^T ; dY/dB' = A'^T @ g ; then un-transpose. */
       int ta = t->axis, tb = t->keepdim;
+      RTTensor* A = t->src[0], *B = t->src[1];
       if (s == 0) {
-        RTTensor* gbt = tb ? g : rt_transpose(c, g);     /* d/dopA = g @ opB(B)^T */
-        RTTensor* bt = tb ? t->src[1] : rt_transpose(c, t->src[1]);
-        RTTensor* d = rt_matmul(c, gbt, bt);
-        return ta ? rt_transpose(c, d) : d;
+        RTTensor* BpT = tb ? B : rt_transpose(c, B);   /* opB(B)^T */
+        RTTensor* dAp = rt_matmul(c, g, BpT);          /* dY/dA' */
+        return ta ? rt_transpose(c, dAp) : dAp;
       }
       if (s == 1) {
-        RTTensor* gat = ta ? g : rt_transpose(c, g);     /* d/dopB = opA(A)^T @ g */
-        RTTensor* at = ta ? t->src[0] : rt_transpose(c, t->src[0]);
-        RTTensor* d = rt_matmul(c, at, gat);
-        return tb ? rt_transpose(c, d) : d;
+        RTTensor* ApT = ta ? A : rt_transpose(c, A);   /* opA(A)^T */
+        RTTensor* dBp = rt_matmul(c, ApT, g);          /* dY/dB' */
+        return tb ? rt_transpose(c, dBp) : dBp;
       }
-      return g;  /* s==2 is bias: dY/dbias = sum over rows of g */
+      /* s==2: bias. dY/dbias[j] = sum_i g[i,j] -> reduce over axis 0 */
+      return rt_reduce(c, g, RT_REDUCE_SUM, 0, 0);
     }
-    case RT_REDUCE: {  /* broadcast g back to input shape via multiply by ones */
+    case RT_REDUCE: {
+      int kind = (int)t->scalar;
       int64_t n = rt_numel(a->ndim, a->dims);
       float* ones = (float*)malloc(sizeof(float) * (size_t)n);
       for (int64_t i=0;i<n;++i) ones[i] = 1.f;
       RTTensor* ot = rt_from_host(c, ones, a->ndim, a->dims, 0);
       free(ones);
-      return rt_mul(c, g, ot); }
+      /* broadcast g to input shape; t is the reduce output (scalar for these tests) */
+      RTTensor* gfull = rt_mul(c, g, ot);
+      if (kind == RT_REDUCE_SUM) return gfull;
+      if (kind == RT_REDUCE_MEAN) {
+        int64_t count = rt_numel(a->ndim, a->dims) / rt_numel(t->ndim, t->dims);
+        return rt_mul(c, gfull, scalar(c, 1.f/(float)count)); }
+      if (kind == RT_REDUCE_MAX || kind == RT_REDUCE_MIN) {
+        /* mask = (a == broadcast(t)); grad = gfull * mask */
+        RTTensor* tbcast = rt_mul(c, t, ot);              /* scalar t broadcast to input shape */
+        RTTensor* mask = rt_eq(c, a, tbcast);
+        return rt_mul(c, gfull, mask); }
+      return gfull; }
     case RT_TRANSPOSE: case RT_RESHAPE: return rt_reshape(c, g, a->ndim, a->dims);
     case RT_GT0: case RT_GELUB: return scalar(c, 0.f);
     default: return scalar(c, 0.f);
@@ -622,7 +637,8 @@ void rt_backward(RT* c, RTTensor* loss) {
     for (int s = 0; s < n->nsrc; ++s) {
       RTTensor* p = n->src[s];
       if (!p || !p->requires_grad) continue;
-      accum(c, p, grad_wrt(c, n, s, n->grad));
+      RTTensor* g = grad_wrt(c, n, s, n->grad);
+      accum(c, p, g);
     }
   }
   free(topo);
