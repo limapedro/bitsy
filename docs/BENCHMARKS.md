@@ -58,6 +58,28 @@ this GPU — see FINDINGS_PR15).
 
 ---
 
+## 2026-11-22 15:15 — PR #49: CUDA-native output allocation — blocked by driver (Win32 external memory export)
+
+Tried the reverse interop direction the previous experiment suggested: have
+CUDA allocate the output memory natively (`cuMemCreate` + `cuMemExportToShareableHandle`
+with `CU_MEM_HANDLE_TYPE_WIN32` / `_WIN32_KMT`), import that handle into Vulkan
+for compute, then copy D2H with CUDA's fast native path. This would avoid the
+990 us Vulkan-imported-memory D2H measured in PR #46.
+
+The path is blocked at the first step on this GTX 1660 Super / driver 13.3:
+`cuMemCreate` returns `CUDA_ERROR_INVALID_VALUE` (1) for correctly formed
+`CUmemAllocationProp` (PINNED, DEVICE id 0, WIN32/KMT handle type, Win32
+SECURITY_ATTRIBUTES) at the required 2 MB granularity. Both handle types were
+tried. No Vulkan import or D2H was ever reached, so no timing exists.
+
+Fully reverted (module deleted, CMake and all core edits restored); gates green.
+Combined with PR #46 (Vulkan-exported memory → CUDA D2H = 990 us), this closes
+both directions of CUDA/Vulkan memory interop on this stack: neither can provide
+a fast single-call readback path.
+
+Gates: v2 48/48, op 27/27, gradcheck 25/25, model 10/10, API 111/111, ctest 2/2.
+Core 3,159 lines.
+
 ## 2026-11-22 14:40 — PR #48: adaptive auto-capture covers inference/single ops too
 
 Extended `AutoCapture` to cover inference/single-op workloads with an adaptive
