@@ -16,6 +16,7 @@
 #include "rt_gemm.spv.h"
 #include "rt_reduce.spv.h"
 #include "rt_softmax.spv.h"
+#include "rt_layernorm.spv.h"
 
 #define RT_NBUF 512
 
@@ -68,6 +69,7 @@ struct RtVk {
   int gemm_bm[3], gemm_bn[3];
   VkPipeline reduce, reduce_s1;
   VkPipeline softmax[2];   /* 0=softmax, 1=log_softmax */
+  VkPipeline layernorm;
   VkBuffer reduce_part; VkDeviceMemory reduce_part_mem;   /* two-stage partials */
   VkPipelineCache pcache;
   RtVkBuf bufs[RT_NBUF];
@@ -317,6 +319,7 @@ void rt_vk_init(RT* c) {
   VkShaderModule sg = shader(vk, rt_gemm_spv, rt_gemm_spv_bytes);
   VkShaderModule sr = shader(vk, rt_reduce_spv, rt_reduce_spv_bytes);
   VkShaderModule ss = shader(vk, rt_softmax_spv, rt_softmax_spv_bytes);
+  VkShaderModule sl = shader(vk, rt_layernorm_spv, rt_layernorm_spv_bytes);
   vk->fused[0] = make_pipeline(vk, sf, 0, 0,0,0);
   vk->gemm[0] = make_pipeline(vk, sg, 1, 16,16,16);
   vk->gemm[1] = make_pipeline(vk, sg, 1, 32,32,8);
@@ -328,6 +331,7 @@ void rt_vk_init(RT* c) {
   vk->reduce_s1 = make_pipeline(vk, sr, 1, 1,64,0); /* STAGE=1, NPART=64 */
   vk->softmax[0] = make_pipeline(vk, ss, 1, 0,0,0);
   vk->softmax[1] = make_pipeline(vk, ss, 1, 1,0,0);
+  vk->layernorm = make_pipeline(vk, sl, 0, 0,0,0);
 
   /* params + output staging buffers (host visible) */
   VkBufferCreateInfo bci = { .sType=VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
@@ -394,6 +398,7 @@ void rt_vk_shutdown(RT* c) {
     vkUnmapMemory(vk->dev,vk->rb_mem[i]);
     vkDestroyBuffer(vk->dev,vk->rb_buf[i],NULL); vkFreeMemory(vk->dev,vk->rb_mem[i],NULL);
   }
+  if (vk->layernorm) vkDestroyPipeline(vk->dev,vk->layernorm,NULL);
   if (vk->softmax[0]) vkDestroyPipeline(vk->dev,vk->softmax[0],NULL);
   if (vk->softmax[1]) vkDestroyPipeline(vk->dev,vk->softmax[1],NULL);
   if (vk->reduce_s1) vkDestroyPipeline(vk->dev,vk->reduce_s1,NULL);
@@ -642,6 +647,33 @@ void rt_vk_gemm(RT* c, RtBuf* a, RtBuf* b, RtBuf* bias,
   vkEndCommandBuffer(vk->cmd);
   submit_wait(vk);
   finish_output(vk, out);
+}
+
+void rt_vk_layernorm(RT* c, RtBuf* x, RtBuf* w, RtBuf* b, RtBuf* out, float eps) {
+  RtVk* vk=c->vk; if(!vk->dev) return;
+  if (x->ndim<1 || x->dims[x->ndim-1]>256) return;
+  int cols=(int)x->dims[x->ndim-1], rows=1;
+  for(int i=0;i<x->ndim-1;++i) rows*=(int)x->dims[i];
+  RtCaptureSlot* slot = vk->capturing ? cap_slot_new(vk, out) : NULL;
+  int* p=(int*)(slot ? slot->params_map : vk->params_map);
+  p[0]=rows; p[1]=cols; memcpy(&p[2],&eps,sizeof(float));
+  pack_addr(p,4,vkbuf(c,x)->addr); pack_addr(p,6,vkbuf(c,w)->addr); pack_addr(p,8,vkbuf(c,b)->addr);
+  uint64_t outaddr;
+  if(slot){ VkBufferDeviceAddressInfo ao={.sType=VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,.buffer=slot->out};
+    outaddr=vkGetBufferDeviceAddress(vk->dev,&ao); }
+  else outaddr=vkbuf(c,out)->addr;
+  pack_addr(p,10,outaddr);
+  int pc[4]={rows,cols,0,0};
+  VkCommandBuffer cmd = slot?vk->replay_cmd:vk->cmd;
+  VkDescriptorSet set = slot?slot->set:vk->set;
+  if(!slot){ VkCommandBufferBeginInfo bi={.sType=VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
+    vkBeginCommandBuffer(cmd,&bi); }
+  vkCmdBindPipeline(cmd,VK_PIPELINE_BIND_POINT_COMPUTE,vk->layernorm);
+  vkCmdBindDescriptorSets(cmd,VK_PIPELINE_BIND_POINT_COMPUTE,vk->playout,0,1,&set,0,NULL);
+  vkCmdPushConstants(cmd,vk->playout,VK_SHADER_STAGE_COMPUTE_BIT,0,sizeof(pc),pc);
+  vkCmdDispatch(cmd,rows,1,1);
+  if(slot){ if(slot->pipeline==VK_NULL_HANDLE){slot->pipeline=vk->layernorm;memcpy(slot->pc,pc,sizeof(int)*4);slot->groups=1;} return; }
+  vkEndCommandBuffer(cmd); submit_wait(vk); finish_output(vk,out);
 }
 
 void rt_vk_softmax(RT* c, RtBuf* in, RtBuf* out, int kind) {
@@ -921,6 +953,7 @@ void rt_vk_gemm(RT* c, RtBuf* a, RtBuf* b, RtBuf* bias, int ta, int tb, int relu
   (void)c;(void)a;(void)b;(void)bias;(void)ta;(void)tb;(void)relu;(void)o; }
 void rt_vk_reduce(RT* c, RtBuf* i, int kind, int ax, RtBuf* o){ (void)c;(void)i;(void)kind;(void)ax;(void)o; }
 void rt_vk_softmax(RT* c, RtBuf* i, RtBuf* o, int k){ (void)c;(void)i;(void)o;(void)k; }
+void rt_vk_layernorm(RT* c, RtBuf* x, RtBuf* w, RtBuf* b, RtBuf* o, float e){ (void)c;(void)x;(void)w;(void)b;(void)o;(void)e; }
 void rt_vk_capture_begin(RT* c){ (void)c; }
 void rt_vk_capture_end(RT* c){ (void)c; }
 void rt_vk_replay(RT* c){ (void)c; }

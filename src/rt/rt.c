@@ -244,6 +244,12 @@ RTTensor* rt_softmax(RT* c, RTTensor* a, int kind) {
   t->scalar=(float)kind;
   return t;
 }
+RTTensor* rt_layernorm(RT* c, RTTensor* x, RTTensor* w, RTTensor* b, float eps) {
+  if (!x || x->ndim<1 || x->dims[x->ndim-1]>256) return NULL;
+  RTTensor* t=node_new(c,RT_LAYERNORM,x->ndim,x->dims,3,x,w,b);
+  t->scalar=eps;
+  return t;
+}
 RTTensor* rt_reduce_sum(RT* c, RTTensor* a, int axis, int keepdim) {
   return rt_reduce(c, a, RT_REDUCE_SUM, axis, keepdim);
 }
@@ -330,7 +336,7 @@ static int emit_pointwise(RT* c, RTTensor* t, RtFusion* f) {
 static void realize_node(RT* c, RTTensor* t);
 static int is_cut(RTOp op) {
   return op == RT_MATMUL || op == RT_GEMM_RELU || op == RT_REDUCE ||
-         op == RT_SOFTMAX || op == RT_TRANSPOSE || op == RT_RESHAPE;
+         op == RT_SOFTMAX || op == RT_LAYERNORM || op == RT_TRANSPOSE || op == RT_RESHAPE;
 }
 
 /* Emit expression onto the fused stack; returns the stack slot holding value.
@@ -600,6 +606,20 @@ static void realize_node(RT* c, RTTensor* t) {
     out->host_valid = 1;   /* host-side copy -> must upload to device on first vkbuf */
     c->dispatch_count++; t->buf = out; return;
   }
+  if (t->op == RT_LAYERNORM) {
+    RtBuf* x=t->src[0]->buf, *w=t->src[1]->buf, *b=t->src[2]->buf;
+    RtBuf* out=rt_buf_new(c,t->ndim,t->dims,c->device);
+    if (c->device==RT_VULKAN && c->vk) rt_vk_layernorm(c,x,w,b,out,t->scalar);
+    else { int cols=(int)x->dims[x->ndim-1], rows=x->n/cols; float eps=t->scalar;
+      for(int r=0;r<rows;++r){ float m=0,vv=0;
+        for(int j=0;j<cols;++j) m+=x->host[r*cols+j]; m/=cols;
+        for(int j=0;j<cols;++j){ float d=x->host[r*cols+j]-m; vv+=d*d; } vv/=cols;
+        float sc=1.0f/sqrtf(vv+eps);
+        for(int j=0;j<cols;++j) out->host[r*cols+j]=(x->host[r*cols+j]-m)*sc*w->host[j]+b->host[j];
+      }
+    }
+    c->dispatch_count++; t->buf=out; return;
+  }
   if (t->op == RT_SOFTMAX) {
     RtBuf* in=t->src[0]->buf;
     RtBuf* out=rt_buf_new(c,t->ndim,t->dims,c->device);
@@ -708,6 +728,25 @@ static RTTensor* grad_wrt(RT* c, RTTensor* t, int s, RTTensor* g) {
       }
       /* s==2: bias. dY/dbias[j] = sum_i g[i,j] -> reduce over axis 0 */
       return rt_reduce(c, g, RT_REDUCE_SUM, 0, 0);
+    }
+    case RT_LAYERNORM: {
+      /* y = xhat*s*w + b, xhat=(x-mean)/sqrt(var+eps), s=rsqrt(var+eps)
+       * dx = (1/n)*s*(n*g*w - sum(g*w) - xhat*sum(g*w*xhat))
+       * gw = sum_rows(g*xhat), gb = sum_rows(g) */
+      RTTensor* x=t->src[0], *w=t->src[1];
+      int ax=t->ndim-1, cols=(int)x->dims[ax];
+      RTTensor* mean=rt_reduce(c,x,RT_REDUCE_MEAN,ax,1);
+      RTTensor* d=rt_sub(c,x,mean);
+      RTTensor* var=rt_reduce(c,rt_mul(c,d,d),RT_REDUCE_MEAN,ax,1);
+      RTTensor* inv=rt_pow(c,rt_add(c,var,scalar(c,t->scalar)),scalar(c,-0.5f));
+      RTTensor* xhat=rt_mul(c,d,inv);
+      if(s==1) return rt_reduce(c,rt_mul(c,g,xhat),RT_REDUCE_SUM,0,1);
+      if(s==2) return rt_reduce(c,g,RT_REDUCE_SUM,0,1);
+      RTTensor* dxh=rt_mul(c,g,w);
+      RTTensor* s1=rt_reduce(c,dxh,RT_REDUCE_SUM,ax,1);
+      RTTensor* s2=rt_reduce(c,rt_mul(c,dxh,xhat),RT_REDUCE_SUM,ax,1);
+      RTTensor* core=rt_sub(c,rt_sub(c,dxh,s1),rt_mul(c,xhat,s2));
+      return rt_mul(c,rt_mul(c,core,inv),scalar(c,1.0f/(float)cols));
     }
     case RT_SOFTMAX: {
       /* softmax: dx = y*(g - sum(g*y)); log_softmax: dx = g - exp(y)*sum(g) */
