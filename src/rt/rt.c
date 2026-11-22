@@ -595,7 +595,8 @@ static RTTensor* grad_wrt(RT* c, RTTensor* t, int s, RTTensor* g) {
         RTTensor* mask = rt_eq(c, a, tbcast);
         return rt_mul(c, gfull, mask); }
       return gfull; }
-    case RT_TRANSPOSE: case RT_RESHAPE: return rt_reshape(c, g, a->ndim, a->dims);
+    case RT_TRANSPOSE: return rt_transpose(c, g);
+    case RT_RESHAPE: return rt_reshape(c, g, a->ndim, a->dims);
     case RT_GT0: case RT_GELUB: return scalar(c, 0.f);
     default: return scalar(c, 0.f);
   }
