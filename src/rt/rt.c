@@ -680,8 +680,17 @@ static void realize_node(RT* c, RTTensor* t) {
     RtBuf* out = rt_buf_new(c, t->ndim, t->dims, c->device);
     int kind = (int)t->scalar;
     RtBuf* ib=t->src[0]->buf;
-    /* PR #60 two-stage max/min measured slower than Vulkan (2 launches +
-     * D2H sync ~0.29ms vs 0.23ms); keep max/min on Vulkan. */
+    /* PR #61: single-kernel atomicCAS max/min. */
+    if (c->cuda_native && !c->capture && (kind==2||kind==3) && rt_cn_available() && ib &&
+        (ib->host_valid || ib->cn_dptr)) {
+      int outer=1, stride=(int)ib->dims[t->axis], inner=1;
+      for (int i=0;i<t->axis;++i) outer*=(int)ib->dims[i];
+      for (int i=t->axis+1;i<ib->ndim;++i) inner*=(int)ib->dims[i];
+      void* od=rt_cn_out(sizeof(float)*(size_t)out->n);
+      if (od && rt_cn_reduce_max_atomic(cn_buf(ib),od,outer,stride,inner,kind)==0) {
+        out->cn_dptr=od; out->dirty=1; t->buf=out; c->dispatch_count++; return;
+      }
+    }
     (void)rt_cn_reduce_max;
     /* PR #55: single-kernel CUDA reduction for sum/mean. */
     if (c->cuda_native && !c->capture && (kind==0||kind==1) && rt_cn_available() && ib &&
