@@ -58,6 +58,27 @@ this GPU — see FINDINGS_PR15).
 
 ---
 
+## 2026-11-22 19:30 — PR #57: CUDA fast path returned to opt-in (intermittent gradcheck corruption)
+
+Attempted to port GEMM to a tiled CUDA kernel (16×16 shared-memory tiles) and
+re-benchmark. In isolation it beat PyTorch (GEMM 0.049 vs 0.084 ms, 0.58×) and
+all gates passed once — but repeated gate runs exposed **intermittent**
+`grad_reshape` corruption (grad = zeros or ~1e27). Bisection showed the
+corruption comes from the CUDA fast path being enabled by default (PR #54),
+not from the new GEMM kernel specifically: with `cuda_native=0` gradcheck passed
+4/4 runs; with it on, 0/3. Ring size 8→32 and per-op stream syncs did not help.
+
+This is a real correctness regression that the single green run after PR #54
+missed. Reverted the CUDA GEMM port and set `cuda_native=0` by default again
+(restoring the opt-in `Engine.use_cuda_native(True)` path). Verified gradcheck
+4/4 consecutive green plus all other gates: v2 48/48, op 27/27, gradcheck
+25/25, model 10/10, API 113/113, CTest 2/2. Core 3,438 lines.
+
+The standalone CUDA GEMM/reduce performance numbers were measured but are not
+shipped because the default-on path is not trustworthy; the Vulkan GEMM and the
+opt-in pointwise path remain. This is recorded so PR #54's "default" claim is
+corrected.
+
 ## 2026-11-22 18:50 — PR #55: single-kernel CUDA reduction closes most of the reduction gap
 
 Replaced the Vulkan two-stage reduce for SUM/MEAN with a single CUDA kernel:
