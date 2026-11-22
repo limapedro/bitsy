@@ -1,11 +1,11 @@
 {
-  "generated_at": "2026-11-22T05:22:03.132178+00:00",
+  "generated_at": "2026-11-22T05:28:32.065437+00:00",
   "environment": {
     "torch": "2.11.0+cu126",
     "gpu": "NVIDIA GeForce GTX 1660 SUPER",
     "clock": [
-      1530.0,
-      1845.0
+      1950.0,
+      1950.0
     ]
   },
   "config": {
@@ -26,55 +26,55 @@
   },
   "single_step_forced_download": {
     "bitsy_eager": {
-      "median_ms": 3.204999986337498,
+      "median_ms": 3.2599999831290916,
       "spread_ms": [
-        2.437999995891005,
-        4.24040001234971
+        2.8651999891735613,
+        8.794599998509511
       ]
     },
     "bitsy_replay": {
-      "median_ms": 0.9502500033704564,
+      "median_ms": 0.8893000049283728,
       "spread_ms": [
-        0.8091000199783593,
-        3.1956000020727515
+        0.7391999824903905,
+        1.1377999908290803
       ]
     },
     "torch": {
-      "median_ms": 0.7168500014813617,
+      "median_ms": 0.6782499986002222,
       "spread_ms": [
-        0.5934999790042639,
-        0.9906000050250441
+        0.6168000109028071,
+        1.0986999841406941
       ]
     },
-    "replay_vs_eager": 3.372796606124319,
-    "torch_vs_replay": 1.3255911298134568
+    "replay_vs_eager": 3.665804526102148,
+    "torch_vs_replay": 1.3111684581846184
   },
   "loop_gpu_only_plus_final_read": {
     "bitsy": {
-      "median_ms": 1.4973000070312992,
+      "median_ms": 1.4385500107891858,
       "spread_ms": [
-        1.3880000042263418,
-        2.252899983432144
+        1.2729000009130687,
+        4.9325999862048775
       ]
     },
     "bitsy_sync_submit": {
-      "median_ms": 1.7951999907381833,
+      "median_ms": 2.187449994380586,
       "spread_ms": [
-        1.6008999955374748,
-        2.491100021870807
+        1.6081999929156154,
+        5.382600007578731
       ]
     },
     "torch": {
-      "median_ms": 1.7425499827368185,
+      "median_ms": 1.9645999855129048,
       "spread_ms": [
-        1.5411999775096774,
-        2.3347999958787113
+        1.586200000019744,
+        3.9641000039409846
       ]
     },
-    "bitsy_per_step_ms": 0.14973000070312992,
-    "torch_per_step_ms": 0.17425499827368185,
-    "torch_vs_bitsy_per_step": 0.8592579965365849,
-    "sync_vs_async_per_step": 1.198958112808355
+    "bitsy_per_step_ms": 0.14385500107891858,
+    "torch_per_step_ms": 0.19645999855129048,
+    "torch_vs_bitsy_per_step": 0.7322355804729473,
+    "sync_vs_async_per_step": 1.5205936380206588
   },
   "note": "ratios >1 mean first arg faster. Async loop is the fair comparison: both frameworks submit N steps without a per-step sync and pay one final read. bitsy_sync_submit shows the cost of the legacy per-step-wait API."
 }

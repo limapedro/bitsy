@@ -126,10 +126,10 @@ Per-function numeric and performance evidence lives in [PROGRESS.md](PROGRESS.md
 | `relu`, `sigmoid`, `tanh`, `softmax` (via `log_softmax` internally) | done (exp_037: softmax dx 1.7e-7) |
 | fused `add + relu` pointwise kernel | done |
 | `gelu`, `log_softmax` | done (exp_037: exact-erf gelu fwd/bwd 1.2e-7; `log_softmax` now handles >256 cols) |
-| `silu`, `mish`, `leaky_relu`, `elu`, `selu`, `softplus`, `glu` | partial (PR #9: six activations done incl. hardswish/hardtanh; `glu` missing) |
+| `silu`, `mish`, `leaky_relu`, `elu`, `selu`, `softplus`, `glu` | partial (PR #9: six activations + hardswish/hardtanh; PR #16: relu6/celu/softsign/tanhshrink/logsigmoid/softshrink/threshold; `glu` missing) |
 | `mse_loss`, `cross_entropy` | done |
 | `nll_loss`, `l1_loss`, `smooth_l1_loss`/`huber_loss`, `bce_loss`, `bce_with_logits_loss` | done (PR #9: all five, pure Python compositions, fwd+grad parity) |
-| `kl_div`, `poisson_nll_loss`, `hinge_loss`, `triplet_margin_loss`, `ctc_loss` | missing |
+| `kl_div`, `poisson_nll_loss`, `hinge_loss`, `triplet_margin_loss`, `ctc_loss` | partial (PR #16: `kl_div`/`poisson_nll_loss`/`hinge_loss` done; triplet/ctc missing) |
 
 ## 12. Optimizers and schedulers
 

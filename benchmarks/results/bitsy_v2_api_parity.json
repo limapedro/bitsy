@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-22T05:21:38.422000+00:00",
+  "generated_at": "2026-11-22T05:28:28.090272+00:00",
   "environment": {
     "torch": "2.11.0+cu126",
     "gpu": "NVIDIA GeForce GTX 1660 SUPER"
@@ -14,8 +14,8 @@
     "result_path": "E:\\__PROJECTS__\\Hagane\\benchmarks\\results\\bitsy_v2_api_parity.json"
   },
   "summary": {
-    "total": 69,
-    "passed": 69,
+    "total": 79,
+    "passed": 79,
     "failed": 0
   },
   "cases": [
@@ -177,6 +177,48 @@
     },
     {
       "name": "clamp",
+      "max_abs_diff": 0.0,
+      "tol": 0.0001,
+      "passed": true
+    },
+    {
+      "name": "relu6",
+      "max_abs_diff": 0.0,
+      "tol": 0.0001,
+      "passed": true
+    },
+    {
+      "name": "celu",
+      "max_abs_diff": 0.0,
+      "tol": 0.0001,
+      "passed": true
+    },
+    {
+      "name": "softsign",
+      "max_abs_diff": 5.960464477539063e-08,
+      "tol": 0.0001,
+      "passed": true
+    },
+    {
+      "name": "tanhshrink",
+      "max_abs_diff": 0.0,
+      "tol": 0.0001,
+      "passed": true
+    },
+    {
+      "name": "logsigmoid",
+      "max_abs_diff": 1.1920928955078125e-07,
+      "tol": 0.0001,
+      "passed": true
+    },
+    {
+      "name": "softshrink",
+      "max_abs_diff": 0.0,
+      "tol": 0.0001,
+      "passed": true
+    },
+    {
+      "name": "threshold",
       "max_abs_diff": 0.0,
       "tol": 0.0001,
       "passed": true
@@ -406,6 +448,24 @@
     {
       "name": "copysign",
       "max_abs_diff": 0.0,
+      "tol": 0.0001,
+      "passed": true
+    },
+    {
+      "name": "hinge_loss",
+      "max_abs_diff": 0.0,
+      "tol": 0.0001,
+      "passed": true
+    },
+    {
+      "name": "poisson_nll",
+      "max_abs_diff": 5.960464477539062e-07,
+      "tol": 0.0001,
+      "passed": true
+    },
+    {
+      "name": "kl_div",
+      "max_abs_diff": 8.940696716308594e-08,
       "tol": 0.0001,
       "passed": true
     },

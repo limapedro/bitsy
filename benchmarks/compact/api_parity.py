@@ -94,6 +94,13 @@ def run(cfg=CFG):
     ("exp2",   lambda t: t.exp2(),         lambda t: torch.exp2(t)),
     ("log2",   lambda t: t.log2(),         lambda t: torch.log2(t)),
     ("clamp",  lambda t: t.clamp(-0.5, 0.5), lambda t: torch.clamp(t, -0.5, 0.5)),
+    ("relu6",      lambda t: t.relu6(),        lambda t: torch.nn.functional.relu6(t)),
+    ("celu",       lambda t: t.celu(1.0),      lambda t: torch.nn.functional.celu(t, 1.0)),
+    ("softsign",   lambda t: t.softsign(),     lambda t: torch.nn.functional.softsign(t)),
+    ("tanhshrink", lambda t: t.tanhshrink(),   lambda t: torch.nn.functional.tanhshrink(t)),
+    ("logsigmoid", lambda t: t.logsigmoid(),   lambda t: torch.nn.functional.logsigmoid(t)),
+    ("softshrink", lambda t: t.softshrink(0.5),lambda t: torch.nn.functional.softshrink(t, 0.5)),
+    ("threshold",  lambda t: t.threshold(0.1, 0.5), lambda t: torch.nn.functional.threshold(t, 0.5, 0.1)),
     ("sign",   lambda t: t.sign(),         lambda t: torch.sign(t)),
     ("clamp_min", lambda t: t.clamp_min(-0.2), lambda t: torch.clamp_min(t, -0.2)),
     ("clamp_max", lambda t: t.clamp_max(0.2),  lambda t: torch.clamp_max(t, 0.2)),
@@ -132,7 +139,12 @@ def run(cfg=CFG):
   for nm, bf, tf in losses:
     is_bce = nm.startswith("bce")
     xa = probs.copy() if nm == "bce_loss" else x.copy()
-    tdata = (ydata > 0).astype(np.float32) if is_bce else ydata
+    if nm == "hinge_loss":
+      tdata = np.where(ydata >= 0, 1.0, -1.0).astype(np.float32)
+    elif nm in ("poisson_nll", "kl_div"):
+      tdata = np.abs(ydata).astype(np.float32) + 0.5
+    else:
+      tdata = (ydata > 0).astype(np.float32) if is_bce else ydata
     bx = bv.Tensor.from_numpy(eng.rt, xa, requires_grad=True)
     by = bv.Tensor.from_numpy(eng.rt, tdata.copy())
     ta = torch.tensor(xa, device="cuda", requires_grad=True)
@@ -186,6 +198,9 @@ def run(cfg=CFG):
     ("equal",        lambda a,b: F.equal(a,b),        lambda a,b: (a==b).float()),
     ("hypot",        lambda a,b: F.hypot(a,b),        lambda a,b: torch.hypot(a,b)),
     ("copysign",     lambda a,b: F.copysign(a,b),     lambda a,b: torch.copysign(a,b)),
+    ("hinge_loss",   lambda a,b: F.hinge_loss(a,b),   lambda a,b: torch.clamp(1.0-a*b,min=0.0).mean()),
+    ("poisson_nll",  lambda a,b: F.poisson_nll_loss(a,b,True), lambda a,b: torch.nn.functional.poisson_nll_loss(a,b,log_input=True,full=False,reduction='mean')),
+    ("kl_div",       lambda a,b: F.kl_div(a,b.abs()+0.5), lambda a,b: torch.nn.functional.kl_div(a,b.abs()+0.5,reduction='mean')),
   ]
   for nm, bf, tf in logical:
     rec_fwd(nm, md(bf(b1,b2).numpy(), tf(t1,t2).detach().cpu().numpy()))

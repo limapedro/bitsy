@@ -146,6 +146,33 @@ class Tensor:
       self.ge(Tensor.scalar(self.rt, 3.0)).where(
         self, self * (self + Tensor.scalar(self.rt, 3.0)) * Tensor.scalar(self.rt, 1.0/6.0)))
 
+  def relu6(self) -> "Tensor": return self.hardtanh(0.0, 6.0)
+
+  def celu(self, alpha: float = 1.0) -> "Tensor":
+    a = Tensor.scalar(self.rt, alpha)
+    return self.gt(Tensor.scalar(self.rt, 0.0)).where(
+      self, (self / a).exp1m() * a)
+
+  def exp1m(self) -> "Tensor": return self.exp() - Tensor.scalar(self.rt, 1.0)
+
+  def softsign(self) -> "Tensor":
+    return self / (Tensor.scalar(self.rt, 1.0) + self.abs())
+
+  def tanhshrink(self) -> "Tensor": return self - self.tanh()
+
+  def logsigmoid(self) -> "Tensor":
+    return -((Tensor.scalar(self.rt, 1.0) + self.neg().exp()).log())
+
+  def softshrink(self, l: float = 0.5) -> "Tensor":
+    lam = Tensor.scalar(self.rt, l)
+    z = Tensor.scalar(self.rt, 0.0)
+    return self.gt(lam).where(self - lam,
+           self.lt(-lam).where(self + lam, z))
+
+  def threshold(self, value: float, threshold: float) -> "Tensor":
+    return self.gt(Tensor.scalar(self.rt, threshold)).where(
+      self, Tensor.scalar(self.rt, value))
+
   def sign(self) -> "Tensor": return self._unary("sign")
   def square(self) -> "Tensor": return self * self
   def reciprocal(self) -> "Tensor": return Tensor.scalar(self.rt, 1.0) / self

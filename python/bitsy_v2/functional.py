@@ -138,3 +138,20 @@ def hypot(a: Tensor, b: Tensor) -> Tensor:
 def copysign(a: Tensor, b: Tensor) -> Tensor:
   z = _scalar(a, 0.0)
   return b.lt(z).where(-a.abs(), a.abs())
+
+
+# ---- PR #16: more losses (pure compositions) ----
+def hinge_loss(pred: Tensor, target: Tensor) -> Tensor:
+  """target in {-1,+1}: mean(max(0, 1 - pred*target))."""
+  return (Tensor.scalar(pred.rt, 1.0) - pred * target).relu().mean()
+
+
+def poisson_nll_loss(input: Tensor, target: Tensor, log_input: bool = True) -> Tensor:
+  if log_input:
+    return (input.exp() - target * input).mean()
+  return (input - target * input.log()).mean()
+
+
+def kl_div(input: Tensor, target: Tensor) -> Tensor:
+  """target must be positive; mean(target*(log(target) - input))."""
+  return (target * (target.log() - input)).mean()
