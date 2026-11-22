@@ -1,6 +1,7 @@
 /* Bitsy 0.2 compact Vulkan executor: bindless device addresses, one descriptor
  * set, three pipelines (fused/gemm/reduce), timeline capture/replay. */
 #include "rt_internal.h"
+#include "rt_cudanative.h"
 
 #ifdef RT_WITH_VULKAN
 #include <vulkan/vulkan.h>
@@ -201,6 +202,13 @@ static void staging_invalidate(RtVk* vk, VkDeviceSize size) {
 }
 
 static void clear_ring(RtVk* vk);  /* PR #39: forward decl */
+/* PR #52: dual representation — materialize a Vulkan buffer for a CUDA-produced
+ * tensor when a Vulkan op needs it (CUDA -> host -> vkbuf upload). */
+static void cn_to_vk(RT* c, RtBuf* b) {
+  if (!c->cuda_native || !b || !b->cn_dptr || b->vk) return;
+  size_t bytes=sizeof(float)*(size_t)(b->n?b->n:1);
+  if (b->host && rt_cn_read(b->cn_dptr,b->host,bytes)==0) b->host_valid=1;
+}
 
 /* Copy buffer->buffer via a persistent resettable command buffer + fence. */
 static void copy_buffer(RtVk* vk, VkBuffer src, VkBuffer dst, VkDeviceSize size) {
@@ -682,6 +690,7 @@ static void finish_output(RtVk* vk, RtBuf* out) {
 
 void rt_vk_fused(RT* c, RtFusion* f, RtBuf* out) {
   RtVk* vk = c->vk; if (!vk->dev) return;
+  for (int i=0;i<f->ninputs;++i) cn_to_vk(c,f->in_buf[i]);
   RtCaptureSlot* slot = vk->capturing ? cap_slot_new(vk, out) : NULL;
   int ri = slot ? -1 : ring_acquire(vk);
   int* p = (int*)(slot ? slot->params_map : vk->ring_params_map[ri]);
@@ -754,6 +763,7 @@ static int gemm_variant(int M, int N) {
 void rt_vk_gemm(RT* c, RtBuf* a, RtBuf* b, RtBuf* bias,
                 int trans_a, int trans_b, int relu, RtBuf* out) {
   RtVk* vk=c->vk; if(!vk->dev) return;
+  cn_to_vk(c,a); cn_to_vk(c,b); if(bias) cn_to_vk(c,bias);
   int ar=(int)a->dims[0], ac=(int)a->dims[1];
   int br=(int)b->dims[0], bc=(int)b->dims[1];
   int M = trans_a?ac:ar, K = trans_a?ar:ac, N = trans_b?br:bc;
@@ -793,6 +803,7 @@ void rt_vk_gemm(RT* c, RtBuf* a, RtBuf* b, RtBuf* bias,
 
 void rt_vk_sgd_update(RT* c, RtBuf* w, RtBuf* g, float lr, float wd) {
   RtVk* vk=c->vk; if(!vk->dev) return;
+  cn_to_vk(c,w); cn_to_vk(c,g);
   int n=w->n;
   RtCaptureSlot* slot = vk->capturing ? cap_slot_new(vk,NULL) : NULL;
   int ri = slot ? -1 : ring_acquire(vk);
@@ -825,6 +836,7 @@ void rt_vk_sgd_update(RT* c, RtBuf* w, RtBuf* g, float lr, float wd) {
 
 void rt_vk_transpose(RT* c, RtBuf* in, RtBuf* out) {
   RtVk* vk=c->vk; if(!vk->dev) return;
+  cn_to_vk(c,in);
   int M=(int)in->dims[0], N=(int)in->dims[1];
   RtCaptureSlot* slot = vk->capturing ? cap_slot_new(vk,out) : NULL;
   int ri = slot ? -1 : ring_acquire(vk);
@@ -851,6 +863,7 @@ void rt_vk_transpose(RT* c, RtBuf* in, RtBuf* out) {
 
 void rt_vk_layernorm(RT* c, RtBuf* x, RtBuf* w, RtBuf* b, RtBuf* res, RtBuf* out, float eps) {
   RtVk* vk=c->vk; if(!vk->dev) return;
+  cn_to_vk(c,x); if(w) cn_to_vk(c,w); if(b) cn_to_vk(c,b); if(res) cn_to_vk(c,res);
   if (x->ndim<1 || x->dims[x->ndim-1]>256) return;
   int cols=(int)x->dims[x->ndim-1], rows=1;
   for(int i=0;i<x->ndim-1;++i) rows*=(int)x->dims[i];
@@ -880,6 +893,7 @@ void rt_vk_layernorm(RT* c, RtBuf* x, RtBuf* w, RtBuf* b, RtBuf* res, RtBuf* out
 
 void rt_vk_softmax(RT* c, RtBuf* in, RtBuf* bias, RtBuf* out, int kind) {
   RtVk* vk=c->vk; if(!vk->dev) return;
+  cn_to_vk(c,in); if(bias) cn_to_vk(c,bias);
   if (in->ndim<1 || in->dims[in->ndim-1]>256) return;  /* shader supports <=256 cols */
   int cols=(int)in->dims[in->ndim-1], rows=1;
   for(int i=0;i<in->ndim-1;++i) rows*=(int)in->dims[i];
@@ -934,6 +948,7 @@ static void record_reduce(RtVk* vk, VkCommandBuffer cmd, VkDescriptorSet set,
 
 void rt_vk_reduce(RT* c, RtBuf* in, int kind, int axis, RtBuf* out) {
   RtVk* vk=c->vk; if(!vk->dev) return;
+  cn_to_vk(c,in);
   int outer=1,stride=(int)in->dims[axis],inner=1;
   for(int i=0;i<axis;++i)outer*=(int)in->dims[i];
   for(int i=axis+1;i<in->ndim;++i)inner*=(int)in->dims[i];

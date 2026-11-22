@@ -58,6 +58,33 @@ this GPU — see FINDINGS_PR15).
 
 ---
 
+## 2026-11-22 17:05 — PR #52: dual CUDA/Vulkan buffers make mixed graphs correct
+
+Gave CUDA-produced tensors a dual representation: each `RtBuf` keeps both a
+CUDA device pointer and a lazily-created Vulkan buffer. When a Vulkan op needs
+a CUDA-produced tensor, `cn_to_vk()` reads it back to host once and uploads it
+through the normal `vkbuf` path. This lets CUDA pointwise fusions feed Vulkan
+GEMM/reduce/softmax/LayerNorm/transpose/SGD safely, so the `use_cuda_native()`
+fast path is no longer restricted to terminal pointwise fusions — it now covers
+any pointwise fusion whose inputs are host leaves or CUDA-resident tensors.
+
+Validated by enabling CUDA mode globally for one gate run (test-only env
+switch, then removed): all parity gates passed (v2 48/48, op 27/27, gradcheck
+25/25, model 10/10, API 112/112) with CUDA as the default — mixed graphs are
+now correct. Kept the path **opt-in** because enabling it globally is
+context-creation-order sensitive: if bitsy creates the CUDA context before
+PyTorch, single-call wall rises ~0.4 ms (two contexts); with PyTorch first it is
+fast. The opt-in benchmark remains 9/9 faster than PyTorch (gaps 0.78–0.94×).
+
+End-to-end 4-layer MLP with CUDA mode enabled: 0.3386 vs 0.4413 ms/step (0.77×,
+1.29× faster), correctness diffs ~1e-8.
+
+Added `cuda_native_mixed` parity gate (API 112 → **113 cases**) covering a
+CUDA pointwise fusion feeding a Vulkan GEMM.
+
+Gates (default path): v2 48/48, op 27/27, gradcheck 25/25, model 10/10, API
+**113/113**, ctest 2/2. Core 3,383 lines.
+
 ## 2026-11-22 16:30 — PR #51: CUDA-native GEMM/reduction — implemented, measured, reverted
 
 Extended the dynamically-loaded CUDA path with native GEMM (`bgemm`) and two-stage

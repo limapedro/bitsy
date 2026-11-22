@@ -473,6 +473,12 @@ def run(cfg=CFG):
     nout=((NX+NY)*NX).relu().numpy()
     nwant=np.maximum((na+nb)*na,0)
     rec_fwd("cuda_native_pointwise", md(nout,nwant))
+    # CUDA-produced pointwise tensor feeding a Vulkan GEMM (dual representation)
+    nx2=rng.standard_normal((8,16)).astype(np.float32)
+    nw2=rng.standard_normal((4,16)).astype(np.float32)
+    NX2,NW2=ne.tensor(nx2),ne.tensor(nw2)
+    nmix=NX2.matmul(NW2.T()).relu()  # GEMM(Vulkan) -> pointwise (CUDA path)
+    rec_fwd("cuda_native_mixed", md(nmix.numpy(),np.maximum(nx2@nw2.T,0)))
     ne.use_cuda_native(False)
 
   passed = sum(r["passed"] for r in results)
