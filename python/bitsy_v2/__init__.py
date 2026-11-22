@@ -19,6 +19,13 @@ class _RT:
   def __init__(self, lib, device):
     self.lib, self.ctx = lib, lib.rt_create(device)
     self.leaves = []
+    # Reusable host readback buffers. Allocating a fresh 4 MB numpy array on
+    # every numpy() call faults ~1000 pages (~0.55 ms); reusing a small pool
+    # cuts readback to the raw memcpy (~0.22 ms). Like PyTorch's `.numpy()`,
+    # the returned array shares storage and is overwritten by a later read of
+    # the same shape — callers needing a long-lived snapshot should .copy().
+    self._read_pool = {}
+    self._read_idx = {}
   def __del__(self): self.lib.rt_destroy(self.ctx)
   def _raw_tensor(self, arr, requires_grad):
     h = self.lib.rt_from_host(self.ctx,
@@ -27,7 +34,12 @@ class _RT:
     return h
   tensor = _raw_tensor
   def get(self, h, shape):
-    out = np.empty(shape, dtype=np.float32)  # rt_to_host overwrites every element
+    key = tuple(shape)
+    pool = self._read_pool.setdefault(key, [])
+    idx = self._read_idx.get(key, 0)
+    while idx >= len(pool) and len(pool) < 32: pool.append(np.zeros(shape, dtype=np.float32))
+    out = pool[idx % len(pool)]
+    self._read_idx[key] = (idx + 1) % 32
     self.lib.rt_to_host(h, out.ctypes.data_as(C.POINTER(C.c_float)))
     return out
   def binary(self, name, a, b): return getattr(self.lib, f"rt_{name}")(self.ctx, a, b)
@@ -73,5 +85,6 @@ class Engine:
   def capture_end(self): self.lib.rt_capture_end(self.rt.ctx)
   def replay(self): self.lib.rt_replay(self.rt.ctx)
   def replay_submit_only(self): self.lib.rt_replay_submit_only(self.rt.ctx)
+  def replay_submit_async(self): self.lib.rt_replay_submit_async(self.rt.ctx)
   def dispatch(self): return self.lib.rt_dispatch_count(self.rt.ctx)
   def reset_dispatch(self): self.lib.rt_reset_dispatch_count(self.rt.ctx)

@@ -79,6 +79,7 @@ struct RtVk {
   int recording;
   VkSemaphore timeline;
   uint64_t tick;
+  int pending;                 /* async submits issued but not yet waited */
   VkCommandBuffer replay_cmd;
   int replay_count;
   int capturing;
@@ -601,19 +602,44 @@ void rt_vk_capture_end(RT* c){
   vkEndCommandBuffer(vk->replay_cmd);
   vk->capturing=0; vk->replay_count=vk->capture_slot_count;
 }
-void rt_vk_submit_only(RT* c){
-  RtVk* vk=c->vk; if(!vk||!vk->dev||!vk->replay_count)return;
+/* Submit one replay. Sync submissions wait on the previous timeline value then
+ * signal the next (self-chain). Async submissions ONLY signal: all submits are
+ * on the same queue so they execute in order, and waiting on the final tick
+ * covers them all. The async path avoids the ~0.15ms/step cross-submit semaphore
+ * wait that dominated the old per-step-wait loop. */
+static void submit_timeline(RtVk* vk, int do_wait) {
   vk->tick++;
   VkSemaphoreSubmitInfo w={.sType=VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,.semaphore=vk->timeline,.value=vk->tick-1,.stageMask=VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT};
   VkSemaphoreSubmitInfo s={.sType=VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,.semaphore=vk->timeline,.value=vk->tick,.stageMask=VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT};
   VkCommandBufferSubmitInfo cb={.sType=VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,.commandBuffer=vk->replay_cmd};
-  VkSubmitInfo2 si={.sType=VK_STRUCTURE_TYPE_SUBMIT_INFO_2,.waitSemaphoreInfoCount=1,.pWaitSemaphoreInfos=&w,.commandBufferInfoCount=1,.pCommandBufferInfos=&cb,.signalSemaphoreInfoCount=1,.pSignalSemaphoreInfos=&s};
+  VkSubmitInfo2 si={.sType=VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
+    .waitSemaphoreInfoCount=(do_wait?1:0), .pWaitSemaphoreInfos=(do_wait?&w:NULL),
+    .commandBufferInfoCount=1,.pCommandBufferInfos=&cb,
+    .signalSemaphoreInfoCount=1,.pSignalSemaphoreInfos=&s};
   vkQueueSubmit2(vk->queue,1,&si,VK_NULL_HANDLE);
+  if (do_wait) {
+    VkSemaphoreWaitInfo wi={.sType=VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,.semaphoreCount=1,.pSemaphores=&vk->timeline,.pValues=&vk->tick};
+    vkWaitSemaphores(vk->dev,&wi,UINT64_MAX);
+    vk->pending=0;
+  } else vk->pending=1;
+}
+void rt_vk_wait_pending(RtVk* vk) {
+  if (!vk->pending) return;
   VkSemaphoreWaitInfo wi={.sType=VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,.semaphoreCount=1,.pSemaphores=&vk->timeline,.pValues=&vk->tick};
   vkWaitSemaphores(vk->dev,&wi,UINT64_MAX);
+  vk->pending=0;
+}
+void rt_vk_submit_only(RT* c){
+  RtVk* vk=c->vk; if(!vk||!vk->dev||!vk->replay_count)return;
+  submit_timeline(vk, 1);
+}
+void rt_vk_submit_async(RT* c){
+  RtVk* vk=c->vk; if(!vk||!vk->dev||!vk->replay_count)return;
+  submit_timeline(vk, 0);
 }
 void rt_vk_download_outputs(RT* c){
   RtVk* vk=c->vk; if(!vk||!vk->dev)return;
+  rt_vk_wait_pending(vk);   /* async submits must complete before reading */
   /* copy each dispatch's result into its output buffer's host view */
   for (int i=0;i<vk->capture_slot_count;++i) {
     RtCaptureSlot* sl=&vk->cap_slots[i];
@@ -638,6 +664,7 @@ void rt_vk_upload(RT* c, RtBuf* b, const float* data){
 }
 void rt_vk_download(RT* c, RtBuf* b){
   RtVk* vk=c->vk; if(!vk||!vk->dev) return;
+  rt_vk_wait_pending(vk);
   if (b->cap_slot) {
     RtCaptureSlot* sl=(RtCaptureSlot*)b->cap_slot;
     if (sl->output_in_slot) { download_slot(vk, sl, b->host, (size_t)b->n); b->dirty=0; return; }
@@ -646,6 +673,29 @@ void rt_vk_download(RT* c, RtBuf* b){
   b->dirty=0;
 }
 void rt_vk_download_lazy(RT* c, RtBuf* b){ if (b && b->dirty) rt_vk_download(c,b); }
+
+/* Download a dirty captured output directly into the user's buffer, skipping
+ * the b->host intermediate copy (that copy exists only to cache eager results).
+ * dirty is intentionally left set so a later cached read re-downloads — correct
+ * for repeated numpy() calls and faster than the old two-memcpy path. */
+void rt_vk_download_to(RT* c, RtBuf* b, float* out){
+  RtVk* vk=c->vk; if(!vk||!vk->dev) return;
+  rt_vk_wait_pending(vk);
+  if (b->cap_slot) {
+    RtCaptureSlot* sl=(RtCaptureSlot*)b->cap_slot;
+    if (sl->output_in_slot) {
+      VkDeviceSize sz=sizeof(float)*(size_t)b->n;
+      if (sz>sl->out_size) sz=sl->out_size;
+      staging_ensure(vk,sz);
+      copy_buffer(vk,sl->out,vk->staging,sz);
+      staging_invalidate(vk,sz);
+      memcpy(out,vk->staging_map,sz);
+      return;
+    }
+  }
+  rt_vk_download(c,b);
+  memcpy(out,b->host,sizeof(float)*(size_t)b->n);
+}
 
 /* Copy a capture slot's DEVICE_LOCAL out buffer into dst host memory. */
 static void download_slot(RtVk* vk, RtCaptureSlot* sl, float* dst, size_t n) {
@@ -678,7 +728,9 @@ void rt_vk_capture_begin(RT* c){ (void)c; }
 void rt_vk_capture_end(RT* c){ (void)c; }
 void rt_vk_replay(RT* c){ (void)c; }
 void rt_vk_submit_only(RT* c){ (void)c; }
+void rt_vk_submit_async(RT* c){ (void)c; }
 void rt_vk_download_outputs(RT* c){ (void)c; }
+void rt_vk_download_to(RT* c, RtBuf* b, float* out){ (void)c; (void)b; (void)out; }
 void rt_vk_upload(RT* c, RtBuf* b, const float* d){ (void)c;(void)b;(void)d; }
 void rt_vk_download(RT* c, RtBuf* b){ (void)c;(void)b; }
 void rt_vk_download_lazy(RT* c, RtBuf* b){ (void)c;(void)b; }
