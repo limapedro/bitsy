@@ -26,7 +26,7 @@ numeric reference. See `experiments/exp_040/` and `docs/study/`.
 | R6 | Perf | Attack the PyTorch speed gap (evidence-driven) | **done** (PR #6: 194x->3.5x via HOST_CACHED+lazy download; PR #7: DEVICE_LOCAL + specialized kernel ->1.5-1.9x; PR #8: async submit + direct download + reused readback buffers -> **0.95x per-step, speed parity reached on the fair async loop benchmark**; single-step forced download still slower than torch) |
 | R3 | Kernels | One parameterized GEMM + reduce + fused elementwise; drop 10 GEMM variants | **done** (PR #2: gemm+bias/transpose, reduce sum/mean/max/min, 27/27 vs PyTorch CUDA) |
 | R4 | Exec | Vulkan device/allocator + command-buffer capture/replay (JIT) | planned |
-| R5 | Verify | Parity gate green, ≤4096 lines, benchmarks, tag 0.2, push main | **in progress** (PR #9: 29 new pure-Python APIs, 44/44 vs PyTorch CUDA; new API 44/44 + op 27/27 + gradcheck 25/25 + model 10/10 + legacy 48/48 + ctest 3/3; core 2026 lines; legacy cutover plan in FINDINGS_PR9.md, not yet executed) |
+| R5 | Verify | Parity gate green, ≤4096 lines, benchmarks, tag 0.2, push main | **in progress** (PR #9: 29 new pure-Python APIs, 44/44 vs PyTorch CUDA; PR #10: cutover steps 1-2 done — 48-case audit + `tests/parity/v2_runner.py` with identical report shape, 48/48 green, 2 numeric/shape divergences fixed; gates: v2 48/48, legacy 48/48, op 27/27, gradcheck 25/25, model 10/10, API 44/44, ctest 3/3; core 2026 lines. Steps 3-5 CI flip + legacy deletion still pending) |
 
 The legacy milestone table below is kept for historical traceability.
 
