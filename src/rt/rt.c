@@ -129,7 +129,25 @@ static RTTensor* pointwise(RT* c, RTOp op, RTTensor* a, RTTensor* b) {
   RTTensor* t = node_new(c, op, nd, d, b ? 2 : 1, a, b, NULL);
   return t;
 }
-RTTensor* rt_add(RT* c, RTTensor* a, RTTensor* b) { return pointwise(c, RT_ADD, a, b); }
+/* PR #42: fold `matmul + bias` (the nn.Linear pattern) into the GEMM's bias
+ * epilogue, which the shader already supports via flag bit 4. Removes a
+ * separate add dispatch per linear layer. */
+static RTTensor* gemm_bias(RT* c, RTTensor* g, RTTensor* bias) {
+  RTTensor* t = node_new(c, RT_MATMUL, g->ndim, g->dims, 3,
+                         g->src[0], g->src[1], bias);
+  if (!t) return NULL;
+  t->axis = g->axis; t->keepdim = g->keepdim;
+  return t;
+}
+RTTensor* rt_add(RT* c, RTTensor* a, RTTensor* b) {
+  if (a && !a->buf && a->op == RT_MATMUL && a->nsrc == 2 && b) {
+    int64_t N = a->dims[1];
+    int bias_ok = (b->ndim == 1 && b->dims[0] == N) ||
+                  (b->ndim == 2 && b->dims[0] == 1 && b->dims[1] == N);
+    if (bias_ok) return gemm_bias(c, a, b);
+  }
+  return pointwise(c, RT_ADD, a, b);
+}
 RTTensor* rt_sub(RT* c, RTTensor* a, RTTensor* b) { return pointwise(c, RT_SUB, a, b); }
 RTTensor* rt_mul(RT* c, RTTensor* a, RTTensor* b) { return pointwise(c, RT_MUL, a, b); }
 RTTensor* rt_div(RT* c, RTTensor* a, RTTensor* b) { return pointwise(c, RT_DIV, a, b); }
@@ -740,8 +758,9 @@ static RTTensor* grad_wrt(RT* c, RTTensor* t, int s, RTTensor* g) {
         RTTensor* dBp = rt_matmul(c, ApT, g);          /* dY/dB' */
         return tb ? rt_transpose(c, dBp) : dBp;
       }
-      /* s==2: bias. dY/dbias[j] = sum_i g[i,j] -> reduce over axis 0 */
-      return rt_reduce(c, g, RT_REDUCE_SUM, 0, 0);
+      /* s==2: bias. dY/dbias[j] = sum_i g[i,j] -> reduce over axis 0 with
+       * keepdim so unbroadcast() handles (1,N) biases correctly. */
+      return rt_reduce(c, g, RT_REDUCE_SUM, 0, 1);
     }
     case RT_LAYERNORM: {
       /* y = xhat*s*w + b, xhat=(x-mean)/sqrt(var+eps), s=rsqrt(var+eps)

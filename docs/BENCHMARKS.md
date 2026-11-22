@@ -58,6 +58,28 @@ this GPU — see FINDINGS_PR15).
 
 ---
 
+## 2026-11-22 11:10 — PR #42: GEMM+bias epilogue — nn.Linear in one dispatch
+
+`rt_add` now folds `matmul(...) + bias` into the GEMM's existing bias epilogue
+(flag bit 4), the same way PR #23 folds ReLU. This removes a separate add
+dispatch per linear layer. The fold exposed a latent bias-gradient bug
+(`keepdim=0` then `unbroadcast` collapsed a `(1,N)` bias) — fixed with
+`keepdim=1`, which also tightened existing bias-gradient parity.
+
+A/B (`gemm_epilogue_bench.py`, batch 64, 256→128 linear + bias):
+```
+no fold:  dispatch 2, wall 0.6088 ms
+folded:   dispatch 1, wall 0.3242 ms   (-47% wall)
+```
+Also tested making large outputs HOST_CACHED to remove the D2H copy entirely
+(`BT_HOSTOUT_KB` sweep, reverted): 4 MB output regressed 1.543→2.263 ms because
+GPU PCIe writes cost ~0.32 ms vs 0.066 ms to DEVICE_LOCAL — the 4 KB limit is
+correct. The ~0.4 ms synchronous fence wait remains driver-bound.
+
+Added `folded_gemm_bias_dispatch/fwd/wgrad/bgrad` gates (API 104 → **108 cases**).
+Gates: v2 48/48, op 27/27, gradcheck 25/25, model 10/10, API **108/108**, ctest 2/2.
+Core 3,157 lines.
+
 ## 2026-11-22 10:35 — PR #41: transpose-folded GEMM — half the dispatches per linear layer
 
 The GEMM shader already supports `trans_a`/`trans_b`, and `grad_wrt` already

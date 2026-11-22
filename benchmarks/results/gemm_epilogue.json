@@ -1,5 +1,14 @@
 {
-  "generated_at": "2026-11-22T11:01:37.647091+00:00",
+  "linear_bias_dispatch": 1,
+  "linear_bias_wall": {
+    "median_ms": 0.324200009345077,
+    "spread_ms": [
+      0.2820999943651259,
+      0.898900005267933
+    ]
+  },
+  "linear_bias_before_ms": 0.6088,
+  "generated_at": "2026-11-22T11:13:25.332628+00:00",
   "environment": {
     "torch": "2.11.0+cu126",
     "gpu": "GTX 1660 SUPER",
@@ -25,19 +34,19 @@
   },
   "dispatch_count": 2,
   "bitsy": {
-    "median_ms": 0.5125000170664862,
+    "median_ms": 0.5646000063279644,
     "spread_ms": [
-      0.3152000135742128,
-      0.999299983959645
+      0.42490000487305224,
+      3.643000003648922
     ]
   },
   "torch": {
-    "median_ms": 0.02579999272711575,
+    "median_ms": 0.03404999733902514,
     "spread_ms": [
-      0.025399989681318402,
-      0.028499984182417393
+      0.025900022592395544,
+      0.40859999717213213
     ]
   },
-  "gap": 19.86434734641803,
-  "note": "Unrealized W.T() folded into GEMM trans_b flag; removes one transpose dispatch per linear layer."
+  "gap": 16.581499279028403,
+  "note": "Unrealized W.T() folded into GEMM trans_b flag; bias add folded into GEMM epilogue."
 }
