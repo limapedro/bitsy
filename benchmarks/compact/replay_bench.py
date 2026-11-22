@@ -69,15 +69,21 @@ def run(cfg=Config()):
   full=bench(lambda:eng.replay(),cfg.warmup,cfg.iters)
   t_full=bench(lambda:torch_chain().cpu().numpy(),cfg.warmup,cfg.iters)
 
-  # ---- speed (b): N GPU-only steps + one final read (fair vs PyTorch GPU-only) ----
+  # ---- speed (b): N async GPU steps + one final read (fair vs PyTorch async) ----
+  # Both frameworks submit N steps asynchronously and pay one final sync+read.
+  # (replay_submit_only would add an artificial per-step sync that torch lacks.)
   def bitsy_loop():
+    for _ in range(cfg.steps): eng.replay_submit_async()
+    y.numpy()   # one final download (waits for all pending submits)
+  def bitsy_loop_sync():
     for _ in range(cfg.steps): eng.replay_submit_only()
-    y.numpy()   # one final download
+    y.numpy()
   def torch_loop():
     o=None
     for _ in range(cfg.steps): o=torch_chain()
     return o.cpu().numpy()
   loop=bench(bitsy_loop,cfg.warmup,cfg.iters)
+  loop_sync=bench(bitsy_loop_sync,cfg.warmup,cfg.iters)
   t_loop=bench(torch_loop,cfg.warmup,cfg.iters)
   clk1=gpu_clock_mhz()
 
@@ -91,10 +97,11 @@ def run(cfg=Config()):
     "single_step_forced_download":{"bitsy_eager":eager,"bitsy_replay":full,"torch":t_full,
        "replay_vs_eager":eager["median_ms"]/full["median_ms"],
        "torch_vs_replay":full["median_ms"]/t_full["median_ms"]},
-    "loop_gpu_only_plus_final_read":{"bitsy":loop,"torch":t_loop,
+    "loop_gpu_only_plus_final_read":{"bitsy":loop,"bitsy_sync_submit":loop_sync,"torch":t_loop,
        "bitsy_per_step_ms":per_step_bitsy,"torch_per_step_ms":per_step_torch,
-       "torch_vs_bitsy_per_step":per_step_bitsy/per_step_torch},
-    "note":"ratios >1 mean first arg faster. Per-step loop is the fair framework comparison.",
+       "torch_vs_bitsy_per_step":per_step_bitsy/per_step_torch,
+       "sync_vs_async_per_step":loop_sync["median_ms"]/loop["median_ms"]},
+    "note":"ratios >1 mean first arg faster. Async loop is the fair comparison: both frameworks submit N steps without a per-step sync and pay one final read. bitsy_sync_submit shows the cost of the legacy per-step-wait API.",
   }
   cfg.result_path.parent.mkdir(parents=True,exist_ok=True)
   cfg.result_path.write_text(json.dumps(rep,indent=2)+"\n",encoding="utf-8")
