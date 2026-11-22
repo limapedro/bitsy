@@ -58,6 +58,35 @@ this GPU — see FINDINGS_PR15).
 
 ---
 
+## 2026-11-22 18:15 — PR #54: lazy CUDA init — fast pointwise path ON BY DEFAULT
+
+The context-order penalty was caused by `rt_set_cuda_native()` calling
+`rt_cn_available()` (which creates the CUDA driver context) at enable time. Made
+that call lazy: the mode flag is set without touching CUDA, and the context is
+created at the first CUDA op. In the previously-slow order (bitsy engine first,
+then PyTorch CUDA tensors), single-call wall dropped **1.08 → 0.472 ms** — the
+penalty is gone because PyTorch becomes the context owner and we reuse it.
+
+With this fixed, the dual-buffer CUDA pointwise path is now the **default**
+(`rt_create` sets `cuda_native=1`; CUDA-less builds fall back to Vulkan via the
+existing `rt_cn_available()` check at op time). GEMM/reduce/softmax/LayerNorm
+stay on Vulkan through the dual-buffer handoff. All parity gates pass with the
+fast path on by default: v2 48/48, op 27/27, gradcheck 25/25, model 10/10,
+API 113/113, CTest 2/2.
+
+Default-path single-op sweep (`common_ops_bench.py`, warmup/median/spread,
+clock 1530→1950): add 0.85×, mul 0.85×, sub 0.77×, div 0.87×, relu 0.71×,
+sigmoid 0.81×, tanh 0.66×, exp 0.70×, log 0.82×, sqrt 0.74×, abs 0.71×,
+gelu 0.79×, silu 0.71×, fused chain 0.77× — **all pointwise ops beat PyTorch
+without any opt-in**. Reductions remain 4–5× slower (Vulkan path).
+
+End-to-end 4-layer MLP (fresh data, fwd+bwd+SGD): 0.3488 vs 0.4900 ms/step,
+gap 0.71× (**1.41× FASTER**), correctness diffs ~1e-8. Inference still 1.12×
+slower (async eager path, no readback).
+
+Gates: v2 48/48, op 27/27, gradcheck 25/25, model 10/10, API **113/113**, ctest 2/2.
+Core 3,388 lines.
+
 ## 2026-11-22 17:40 — PR #53: CUDA context-order penalty investigation (primary context tested)
 
 Tried to remove the ~0.4 ms penalty seen when bitsy creates the CUDA context

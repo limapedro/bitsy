@@ -58,6 +58,9 @@ RT* rt_create(int device) {
   if (!c) return NULL;
   c->device = device;
   c->next_id = 1;
+  c->cuda_native = 1;  /* PR #54: fast pointwise path on by default; the CUDA
+                        * context is initialized lazily at first use, and falls
+                        * back to Vulkan when CUDA is unavailable. */
   if (device == RT_VULKAN) rt_vk_init(c);
   return c;
 }
@@ -950,7 +953,10 @@ const float* rt_read_ptr(RT* c, RTTensor* t, int slot) {
 void rt_zero_grad(RTTensor* t) { if (t) t->grad=NULL; }
 int rt_set_cuda_native(RT* c, int on) {
   if (!c) return 0;
-  c->cuda_native = (on && rt_cn_available()) ? 1 : 0;
+  /* PR #54: set the mode without initializing CUDA here. The driver context
+   * is created lazily at the first op, so a framework (e.g. PyTorch) that
+   * initializes CUDA in between becomes the context owner and we reuse it. */
+  c->cuda_native = on ? 1 : 0;
   return c->cuda_native;
 }
 void rt_stream_begin(RT* c, int idx) { if (c && c->vk) rt_vk_stream_begin(c,idx); }
