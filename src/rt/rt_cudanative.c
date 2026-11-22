@@ -1,6 +1,7 @@
 /* PR #50: dynamically loaded CUDA-native fused pointwise execution. */
 #include "rt_cudanative.h"
 #include "fused_cuda.ptx.h"
+#include "reduce_atomic.ptx.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -20,6 +21,7 @@ typedef int CUres; typedef void* CUctx; typedef void* CUstream;
 typedef void* CUmod; typedef void* CUfunc; typedef unsigned long long CUdptr;
 struct CN {
   void* lib; CUctx ctx; CUstream stream; CUmod mod; CUfunc fn;
+  CUmod mod3; CUfunc f_sum;
   CUdptr params; void* host; size_t host_cap;
   void* hostn[4]; int hidx;
   CUdptr out_ring[8]; size_t out_cap[8]; int oidx;
@@ -63,6 +65,8 @@ static struct CN* cn_init(void){
   if(s->cuStreamCreate(&s->stream,1)!=0){ DBG("stream failed"); goto fail; }
   if(s->cuModuleLoadData(&s->mod,rt_fused_cuda_ptx)!=0){ DBG("module failed"); goto fail; }
   if(s->cuModuleGetFunction(&s->fn,s->mod,"bfused")!=0){ DBG("function failed"); goto fail; }
+  if(s->cuModuleLoadData(&s->mod3,rt_reduce_atomic_ptx)==0)
+    s->cuModuleGetFunction(&s->f_sum,s->mod3,"breduce_sum");
   s->params=0; s->host_cap=64u<<20;
   if(s->cuMemAllocHost(&s->host,s->host_cap)!=0){ DBG("host failed"); goto fail; }
   for(int i=0;i<4;++i) s->hostn[i]=(char*)s->host+(size_t)(s->host_cap/4)*i;
@@ -115,5 +119,24 @@ const float* rt_cn_ptr(const void* dptr,size_t bytes){
   if(s->cuMemcpyDtoHAsync(h,(CUdptr)(size_t)dptr,bytes,s->stream)!=0) return NULL;
   if(s->cuStreamSynchronize(s->stream)!=0) return NULL;
   return (const float*)h;
+}
+int rt_cn_reduce_fast(void* in,void* out,int outer,int stride,int inner,int kind){
+  struct CN* s=cn_init(); if(!s||!s->f_sum||!in||!out) return -1;
+  int lines=outer*inner;
+  size_t bytes=sizeof(float)*(size_t)lines;
+  memset(s->host,0,bytes);
+  if(s->cuMemcpyHtoDAsync((CUdptr)(size_t)out,s->host,bytes,s->stream)!=0) return -2;
+  int nblocks = stride > 8192 ? 1024 : (stride > 512 ? 64 : 1);
+  if(nblocks>stride) nblocks=stride>0?stride:1;
+  float scale=(kind==1)?(1.f/(float)stride):1.f;
+  CUdptr i=(CUdptr)(size_t)in,o=(CUdptr)(size_t)out;
+  void* args[6]={(void*)&i,(void*)&o,(void*)&outer,(void*)&stride,(void*)&inner,(void*)&nblocks};
+  /* scale is appended via a second array below; kernel has 7 params */
+  float sc2=scale; (void)sc2;
+  void* args7[7]={(void*)&i,(void*)&o,(void*)&outer,(void*)&stride,(void*)&inner,(void*)&nblocks,(void*)&scale};
+  if(s->cuLaunchKernel(s->f_sum,(unsigned)lines,(unsigned)nblocks,1,256,1,1,
+      0,s->stream,args7,NULL)!=0) return -4;
+  (void)args;
+  return 0;
 }
 void rt_cn_flush(void){ if(G&&G->stream) G->cuStreamSynchronize(G->stream); }

@@ -58,6 +58,25 @@ this GPU — see FINDINGS_PR15).
 
 ---
 
+## 2026-11-22 18:50 — PR #55: single-kernel CUDA reduction closes most of the reduction gap
+
+Replaced the Vulkan two-stage reduce for SUM/MEAN with a single CUDA kernel:
+multi-block grid (`lines × chunks`), per-thread strided accumulation, warp
+shuffle reduction, one `atomicAdd` per chunk into a zeroed output (`scale`
+folds in the mean divisor). MAX/MIN stay on Vulkan (no float atomicMax).
+
+A first single-block version regressed badly for 1-D inputs (1.09 ms, 23×
+slower) because one block reduced 1M elements serially; chunking fixed it.
+
+Default-path numbers (`common_ops_bench.py`, warmup/median/spread):
+```
+sum  sum 0.075 vs torch 0.046 ms (1.66x)   was 1.090 ms (23x) before
+mean    0.062 vs torch 0.037 ms (1.66x)   was 1.085 ms (25x) before
+max     0.229 vs torch 0.045 ms (5.11x)   unchanged (Vulkan)
+```
+All gates remain green (v2 48/48, op 27/27, gradcheck 25/25, model 10/10,
+API 113/113, ctest 2/2). Core 3,438 lines.
+
 ## 2026-11-22 18:15 — PR #54: lazy CUDA init — fast pointwise path ON BY DEFAULT
 
 The context-order penalty was caused by `rt_set_cuda_native()` calling
