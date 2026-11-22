@@ -23,6 +23,31 @@ extern "C" __global__ void bmax_single(const float* in, float* out,
   if(tid==0) out[line]=sh[0];
 }
 
+/* PR #67: two-stage sum/mean (no H2D zero-init): partials then final scale. */
+extern "C" __global__ void bsum1(const float* in, float* part,
+    int outer, int stride, int inner, int npart) {
+  int line=blockIdx.x, chunk=blockIdx.y, tid=threadIdx.x;
+  int o=line/inner, t=line%inner;
+  int c0=(chunk*stride)/npart, c1=((chunk+1)*stride)/npart;
+  float s=0.f;
+  for(int k=c0+tid;k<c1;k+=blockDim.x) s+=in[(o*stride+k)*inner+t];
+  __shared__ float sh[256];
+  sh[tid]=s; __syncthreads();
+  for(int off=128;off>0;off>>=1){
+    if(tid<off) sh[tid]+=sh[tid+off];
+    __syncthreads();
+  }
+  if(tid==0) part[line*npart+chunk]=sh[0];
+}
+extern "C" __global__ void bsum2(const float* part, float* out,
+    int lines, int npart, float scale) {
+  int line=blockIdx.x*blockDim.x+threadIdx.x;
+  if(line>=lines) return;
+  float s=0.f;
+  for(int i=0;i<npart;++i) s+=part[line*npart+i];
+  out[line]=s*scale;
+}
+
 /* PR #61: single-kernel max/min via atomicCAS on float bits. */
 __device__ __forceinline__ float atomicMaxF(float* addr, float v){
   unsigned int* u=(unsigned int*)addr;

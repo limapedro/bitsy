@@ -58,6 +58,27 @@ this GPU — see FINDINGS_PR15).
 
 ---
 
+## 2026-11-22 00:55 — PR #67: all reductions at parity — two-stage sum/mean removes the H2D zero-init
+
+Applied the two-level pattern (persistent-scratch partials + one final kernel)
+to sum/mean, replacing the single-kernel atomic path that needed an H2D ±INF/zero
+init copy. New `bsum1`/`bsum2` kernels: block-level strided accumulation and
+shared reduction into scratch, then a final partial-sum with the mean divisor
+folded into `scale`. Correctness diff 6.1e-05 (sum) / 5.8e-11 (mean) on 1M
+elements and 0.0 on 2-D.
+
+Rotated `stable_bench` (two runs) — **every reduction now at parity**:
+```
+sum  0.93-0.97x (4/7 wins)   mean 0.96-1.04x (1-4/7)   max 0.98-1.05x (2-5/7)
+add 0.76-0.82x (6-7/7)       fused 0.78-0.87x (7/7)
+```
+This closes the last measured single-op gaps: no op is consistently slower
+than PyTorch under the rotation-unbiased harness.
+
+All gates green twice: v2 48/48, op 27/27, gradcheck 25/25, model 10/10,
+API 113/113, CTest 2/2. End-to-end 4-layer MLP 0.3344 vs 0.4540 ms/step
+(0.74×, 1.36× faster). Core 3,636 lines.
+
 ## 2026-11-22 00:25 — PR #66: two-level max/min reaches parity — final-kernel arg bug fixed
 
 Re-enabled the atomic-free two-level max/min reduction (block-level partials
