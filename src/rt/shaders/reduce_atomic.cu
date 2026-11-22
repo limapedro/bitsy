@@ -1,5 +1,44 @@
 /* PR #55: multi-block CUDA reduction for SUM/MEAN via atomicAdd.
  * grid.x = output lines, grid.y = chunks; one warp atomic per chunk. */
+/* PR #61: single-kernel max/min via atomicCAS on float bits. */
+__device__ __forceinline__ float atomicMaxF(float* addr, float v){
+  unsigned int* u=(unsigned int*)addr;
+  unsigned int old=*u, assumed;
+  do { assumed=old;
+    if (v <= __int_as_float(assumed)) break;
+    old=atomicCAS(u,assumed,__float_as_int(v));
+  } while (assumed!=old);
+  return __int_as_float(old);
+}
+__device__ __forceinline__ float atomicMinF(float* addr, float v){
+  unsigned int* u=(unsigned int*)addr;
+  unsigned int old=*u, assumed;
+  do { assumed=old;
+    if (v >= __int_as_float(assumed)) break;
+    old=atomicCAS(u,assumed,__float_as_int(v));
+  } while (assumed!=old);
+  return __int_as_float(old);
+}
+extern "C" __global__ void bmax_atomic(const float* in, float* out,
+    int outer, int stride, int inner, int kind, int nblocks) {
+  int line=blockIdx.x, chunk=blockIdx.y, tid=threadIdx.x;
+  int o=line/inner, t=line%inner;
+  int c0=(chunk*stride)/nblocks, c1=((chunk+1)*stride)/nblocks;
+  float local=(kind==2)?-3.4028235e38f:3.4028235e38f;
+  for(int k=c0+tid;k<c1;k+=blockDim.x){
+    float v=in[(o*stride+k)*inner+t];
+    local=(kind==2)?fmaxf(local,v):fminf(local,v);
+  }
+  /* warp reduce to one value per warp, then one atomic per warp */
+  for(int off=16;off>0;off>>=1){
+    float v=__shfl_down_sync(0xffffffff,local,off);
+    local=(kind==2)?fmaxf(local,v):fminf(local,v);
+  }
+  if((tid&31)==0){
+    if(kind==2) atomicMaxF(&out[line],local); else atomicMinF(&out[line],local);
+  }
+}
+
 /* PR #60: two-stage max/min reduction (no float atomicMax). */
 extern "C" __global__ void bmax1(const float* in, float* part,
     int outer, int stride, int inner, int kind, int npart) {

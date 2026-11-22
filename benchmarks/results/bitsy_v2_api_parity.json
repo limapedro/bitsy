@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-22T14:40:52.792299+00:00",
+  "generated_at": "2026-11-22T14:51:24.918398+00:00",
   "environment": {
     "torch": "2.11.0+cu126",
     "gpu": "NVIDIA GeForce GTX 1660 SUPER"
@@ -117,7 +117,7 @@
     },
     {
       "name": "var",
-      "max_abs_diff": 2.9802322387695312e-08,
+      "max_abs_diff": 0.0,
       "tol": 0.0001,
       "passed": true
     },
@@ -129,7 +129,7 @@
     },
     {
       "name": "logsumexp",
-      "max_abs_diff": 4.76837158203125e-07,
+      "max_abs_diff": 0.0,
       "tol": 0.0001,
       "passed": true
     },

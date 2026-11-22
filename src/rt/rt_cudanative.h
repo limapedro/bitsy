@@ -20,6 +20,7 @@ void rt_cn_flush(void);
 int rt_cn_reduce_fast(void* in,void* out,int outer,int stride,int inner,int kind);
 int rt_cn_reduce_max(void* in,void* part,void* out,int outer,int stride,int inner,int kind);
 void* rt_cn_scratch(size_t bytes);  /* persistent scratch (no per-call alloc) */
+int rt_cn_reduce_max_atomic(void* in,void* out,int outer,int stride,int inner,int kind);
 int rt_cn_gemm_fast(void* A,void* B,void* bias,void* C,int M,int N,int K,int flags);
 /* PR #59: CUDA softmax / LayerNorm. */
 int rt_cn_softmax(void* in,void* bias,void* out,int rows,int cols,int kind,int has_bias);

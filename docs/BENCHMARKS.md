@@ -58,6 +58,27 @@ this GPU — see FINDINGS_PR15).
 
 ---
 
+## 2026-11-22 21:55 — PR #61: single-kernel atomicCAS max/min — gap cut from ~5× to ~1.4×
+
+Replaced the two-stage max/min CUDA path (0.29 ms, two launches) with a
+**single** kernel using `atomicCAS` on the float bit pattern (`atomicMaxF`/
+`atomicMinF`). Output is initialized to ±INF with one async H2D copy; one
+kernel then does a warp-shuffle reduction and one atomic per warp. Correctness
+diff 0.0 for both max and min (2-D and 1-D 1M-element inputs).
+
+Measurement: max 0.078 vs PyTorch 0.057 ms (1.38×) — down from ~0.23 ms
+Vulkan / 0.29 ms two-stage CUDA. Sum/mean ~parity (0.054/0.051 ms).
+
+Also fixed a readback-ring regression found while benchmarking: enlarging the
+pinned-host ring to 256 slots had shrunk each slot to 256 KB, causing a NULL
+pointer for 4 MB tensors; lazy allocation then added per-call overhead. Final
+design: **16 pre-allocated 8 MB slots** — no per-call allocation and enough
+slots to avoid aliasing live numpy views in the shared-engine gate runner.
+
+All gates green across repeated rounds: v2 48/48, op 27/27, gradcheck 25/25,
+model 10/10, API 113/113, CTest 2/2. End-to-end 4-layer MLP 0.3429 vs 0.4026
+ms/step (0.85×, 1.18× faster). Core 3,602 lines.
+
 ## 2026-11-22 21:20 — PR #60: CUDA softmax enabled — pinned-readback alias fixed
 
 Diagnosed the PR #59 regression that withheld CUDA softmax: the zero-copy
