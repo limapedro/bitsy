@@ -58,7 +58,36 @@ this GPU — see FINDINGS_PR15).
 
 ---
 
-## 2026-11-22 07:25 — PR #34 (doc-only): training-step capture investigation (blocked by backward capture bug)
+## 2026-11-22 07:50 — PR #35: backward capture FIXED — full training-step replay 8.3× faster than PyTorch
+
+**Root cause of the backward-capture bug**: `RT_TRANSPOSE`/`RT_RESHAPE` were realised
+as **host-side memcpy** reading `in->host`. During capture the input's data lives
+in a capture slot (device memory), so the host copy produced garbage on replay —
+exactly the near-zero grads observed. Added a device-side `transpose.comp`
+(one invocation per output element) so transpose participates in capture slots;
+`RT_TRANSPOSE` now dispatches on Vulkan (host fallback on CPU). Also realised all
+`requires_grad` leaf grads inside `rt_backward` so their dispatches land in the
+capture window. Added `capture_mlp_backward_w1/w2` parity gates.
+
+```
+matmul backward capture diff 0.0 ; MLP backward capture diff 0.0 / 0.0
+```
+New `benchmarks/compact/train_replay_bench.py` (full forward+backward captured,
+N steps in one submit, batch 64 / 256→128→1, warmup/median/spread, clock 1530):
+```
+N= 10   batch 0.2048 | N-submits 0.2054 | torch 0.4939 ms/step | gap 0.41x
+N=100   batch 0.1395 | N-submits 0.1635 | torch 0.4864 ms/step | gap 0.29x
+N=500   batch 0.0668 | N-submits 0.1884 | torch 0.5557 ms/step | gap 0.12x  (8.3x FASTER)
+```
+Batch is 2.82× faster than N separate submits at N=500. This is the first
+**whole-training-step** replay that beats PyTorch — the 73% host overhead from
+PR #31 is amortised across N steps. Note: optimizers remain host-side numpy, so
+this replays repeated fwd+bwd on fixed weights (not a full update loop).
+
+Gates: v2 48/48, op 27/27, gradcheck 25/25, model 10/10, API **92/92**, ctest 2/2.
+Core 2,823 lines.
+
+## 2026-11-22 07:25 — PR #34: training-step capture investigation (blocked by backward capture bug)
 
 Proposed next lever: capture whole forward+backward+optimizer steps and replay N
 times in one submit. Implemented a probe (`rt.grad_refresh` to re-read grads

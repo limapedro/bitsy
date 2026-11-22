@@ -1,0 +1,128 @@
+{
+  "generated_at": "2026-11-22T09:23:47.668648+00:00",
+  "environment": {
+    "torch": "2.11.0+cu126",
+    "gpu": "GTX 1660 SUPER",
+    "clock": [
+      1530.0,
+      1530.0
+    ]
+  },
+  "config": {
+    "build_dir": "E:\\__PROJECTS__\\Hagane\\build-rtvk",
+    "batch": 64,
+    "in_f": 256,
+    "hidden": 128,
+    "out_f": 1,
+    "steps": [
+      10,
+      100,
+      500
+    ],
+    "warmup": 5,
+    "iters": 20,
+    "tol": 0.001,
+    "result_path": "E:\\__PROJECTS__\\Hagane\\benchmarks\\results\\train_replay.json"
+  },
+  "correctness": {
+    "w1": 6.103515625e-05,
+    "w2": 0.00048828125,
+    "passed": true
+  },
+  "results": [
+    {
+      "N": 10,
+      "batch_one_submit": {
+        "median_ms": 2.048449998255819,
+        "spread_ms": [
+          1.719399995636195,
+          3.288000007160008
+        ]
+      },
+      "n_submits": {
+        "median_ms": 2.054399999906309,
+        "spread_ms": [
+          1.9660000107251108,
+          2.9799999902024865
+        ]
+      },
+      "torch": {
+        "median_ms": 4.939450009260327,
+        "spread_ms": [
+          3.679000015836209,
+          8.076800004346296
+        ]
+      },
+      "per_step": {
+        "batch": 0.2048449998255819,
+        "n_submits": 0.2054399999906309,
+        "torch": 0.49394500092603266
+      },
+      "gap_batch_vs_torch": 0.4147121631791898,
+      "speedup_vs_n_submits": 1.002904636020189
+    },
+    {
+      "N": 100,
+      "batch_one_submit": {
+        "median_ms": 13.946699997177348,
+        "spread_ms": [
+          12.10459999856539,
+          16.279600007692352
+        ]
+      },
+      "n_submits": {
+        "median_ms": 16.35240000905469,
+        "spread_ms": [
+          15.00270000542514,
+          18.427500006509945
+        ]
+      },
+      "torch": {
+        "median_ms": 48.643399990396574,
+        "spread_ms": [
+          39.89840002031997,
+          55.251099984161556
+        ]
+      },
+      "per_step": {
+        "batch": 0.13946699997177348,
+        "n_submits": 0.1635240000905469,
+        "torch": 0.48643399990396574
+      },
+      "gap_batch_vs_torch": 0.2867130998230135,
+      "speedup_vs_n_submits": 1.172492418447678
+    },
+    {
+      "N": 500,
+      "batch_one_submit": {
+        "median_ms": 33.385699993232265,
+        "spread_ms": [
+          31.802000012248755,
+          34.485199983464554
+        ]
+      },
+      "n_submits": {
+        "median_ms": 94.1774999955669,
+        "spread_ms": [
+          85.4776999913156,
+          104.05250001349486
+        ]
+      },
+      "torch": {
+        "median_ms": 277.87165000336245,
+        "spread_ms": [
+          257.21000001067296,
+          314.07039999612607
+        ]
+      },
+      "per_step": {
+        "batch": 0.06677139998646453,
+        "n_submits": 0.1883549999911338,
+        "torch": 0.5557433000067249
+      },
+      "gap_batch_vs_torch": 0.12014791718704759,
+      "speedup_vs_n_submits": 2.820893376944559
+    }
+  ],
+  "note": "forward+backward captured into one command buffer; N steps in one submit."
+}
