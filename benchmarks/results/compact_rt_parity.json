@@ -1,0 +1,185 @@
+{
+  "generated_at": "2026-11-22T02:23:14.026589+00:00",
+  "environment": {
+    "torch": "2.11.0+cu126",
+    "gpu": "NVIDIA GeForce GTX 1660 SUPER",
+    "device": "vulkan"
+  },
+  "config": {
+    "build_dir": "E:\\__PROJECTS__\\Hagane\\build-rtvk",
+    "device": 1,
+    "seed": 1234,
+    "tol_elementwise": 1e-05,
+    "tol_matmul": 0.0001,
+    "result_path": "E:\\__PROJECTS__\\Hagane\\benchmarks\\results\\compact_rt_parity.json"
+  },
+  "summary": {
+    "total": 27,
+    "passed": 27,
+    "failed": 0
+  },
+  "cases": [
+    {
+      "name": "elem_add",
+      "max_abs_diff": 0.0,
+      "tol": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "elem_sub",
+      "max_abs_diff": 0.0,
+      "tol": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "elem_mul",
+      "max_abs_diff": 0.0,
+      "tol": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "elem_div",
+      "max_abs_diff": 9.5367431640625e-07,
+      "tol": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "elem_pow",
+      "max_abs_diff": 1.9073486328125e-06,
+      "tol": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "elem_maximum",
+      "max_abs_diff": 0.0,
+      "tol": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "elem_minimum",
+      "max_abs_diff": 0.0,
+      "tol": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "elem_gt",
+      "max_abs_diff": 0.0,
+      "tol": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "elem_ge",
+      "max_abs_diff": 0.0,
+      "tol": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "elem_lt",
+      "max_abs_diff": 0.0,
+      "tol": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "elem_le",
+      "max_abs_diff": 0.0,
+      "tol": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "unary_exp",
+      "max_abs_diff": 1.9073486328125e-06,
+      "tol": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "unary_log",
+      "max_abs_diff": 8.940696716308594e-08,
+      "tol": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "unary_sqrt",
+      "max_abs_diff": 1.1920928955078125e-07,
+      "tol": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "unary_tanh",
+      "max_abs_diff": 0.0,
+      "tol": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "unary_sigm",
+      "max_abs_diff": 5.960464477539063e-08,
+      "tol": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "unary_relu",
+      "max_abs_diff": 0.0,
+      "tol": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "unary_gelu",
+      "max_abs_diff": 1.30385160446167e-07,
+      "tol": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "unary_abs",
+      "max_abs_diff": 0.0,
+      "tol": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "where",
+      "max_abs_diff": 0.0,
+      "tol": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "gemm_bias",
+      "max_abs_diff": 1.9073486328125e-06,
+      "tol": 0.0001,
+      "passed": true
+    },
+    {
+      "name": "gemm_transA",
+      "max_abs_diff": 0.0,
+      "tol": 0.0001,
+      "passed": true
+    },
+    {
+      "name": "reduce_sum",
+      "max_abs_diff": 1.7881393432617188e-07,
+      "tol": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "reduce_mean",
+      "max_abs_diff": 2.60770320892334e-08,
+      "tol": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "reduce_max",
+      "max_abs_diff": 0.0,
+      "tol": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "reduce_min",
+      "max_abs_diff": 0.0,
+      "tol": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "fusion_dispatch_count",
+      "max_abs_diff": 1.0,
+      "tol": 1,
+      "passed": true
+    }
+  ]
+}

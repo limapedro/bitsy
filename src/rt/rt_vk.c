@@ -296,37 +296,43 @@ void rt_vk_fused(RT* c, RtFusion* f, RtBuf* out) {
   memcpy(out->host, vk->out_map, sizeof(float)*(size_t)out->n);
 }
 
-void rt_vk_gemm(RT* c, RtBuf* a, RtBuf* b, RtBuf* out) {
+void rt_vk_gemm(RT* c, RtBuf* a, RtBuf* b, RtBuf* bias,
+                int trans_a, int trans_b, RtBuf* out) {
   RtVk* vk=c->vk; if(!vk->dev) return;
-  int M=(int)a->dims[0],K=(int)a->dims[1],N=(int)b->dims[1];
+  int ar=(int)a->dims[0], ac=(int)a->dims[1];
+  int br=(int)b->dims[0], bc=(int)b->dims[1];
+  int M = trans_a?ac:ar, K = trans_a?ar:ac, N = trans_b?br:bc;
   int* p=(int*)vk->params_map;
-  p[0]=M;p[1]=N;p[2]=K;
-  pack_addr(p,4,vkbuf(c,a)->addr); pack_addr(p,6,vkbuf(c,b)->addr); pack_addr(p,8,vkbuf(c,out)->addr);
+  p[0]=M;p[1]=N;p[2]=K; p[3]=trans_a | (trans_b<<1) | (bias?4:0);
+  p[4]=ar; p[5]=ac; p[6]=br; p[7]=bc;
+  pack_addr(p,8,vkbuf(c,a)->addr); pack_addr(p,10,vkbuf(c,b)->addr);
+  pack_addr(p,12,vkbuf(c,out)->addr);
+  uint64_t baddr = bias ? vkbuf(c,bias)->addr : 0;
+  pack_addr(p,14,baddr);
   VkCommandBufferBeginInfo bi={.sType=VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
   vkBeginCommandBuffer(vk->cmd,&bi);
   vkCmdBindPipeline(vk->cmd,VK_PIPELINE_BIND_POINT_COMPUTE,vk->gemm[0]);
   vkCmdBindDescriptorSets(vk->cmd,VK_PIPELINE_BIND_POINT_COMPUTE,vk->playout,0,1,&vk->set,0,NULL);
-  int pc[4]={M,N,K,0}; vkCmdPushConstants(vk->cmd,vk->playout,VK_SHADER_STAGE_COMPUTE_BIT,0,sizeof(pc),pc);
+  int pc[4]={M,N,K,p[3]}; vkCmdPushConstants(vk->cmd,vk->playout,VK_SHADER_STAGE_COMPUTE_BIT,0,sizeof(pc),pc);
   vkCmdDispatch(vk->cmd, ((M+15)/16)*((N+15)/16), 1,1);
   vkEndCommandBuffer(vk->cmd);
   submit_wait(vk);
-  /* result written directly to C buffer; copy back from its device memory */
   void* m; vkMapMemory(vk->dev, ((RtVkBuf*)out->vk)->mem, 0, sizeof(float)*(size_t)out->n,0,&m);
   memcpy(out->host,m,sizeof(float)*(size_t)out->n); vkUnmapMemory(vk->dev,((RtVkBuf*)out->vk)->mem);
 }
 
-void rt_vk_reduce(RT* c, RtBuf* in, int axis, RtBuf* out) {
+void rt_vk_reduce(RT* c, RtBuf* in, int kind, int axis, RtBuf* out) {
   RtVk* vk=c->vk; if(!vk->dev) return;
   int outer=1,stride=(int)in->dims[axis],inner=1;
   for(int i=0;i<axis;++i)outer*=(int)in->dims[i];
   for(int i=axis+1;i<in->ndim;++i)inner*=(int)in->dims[i];
-  int* p=(int*)vk->params_map; p[0]=outer;p[1]=stride;p[2]=inner;
+  int* p=(int*)vk->params_map; p[0]=outer;p[1]=stride;p[2]=inner;p[3]=kind;
   pack_addr(p,4,vkbuf(c,in)->addr); pack_addr(p,6,vkbuf(c,out)->addr);
   VkCommandBufferBeginInfo bi={.sType=VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
   vkBeginCommandBuffer(vk->cmd,&bi);
   vkCmdBindPipeline(vk->cmd,VK_PIPELINE_BIND_POINT_COMPUTE,vk->reduce);
   vkCmdBindDescriptorSets(vk->cmd,VK_PIPELINE_BIND_POINT_COMPUTE,vk->playout,0,1,&vk->set,0,NULL);
-  int total=outer*inner; int pc[4]={total,0,0,0};
+  int total=outer*inner; int pc[4]={total,kind,0,0};
   vkCmdPushConstants(vk->cmd,vk->playout,VK_SHADER_STAGE_COMPUTE_BIT,0,sizeof(pc),pc);
   vkCmdDispatch(vk->cmd,(total+255)/256,1,1);
   vkEndCommandBuffer(vk->cmd);
@@ -353,8 +359,9 @@ void rt_vk_replay(RT* c){
 void rt_vk_init(RT* c){ (void)c; }
 void rt_vk_shutdown(RT* c){ (void)c; }
 void rt_vk_fused(RT* c, RtFusion* f, RtBuf* o){ (void)c;(void)f;(void)o; }
-void rt_vk_gemm(RT* c, RtBuf* a, RtBuf* b, RtBuf* o){ (void)c;(void)a;(void)b;(void)o; }
-void rt_vk_reduce(RT* c, RtBuf* i, int ax, RtBuf* o){ (void)c;(void)i;(void)ax;(void)o; }
+void rt_vk_gemm(RT* c, RtBuf* a, RtBuf* b, RtBuf* bias, int ta, int tb, RtBuf* o){
+  (void)c;(void)a;(void)b;(void)bias;(void)ta;(void)tb;(void)o; }
+void rt_vk_reduce(RT* c, RtBuf* i, int kind, int ax, RtBuf* o){ (void)c;(void)i;(void)kind;(void)ax;(void)o; }
 void rt_vk_capture_begin(RT* c){ (void)c; }
 void rt_vk_capture_end(RT* c){ (void)c; }
 void rt_vk_replay(RT* c){ (void)c; }

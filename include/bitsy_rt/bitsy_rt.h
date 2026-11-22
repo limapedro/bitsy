@@ -32,10 +32,18 @@ typedef struct RTTensor RTTensor;
 typedef enum {
   RT_ADD=0, RT_SUB, RT_MUL, RT_DIV, RT_NEG,
   RT_EXP, RT_LOG, RT_SQRT, RT_TANH, RT_SIGM, RT_RELU, RT_GELU,
-  RT_MATMUL, RT_REDUCE_SUM, RT_TRANSPOSE,
+  RT_POW, RT_MAXIMUM, RT_MINIMUM, RT_ABS, RT_SIGN,
+  RT_GT, RT_GE, RT_LT, RT_LE, RT_EQ, RT_NE, RT_WHERE,
+  RT_MATMUL, RT_REDUCE, RT_TRANSPOSE, RT_RESHAPE,
   /* internal derivative primitives (fuse like pointwise) */
   RT_GT0, RT_GELUB
 } RTOp;
+
+/* Reduce kind (rt_reduce). */
+#define RT_REDUCE_SUM  0
+#define RT_REDUCE_MEAN 1
+#define RT_REDUCE_MAX  2
+#define RT_REDUCE_MIN  3
 
 /* Context lifecycle */
 RT_API RT* rt_create(int device);
@@ -65,9 +73,30 @@ RT_API RTTensor* rt_tanh(RT*, RTTensor*);
 RT_API RTTensor* rt_sigm(RT*, RTTensor*);
 RT_API RTTensor* rt_relu(RT*, RTTensor*);
 RT_API RTTensor* rt_gelu(RT*, RTTensor*);
+/* PR #2 additional pointwise primitives (all fuse into the op-program) */
+RT_API RTTensor* rt_pow(RT*, RTTensor*, RTTensor*);
+RT_API RTTensor* rt_maximum(RT*, RTTensor*, RTTensor*);
+RT_API RTTensor* rt_minimum(RT*, RTTensor*, RTTensor*);
+RT_API RTTensor* rt_abs(RT*, RTTensor*);
+RT_API RTTensor* rt_sign(RT*, RTTensor*);
+RT_API RTTensor* rt_gt(RT*, RTTensor*, RTTensor*);
+RT_API RTTensor* rt_ge(RT*, RTTensor*, RTTensor*);
+RT_API RTTensor* rt_lt(RT*, RTTensor*, RTTensor*);
+RT_API RTTensor* rt_le(RT*, RTTensor*, RTTensor*);
+RT_API RTTensor* rt_eq(RT*, RTTensor*, RTTensor*);
+RT_API RTTensor* rt_ne(RT*, RTTensor*, RTTensor*);
+RT_API RTTensor* rt_where(RT*, RTTensor* cond, RTTensor* a, RTTensor* b);
+/* GEMM with optional bias epilogue and transpose flags (PR #2) */
+RT_API RTTensor* rt_gemm(RT*, RTTensor* a, RTTensor* b, RTTensor* bias,
+                         int trans_a, int trans_b);
 RT_API RTTensor* rt_matmul(RT*, RTTensor*, RTTensor*);
+/* Generic reduce: kind = RT_REDUCE_SUM/MEAN/MAX/MIN */
+RT_API RTTensor* rt_reduce(RT*, RTTensor*, int kind, int axis, int keepdim);
 RT_API RTTensor* rt_reduce_sum(RT*, RTTensor*, int axis, int keepdim);
 RT_API RTTensor* rt_transpose(RT*, RTTensor*);
+RT_API RTTensor* rt_reshape(RT*, RTTensor*, int ndim, const int64_t* dims);
+/* scalar constant tensor */
+RT_API RTTensor* rt_scalar(RT*, float value);
 
 /* Execution + data */
 RT_API void rt_realize(RT*, RTTensor*);
