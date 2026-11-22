@@ -599,7 +599,9 @@ void rt_vk_reduce(RT* c, RtBuf* in, int kind, int axis, RtBuf* out) {
   int* p=(int*)(slot ? slot->params_map : vk->params_map);
   p[0]=outer;p[1]=stride;p[2]=inner;p[3]=kind;
   pack_addr(p,4,vkbuf(c,in)->addr); pack_addr(p,6,vkbuf(c,out)->addr);
-  int total=outer*inner; int pc[4]={total,kind,0,0}; uint32_t groups=(total+255)/256;
+  /* PR #17: one workgroup (256 cooperating threads) per output line, not one
+   * invocation — a 1M 1-D reduce was single-threaded before this. */
+  int total=outer*inner; int pc[4]={total,kind,0,0}; uint32_t groups=(uint32_t)total;
   if (slot) { cap_record(vk, slot, vk->reduce, pc, groups); return; }
   VkCommandBufferBeginInfo bi={.sType=VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
   vkBeginCommandBuffer(vk->cmd,&bi);

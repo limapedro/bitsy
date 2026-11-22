@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-22T05:28:24.519330+00:00",
+  "generated_at": "2026-11-22T05:36:48.424225+00:00",
   "environment": {
     "torch": "2.11.0+cu126",
     "gpu": "NVIDIA GeForce GTX 1660 SUPER"
@@ -54,13 +54,13 @@
     },
     {
       "name": "grad_l2b",
-      "max_abs_diff": 3.259629011154175e-08,
+      "max_abs_diff": 4.842877388000488e-08,
       "tol": 0.001,
       "passed": true
     },
     {
       "name": "layernorm",
-      "max_abs_diff": 2.384185791015625e-07,
+      "max_abs_diff": 1.1920928955078125e-07,
       "tol": 0.0001,
       "passed": true
     },
