@@ -45,6 +45,9 @@ void main() {
   else if (pc.op == 6) r = tanh(av);
   else if (pc.op == 7) r = exp(av);
   else if (pc.op == 10) r = log(av); // BT_OP_LOG = 10; 8 is transpose/copy
+  // exp_037: ReLU backward: g * (forward_output > 0). b is the forward output.
+  else if (pc.op == 11) r = av * (bv > 0.0 ? 1.0 : 0.0);
+  else if (pc.op == 12) r = sqrt(max(av, 0.0)); // exp_037: sqrt for norms/AdamW
   else r = av; // op 8: transpose (strides are swapped by the host)
   o[io] = r;
 }

@@ -275,7 +275,10 @@ static bt_status_t matmul_kernel(const bt_tensor_t* a, const bt_tensor_t* b, bt_
     chosen = cached >= 0 ? cached
                          : ((pc.M <= 512 && pc.N <= 512) ? 1 : (vec4_ok ? 4 : 2));
   }
-  if ((chosen == 4 || chosen == 5 || chosen == 6 || chosen == 7 || chosen == 8) && !vec4_ok) chosen = 2;
+  /* exp_037: register-blocked/vec4 kernels assume contiguous rows. A
+   * transposed view has strides[1]!=1 and must use the stride-aware tiled
+   * kernel, otherwise the result is silently wrong. */
+  if (!vec4_ok) chosen = 1;
 
   double m = pc.M, n = pc.N, k = pc.K;
   double gemm_bytes = (m * k + k * n + m * n) * 4.0;
@@ -460,6 +463,28 @@ bt_status_t bt_vk_broadcast_grad(const bt_tensor_t* g, bt_tensor_t* out) {
   bt_status_t status = dispatch(g_vk.broadcast_grad_pipeline, buffers, &pc, sizeof(pc),
                                 (uint32_t)((n + 255) / 256), 1, "broadcast_grad",
                                 (double)n * 2.0 * 4.0, 0.0);
+  if (status == BT_OK) bt_storage_bump_version(out->storage);
+  return status;
+}
+
+/* exp_037: GELU forward/backward. */
+typedef struct { uint32_t n, mode, offx, offg, offo; } vk_gelu_pc_t;
+
+bt_status_t bt_vk_gelu(const bt_tensor_t* x, const bt_tensor_t* g, uint32_t mode,
+                       bt_tensor_t* out) {
+  if (!g_vk.ready) return bt_fail(BT_ERR_BACKEND, "bt_vk_gelu: Vulkan not ready");
+  vk_gelu_pc_t pc = { .n = (uint32_t)bt_shape_numel(bt_tensor_shape(x)), .mode = mode,
+                      .offx = (uint32_t)x->offset,
+                      .offg = g ? (uint32_t)g->offset : 0,
+                      .offo = (uint32_t)out->offset };
+  VkBuffer buffers[4] = {
+    bt_vk_buffer_of(x->storage->gpu),
+    bt_vk_buffer_of(g ? g->storage->gpu : x->storage->gpu),
+    bt_vk_buffer_of(out->storage->gpu),
+    bt_vk_buffer_of(x->storage->gpu),
+  };
+  bt_status_t status = dispatch(g_vk.gelu_pipeline, buffers, &pc, sizeof(pc),
+                                (pc.n + 255) / 256, 1, "gelu", (double)pc.n * 8.0, 0.0);
   if (status == BT_OK) bt_storage_bump_version(out->storage);
   return status;
 }
@@ -729,6 +754,7 @@ KERNEL(sigmoid, BT_OP_SIGMOID)
 KERNEL(op_tanh, BT_OP_TANH)
 KERNEL(op_exp, BT_OP_EXP)
 KERNEL(op_log, BT_OP_LOG)
+KERNEL(op_sqrt, BT_OP_SQRT)
 
 #define REG(op, fn) bt_register_binary(op, BT_BACKEND_VULKAN, BT_FLOAT32, fn)
 
@@ -744,6 +770,7 @@ bt_status_t bt_vk_register(void) {
   if ((s = REG(BT_OP_TANH, op_tanh))) return s;
   if ((s = REG(BT_OP_EXP, op_exp))) return s;
   if ((s = REG(BT_OP_LOG, op_log))) return s;
+  if ((s = REG(BT_OP_SQRT, op_sqrt))) return s;
   if ((s = REG(BT_OP_FUSED_ADD_RELU, add_relu_kernel))) return s;
   if ((s = REG(BT_OP_MATMUL, matmul_kernel))) return s;
   if ((s = REG(BT_OP_TRANSPOSE, transpose_kernel))) return s;

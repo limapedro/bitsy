@@ -11,7 +11,8 @@ void main() {
   uint row = gl_WorkGroupID.x;
   uint tid = gl_LocalInvocationID.x;
   float v = 0.0;
-  if (tid < pc.N) v = exp(x[pc.offx + row * pc.N + tid]);
+  for (uint k = tid; k < pc.N; k += 256)
+    v += exp(x[pc.offx + row * pc.N + k]);
   partial[tid] = v;
   barrier();
   for (uint stride = 128; stride > 0; stride >>= 1) {
@@ -19,5 +20,6 @@ void main() {
     barrier();
   }
   float logsum = log(partial[0]);
-  if (tid < pc.N) o[pc.offo + row * pc.N + tid] = x[pc.offx + row * pc.N + tid] - logsum;
+  for (uint k = tid; k < pc.N; k += 256)
+    o[pc.offo + row * pc.N + k] = x[pc.offx + row * pc.N + k] - logsum;
 }

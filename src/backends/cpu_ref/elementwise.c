@@ -25,6 +25,7 @@ static float apply(int op, float a, float b) {
     case BT_OP_TANH: return tanhf(a);
     case BT_OP_EXP: return expf(a);
     case BT_OP_LOG: return logf(a);
+    case BT_OP_SQRT: return sqrtf(fmaxf(a, 0.f));
     default: return NAN;
   }
 }

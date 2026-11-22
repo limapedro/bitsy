@@ -1,7 +1,7 @@
 # Progress tracker — implementation, numerics, performance
 
-**Last updated:** 2026-11-21
-**Repository tag:** `v0.5.0-cifar`
+**Last updated:** 2026-11-22
+**Repository tag:** `v0.5.0-cifar` (feature-completion work unreleased on a branch)
 **Oracle / target:** PyTorch 2.11.0+cu126, CUDA 12.6, NVIDIA GeForce GTX 1660 SUPER
 
 > Rule: no claim in this document is made without a committed report or a
@@ -12,6 +12,58 @@
 Note: committed JSON reports still record the compiled version string
 `0.2.0-bitsy` because the version macro was not advanced with later tags. This
 is tracked as issue #20; it does not affect the numeric or timing values.
+
+---
+
+## 0. Feature completion + model parity (2026-11-22, exp_037/038/039)
+
+New work toward "100% parity" for the functions needed by GPT-2/LSTM/RNN.
+"100% parity" here means every implemented function matches PyTorch within the
+documented tolerance on tested shapes; the full PyTorch API (thousands of
+overloads) is out of scope. All results below have committed JSON/command
+evidence; misses are stated, not hidden.
+
+**Correctness fixes** (exp_037): ReLU backward was the identity, division
+backward omitted `d/db` — both fixed. `log_softmax` ignored columns >256
+(wrong CE loss at vocab 1024) — fixed. The register-blocked GEMM misread
+transposed-view strides (zero embedding grad) — now falls back to the
+stride-aware tiled kernel. Attention now uses a differentiable transpose.
+
+**New primitives** (exp_037): `sqrt`, exact-erf `gelu` (+backward), `LayerNorm`,
+`softmax`, `Embedding`, `Dropout` (eval/identity), `AdamW`, differentiable 2D
+`transpose`. `mse_loss` corrected to PyTorch's mean reduction.
+
+| API | Evidence (max abs diff vs PyTorch CUDA) | Result |
+|---|---|---|
+| GELU fwd/bwd | 1.2e-7 | pass |
+| LayerNorm fwd/dx/dW/db | 2.4e-7 / 5.4e-7 / 6e-8 / 0 | pass |
+| softmax dx | 1.7e-7 | pass |
+| AdamW one-step W/b | 1.5e-8 / 9.3e-10 | pass |
+| sqrt / gelu parity cases | 4 new cases | pass |
+
+**Model parity** (exp_038/039, copied weights, CUDA oracle):
+
+| model | params | loss / logits diff | grad diffs | result |
+|---|---:|---|---|---|
+| RNN (B3 T4 I5 H6) | — | h 5.9e-6 | dx 2.2e-7, dWih 1.3e-6 | pass (tol 1e-5) |
+| LSTM (B3 T4 I5 H6) | — | h 2.1e-6, c 3.1e-6 | dx 7.7e-8 | pass (tol 1e-5) |
+| GPT-2 small | 2,162,688 | loss 0.0, logits 1.16e-6 | embed 5.1e-7, head 2.4e-7, q0 4.3e-8 | pass |
+
+**Performance — honest misses** (median, warmup, synced, live clock logged;
+full distributions in `benchmarks/results/*.json`):
+
+| model | Bitsy ms | PyTorch ms | ratio torch/Bitsy | clock |
+|---|---:|---:|---:|---:|
+| RNN forward | 1.75 (1.39–4.78) | 0.26 (0.19–0.54) | 0.15 | 1530 MHz |
+| LSTM forward | 5.36 (4.25–7.33) | 0.22 (0.17–0.69) | 0.04 | 1530 MHz |
+| GPT-2 forward | 25.42 (14.75–79.68) | 14.69 (9.80–24.77) | 0.58 | 1950 MHz |
+
+Bitsy is slower on all three; cause is per-step/per-head Python-level dispatch
+of small ops with submit/fence overhead versus fused cuDNN kernels. No speed
+target is claimed; consistent with `docs/PERFORMANCE_CEILING.md`.
+
+**Gate:** `python tests/parity/run.py` → **48/48 passed, 0 skipped** (was 44/44);
+CTest → 100%. Details: `experiments/exp_037..039/FINDINGS.md`.
 
 ---
 

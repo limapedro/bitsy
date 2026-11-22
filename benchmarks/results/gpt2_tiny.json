@@ -1,0 +1,39 @@
+{
+  "generated_at": "2026-11-22T00:38:52.913251+00:00",
+  "params": 2162688,
+  "config": {
+    "vocab": 1024,
+    "d_model": 192,
+    "n_layer": 4,
+    "n_head": 4,
+    "d_ff": 768,
+    "block": 32,
+    "batch": 2,
+    "seq": 8,
+    "lr": 0.001,
+    "iters": 10,
+    "warmup": 2,
+    "result_path": "E:\\__PROJECTS__\\Hagane\\benchmarks\\results\\gpt2_tiny.json"
+  },
+  "bitsy_loss": 6.870110511779785,
+  "torch_loss": 6.870110511779785,
+  "logits_max_abs_diff": 1.1622905731201172e-06,
+  "passed_loss": true,
+  "embed_grad_max_abs_diff": 5.066394805908203e-07,
+  "head_grad_max_abs_diff": 2.384185791015625e-07,
+  "q0_grad_max_abs_diff": 4.284083843231201e-08,
+  "passed_grads": true,
+  "passed": true,
+  "gpu_clock_mhz": 1530.0,
+  "bitsy_fwd_ms": 18.172250012867153,
+  "torch_fwd_ms": 11.139299982460216,
+  "bitsy_fwd_spread_ms": [
+    12.951100012287498,
+    56.55110001680441
+  ],
+  "torch_fwd_spread_ms": [
+    9.06599999871105,
+    14.399899984709918
+  ],
+  "torch_over_bitsy": 0.612984081474383
+}

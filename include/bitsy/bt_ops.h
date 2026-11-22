@@ -24,6 +24,17 @@ BT_API bt_status_t bt_tanh(const bt_tensor_t* a, bt_tensor_t** out);
 BT_API bt_status_t bt_exp(const bt_tensor_t* a, bt_tensor_t** out);
 BT_API bt_status_t bt_log(const bt_tensor_t* a, bt_tensor_t** out);
 
+BT_API bt_status_t bt_sqrt(const bt_tensor_t* a, bt_tensor_t** out);
+
+/* exp_037: exact (erf) GELU forward and its derivative. */
+BT_API bt_status_t bt_gelu(const bt_tensor_t* x, bt_tensor_t** out);
+BT_API bt_status_t bt_gelu_backward(const bt_tensor_t* g, const bt_tensor_t* x,
+                                    bt_tensor_t** out);
+
+/* exp_037: ReLU backward out = g * (forward_output > 0). */
+BT_API bt_status_t bt_relu_backward(const bt_tensor_t* g, const bt_tensor_t* out_fwd,
+                                    bt_tensor_t** out);
+
 /* First fused pointwise kernel: out = relu(a + b) in one dispatch. */
 BT_API bt_status_t bt_add_relu(const bt_tensor_t* a, const bt_tensor_t* b,
                                bt_tensor_t** out);

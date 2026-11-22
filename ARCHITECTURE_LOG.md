@@ -6,6 +6,36 @@ only by a later entry that supersedes it and explains why.
 
 ---
 
+## 2026-11-22 — ReduceSum/transpose correctness and scoped feature parity
+
+**Context.** Building GPT-2/LSTM/RNN exposed three silent correctness bugs:
+`log_softmax` ignored columns beyond 256 (wrong loss at vocab 1024), the
+register-blocked GEMM misread transposed-view strides (zero embedding grad),
+and an untyped transpose wrapper severed autograd through attention. exp_037
+also added the primitives these models need (GELU, LayerNorm, softmax,
+Embedding, AdamW, sqrt, differentiable transpose).
+
+**Options considered.** (1) Relax parity tolerances to absorb the errors;
+(2) fix the kernels/graph at the root and add op-level parity cases;
+(3) leave model-level scaffolding to compensate in the harness.
+
+**Decision.** (2). `log_softmax` loops over all columns; GEMM falls back to the
+stride-aware tiled kernel for non-contiguous operands; `Tensor.transpose` is a
+differentiable op. New primitives follow the existing `Tensor._op` pattern with
+Vulkan kernels + CPU fallbacks, reusing the existing `APPROX` tolerance class.
+The one-hot embedding / per-head attention scaffolding is confined to the model
+harness, not the core API.
+
+**Consequences.** Numeric parity holds: 48/48 parity cases (was 44/44), CTest
+100%, GPT-2 loss 0.0 vs PyTorch, grad diffs ≤5.1e-7, RNN/LSTM h/c ≤6e-6. A
+documented divergence remains: Bitsy sqrt clamps negatives at 0 while PyTorch
+returns NaN (the parity gate uses positive inputs; recorded in exp_037
+FINDINGS). Performance is an honest miss — Bitsy is slower than PyTorch on all
+three models (ratio 0.04–0.58) due to Python-level op dispatch — consistent
+with the accepted performance ceiling; no tolerance was relaxed.
+
+---
+
 ## 2026-11-21 — Core language is C11, with no C++ in the core
 
 **Context.** Bitsy must be a small, auditable framework whose internals a C

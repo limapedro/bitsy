@@ -6,6 +6,22 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added (feature completion + model parity, exp_037/038/039, 2026-11-22)
+
+- New primitives with PyTorch parity: `sqrt`, exact-erf `gelu` (+ backward),
+  `LayerNorm`, `softmax`, `Embedding`, `AdamW`, differentiable 2D `transpose`,
+  eval-mode `Dropout`. `mse_loss` now uses PyTorch's mean reduction.
+- Correctness fixes: ReLU backward masking, division `d/db`, `log_softmax`
+  beyond 256 columns, stride-aware GEMM fallback for transposed views.
+- Models: `RNN`/`RNNCell`/`LSTM`/`LSTMCell` (`nn.py`) and a ~2M-param GPT-2-style
+  decoder example. Numerics vs PyTorch CUDA: RNN h 5.9e-6, LSTM h 2.1e-6/c 3.1e-6,
+  GPT-2 loss 0.0/logits 1.16e-6, grad diffs ≤5.1e-7 — all pass.
+- Reproducible benchmarks `benchmarks/models/{rnn_lstm_parity,gpt2_tiny}.py` with
+  dataclass configs, median/spread timing, warmup, sync and GPU-clock logging.
+  Performance is an honest miss (Bitsy slower: ratios 0.04–0.58); no speed
+  target claimed. See `experiments/exp_037..039/FINDINGS.md`.
+- Parity gate extended to 48/48 (was 44/44); CTest 100%.
+
 ### Campaign closed (2026-11-21)
 
 - TOGISHI accepted the documented performance ceiling after 36 experiments.

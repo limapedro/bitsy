@@ -1,0 +1,68 @@
+{
+  "generated_at": "2026-11-22T00:38:47.306856+00:00",
+  "environment": {
+    "torch": "2.11.0+cu126",
+    "gpu": "NVIDIA GeForce GTX 1660 SUPER",
+    "bitsy": "0.2.0-bitsy",
+    "bitsy_vulkan": true
+  },
+  "config": {
+    "batch": 3,
+    "time": 4,
+    "input_size": 5,
+    "hidden_size": 6,
+    "iters": 20,
+    "warmup": 3,
+    "tol": 1e-05,
+    "result_path": "E:\\__PROJECTS__\\Hagane\\benchmarks\\results\\rnn_lstm_parity.json"
+  },
+  "rnn": {
+    "h_max_abs_diff": 6.079673767089844e-06,
+    "dx_max_abs_diff": 1.6763806343078613e-07,
+    "dWih_max_abs_diff": 5.755573511123657e-07
+  },
+  "lstm": {
+    "h_max_abs_diff": 3.635883331298828e-06,
+    "c_max_abs_diff": 3.635883331298828e-06,
+    "dx_max_abs_diff": 8.230563253164291e-08
+  },
+  "passed": true,
+  "rnn_forward_timing": {
+    "bitsy": {
+      "median_ms": 1.4046500000404194,
+      "spread_ms": [
+        1.2233000015839934,
+        3.6408999876584858
+      ],
+      "clock_mhz": 1530.0
+    },
+    "torch": {
+      "median_ms": 0.2417499927105382,
+      "spread_ms": [
+        0.21769999875687063,
+        0.5902000120840967
+      ],
+      "clock_mhz": 1530.0
+    }
+  },
+  "lstm_forward_timing": {
+    "bitsy": {
+      "median_ms": 5.029049993027002,
+      "spread_ms": [
+        4.279099986888468,
+        7.544799998868257
+      ],
+      "clock_mhz": 1530.0
+    },
+    "torch": {
+      "median_ms": 0.28660001407843083,
+      "spread_ms": [
+        0.2337999758310616,
+        0.6504999764729291
+      ],
+      "clock_mhz": 1530.0
+    }
+  },
+  "rnn_speed_ratio_torch_over_bitsy": 0.1721069253576206,
+  "lstm_speed_ratio_torch_over_bitsy": 0.056988897401261535
+}
