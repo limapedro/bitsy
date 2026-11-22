@@ -36,6 +36,7 @@ def load(build_dir: Path) -> C.CDLL:
   lib.rt_replay.argtypes=[C.c_void_p]
   lib.rt_replay_submit_only.argtypes=[C.c_void_p]
   lib.rt_replay_submit_async.argtypes=[C.c_void_p]
+  lib.rt_replay_n.argtypes=[C.c_void_p,C.c_int]
   lib.rt_softmax.argtypes=[C.c_void_p,C.c_void_p,C.c_void_p,C.c_int]; lib.rt_softmax.restype=C.c_void_p
   lib.rt_layernorm.argtypes=[C.c_void_p,C.c_void_p,C.c_void_p,C.c_void_p,C.c_void_p,C.c_float]
   lib.rt_layernorm.restype=C.c_void_p

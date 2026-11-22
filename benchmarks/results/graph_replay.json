@@ -1,0 +1,124 @@
+{
+  "generated_at": "2026-11-22T08:49:43.650712+00:00",
+  "environment": {
+    "torch": "2.11.0+cu126",
+    "gpu": "GTX 1660 SUPER",
+    "clock": [
+      1530.0,
+      1935.0
+    ]
+  },
+  "config": {
+    "build_dir": "E:\\__PROJECTS__\\Hagane\\build-rtvk",
+    "n": 1048576,
+    "steps": [
+      10,
+      100,
+      500
+    ],
+    "warmup": 5,
+    "iters": 20,
+    "tol": 0.0001,
+    "result_path": "E:\\__PROJECTS__\\Hagane\\benchmarks\\results\\graph_replay.json"
+  },
+  "correctness": {
+    "diff": 1.9073486328125e-06,
+    "passed": true
+  },
+  "results": [
+    {
+      "N": 10,
+      "batch_one_submit": {
+        "median_ms": 1.7641499871388078,
+        "spread_ms": [
+          1.5293000033125281,
+          2.0509999885689467
+        ]
+      },
+      "n_submits": {
+        "median_ms": 1.245000006747432,
+        "spread_ms": [
+          1.1579999991226941,
+          1.7641000158619136
+        ]
+      },
+      "torch": {
+        "median_ms": 1.9074000156251714,
+        "spread_ms": [
+          1.584399986313656,
+          2.3058000078890473
+        ]
+      },
+      "per_step": {
+        "batch": 0.17641499871388078,
+        "n_submits": 0.1245000006747432,
+        "torch": 0.19074000156251714
+      },
+      "gap_batch_vs_torch": 0.9248977522738397,
+      "speedup_batch_vs_nsubmits": 0.7057223114949762
+    },
+    {
+      "N": 100,
+      "batch_one_submit": {
+        "median_ms": 5.919150004046969,
+        "spread_ms": [
+          5.5954999988898635,
+          6.329700001515448
+        ]
+      },
+      "n_submits": {
+        "median_ms": 6.98730000294745,
+        "spread_ms": [
+          6.595199985895306,
+          9.391499974299222
+        ]
+      },
+      "torch": {
+        "median_ms": 12.377699997159652,
+        "spread_ms": [
+          11.783699999796227,
+          13.92260001739487
+        ]
+      },
+      "per_step": {
+        "batch": 0.05919150004046969,
+        "n_submits": 0.0698730000294745,
+        "torch": 0.12377699997159652
+      },
+      "gap_batch_vs_torch": 0.4782108150468386,
+      "speedup_batch_vs_nsubmits": 1.1804566530954914
+    },
+    {
+      "N": 500,
+      "batch_one_submit": {
+        "median_ms": 14.434299999265932,
+        "spread_ms": [
+          13.808099989546463,
+          15.316500008339062
+        ]
+      },
+      "n_submits": {
+        "median_ms": 33.28904999943916,
+        "spread_ms": [
+          32.15349998208694,
+          33.578300004592165
+        ]
+      },
+      "torch": {
+        "median_ms": 60.67609999445267,
+        "spread_ms": [
+          59.52380000962876,
+          63.39940000907518
+        ]
+      },
+      "per_step": {
+        "batch": 0.028868599998531863,
+        "n_submits": 0.06657809999887832,
+        "torch": 0.12135219998890534
+      },
+      "gap_batch_vs_torch": 0.23789103123941044,
+      "speedup_batch_vs_nsubmits": 2.306246233009713
+    }
+  ],
+  "note": "gap>1 = bitsy slower. batch_one_submit amortises host submit/fence over N steps."
+}

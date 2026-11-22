@@ -120,6 +120,9 @@ RT_API void rt_capture_end(RT*);
 RT_API void rt_replay(RT*);
 RT_API void rt_replay_submit_only(RT*);  /* submit + wait, skip output download (profiling) */
 RT_API void rt_replay_submit_async(RT*); /* submit without wait; read waits automatically */
+/* PR #32: submit the captured graph N times in ONE vkQueueSubmit2 (single
+ * timeline signal+wait), then one final read. Amortises host submit overhead. */
+RT_API void rt_replay_n(RT*, int n);
 
 /* Zero-copy readback: returns a pointer to a persistent HOST_CACHED buffer
  * holding t's data (downloads if dirty). Valid for N_READBACK_SLOT consecutive

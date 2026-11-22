@@ -110,6 +110,7 @@ void rt_vk_capture_end(RT*);
 void rt_vk_replay(RT*);
 void rt_vk_submit_only(RT*);
 void rt_vk_submit_async(RT*);
+void rt_vk_replay_n(RT*, int);
 void rt_vk_download_to(RT*, RtBuf*, float*);
 const float* rt_vk_read_ptr(RT*, RtBuf*, int);
 void rt_vk_download_outputs(RT*);
