@@ -58,6 +58,23 @@ this GPU — see FINDINGS_PR15).
 
 ---
 
+## 2026-11-22 03:10 — PR #19 (in progress): two-stage reduce (800× → 8×)
+
+**Profile**: single-stage parallel reduce submitted+waited **1.5 ms** — one
+256-thread workgroup = one SM processing all 1M elements (4096 iterations/thread).
+
+**Fix**: two-stage reduction, both dispatches in ONE command buffer (one fence):
+- stage 0: `lines × 64` workgroups (chunk index in y) → partial buffer (uses all SMs)
+- stage 1: one thread per output line reduces 64 partials → final result
+- catches multi-line reductions (axis 0/1 of 2D) and captured replay
+
+```
+sum  42.5ms -> 0.51ms (802x -> ~8x gap)
+mean 42.5ms -> 0.54ms (983x -> ~10x)
+max  42.5ms -> 0.47ms (768x -> ~8x)
+```
+All gates green (48/48, 27/27, 25/25, 10/10, 79/79, ctest 2/2). Core 2,207 lines.
+
 ## 2026-11-22 02:40 — PR #17: parallel reduce (800× → 25×)
 
 `reduce.comp` used one invocation per output line, so a 1D 1M reduce ran on
@@ -112,10 +129,10 @@ Gap 194× → 3.5×.
 
 ---
 
-## Honest status (updated 2026-11-22 02:57)
+## Honest status (updated 2026-11-22 03:10)
 - **Fastest path**: capture/replay with async submit beats PyTorch on the loop
-  (0.86–0.90×). Single-call elementwise is now 1.5–2.7× off (down from 4–5×),
-  fused chain 1.55×. GEMM 2.3×. Reductions 10–38×.
+  (0.81×). Single-call elementwise 1.6–2.3× off (down from 4–5×), fused chain
+  1.7×. GEMM 2.3×. Reductions 8–10× (down from ~800×).
 - **No universal parity claim**: the gap is closed only on the loop workload.
 - Clock not pinned; spread in JSON. GEMM tensor-core path blocked on this GPU
   (no `VK_KHR_cooperative_matrix`) — needs different hardware or a decision.
