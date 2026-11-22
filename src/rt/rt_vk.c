@@ -1088,14 +1088,16 @@ void rt_vk_replay_n(RT* c, int n) {
  * VK_QUERY_RESULT_WAIT_BIT out of the eager dispatch hot path. */
 void rt_vk_flush_timestamps(RT* c) {
   RtVk* vk=c->vk; if(!vk||!vk->dev||!vk->ts_pool) return;
-  if(vk->gpu_q_pending){ uint64_t ts[2];
-    if(vkGetQueryPoolResults(vk->dev,vk->ts_pool,0,2,sizeof(ts),ts,sizeof(uint64_t),
-        VK_QUERY_RESULT_64_BIT|VK_QUERY_RESULT_WAIT_BIT)==VK_SUCCESS)
+  if(vk->gpu_q_pending){ uint64_t ts[2]={0,0};
+    VkResult r=vkGetQueryPoolResults(vk->dev,vk->ts_pool,0,2,sizeof(ts),ts,sizeof(uint64_t),
+        VK_QUERY_RESULT_64_BIT|VK_QUERY_RESULT_WAIT_BIT);
+    if(r==VK_SUCCESS && ts[1]>ts[0])
       c->last_gpu_ms=(double)(ts[1]-ts[0])*vk->ts_period*1e-6;
     vk->gpu_q_pending=0; }
-  if(vk->copy_q_pending){ uint64_t ct[2];
-    if(vkGetQueryPoolResults(vk->dev,vk->ts_pool,2,2,sizeof(ct),ct,sizeof(uint64_t),
-        VK_QUERY_RESULT_64_BIT|VK_QUERY_RESULT_WAIT_BIT)==VK_SUCCESS)
+  if(vk->copy_q_pending){ uint64_t ct[2]={0,0};
+    VkResult r=vkGetQueryPoolResults(vk->dev,vk->ts_pool,2,2,sizeof(ct),ct,sizeof(uint64_t),
+        VK_QUERY_RESULT_64_BIT|VK_QUERY_RESULT_WAIT_BIT);
+    if(r==VK_SUCCESS && ct[1]>ct[0])
       c->copy_gpu_ms=(double)(ct[1]-ct[0])*vk->ts_period*1e-6;
     vk->copy_q_pending=0; }
 }
