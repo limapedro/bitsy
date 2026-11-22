@@ -885,8 +885,16 @@ void rt_sgd_update(RT* c, RTTensor* w, RTTensor* grad, float lr, float wd) {
   else { for(int i=0;i<w->buf->n;++i) w->buf->host[i]-=lr*(grad->buf->host[i]+wd*w->buf->host[i]); }
 }
 
-double rt_device_time_ms(const RT* c) { return c ? c->last_gpu_ms : 0.0; }
-double rt_copy_time_ms(const RT* c) { return c ? c->copy_gpu_ms : 0.0; }
+double rt_device_time_ms(RT* c) {
+  if (!c) return 0.0;
+  if (c->vk) rt_vk_flush_timestamps(c);
+  return c->last_gpu_ms;
+}
+double rt_copy_time_ms(RT* c) {
+  if (!c) return 0.0;
+  if (c->vk) rt_vk_flush_timestamps(c);
+  return c->copy_gpu_ms;
+}
 
 /* ---------- capture / replay ---------- */
 

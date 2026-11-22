@@ -29,6 +29,10 @@
 /* PR #38: several captured graphs, each reading a distinct input buffer, can
  * be submitted in ONE vkQueueSubmit2 so fresh per-step data is amortized. */
 #define RT_MAX_GRAPHS 6
+/* PR #39: per-op ring of command buffers + params + descriptor sets. Consecutive
+ * eager dispatches use DIFFERENT GPU state, so no fence stall is needed before
+ * re-recording; we only wait when a slot is reused or at host readback. */
+#define RT_RING 8
 typedef struct {
   VkBuffer params, out;
   VkDeviceMemory params_mem, out_mem;
@@ -113,6 +117,16 @@ struct RtVk {
   int capturing;
   int capture_slot_count;
   RtCaptureSlot cap_slots[RT_CAPTURE_SLOTS];
+  /* PR #39 eager ring */
+  VkCommandBuffer ring_cmd[RT_RING];
+  VkBuffer ring_params[RT_RING];
+  VkDeviceMemory ring_params_mem[RT_RING];
+  void* ring_params_map[RT_RING];
+  VkDescriptorSet ring_set[RT_RING];
+  VkFence ring_fence[RT_RING];
+  int ring_pending[RT_RING];
+  int ring_idx; VkFence ring_last; int ring_any;
+  int gpu_q_pending, copy_q_pending;  /* PR #39: deferred timestamp reads */
 };
 
 static void* spv_data(const unsigned char* h, size_t* n) { (void)h; (void)n; return NULL; }
@@ -186,6 +200,8 @@ static void staging_invalidate(RtVk* vk, VkDeviceSize size) {
   vkInvalidateMappedMemoryRanges(vk->dev,1,&r);
 }
 
+static void clear_ring(RtVk* vk);  /* PR #39: forward decl */
+
 /* Copy buffer->buffer via a persistent resettable command buffer + fence. */
 static void copy_buffer(RtVk* vk, VkBuffer src, VkBuffer dst, VkDeviceSize size) {
   if (!vk->xfer_cmd) {
@@ -207,11 +223,9 @@ static void copy_buffer(RtVk* vk, VkBuffer src, VkBuffer dst, VkDeviceSize size)
   VkSubmitInfo si={.sType=VK_STRUCTURE_TYPE_SUBMIT_INFO,.commandBufferCount=1,.pCommandBuffers=&vk->xfer_cmd};
   vkQueueSubmit(vk->queue,1,&si,vk->xfer_fence);
   vkWaitForFences(vk->dev,1,&vk->xfer_fence,VK_TRUE,UINT64_MAX);
-  if(vk->ts_pool){ uint64_t ct[2];
-    if(vkGetQueryPoolResults(vk->dev,vk->ts_pool,2,2,sizeof(ct),ct,sizeof(uint64_t),
-        VK_QUERY_RESULT_64_BIT|VK_QUERY_RESULT_WAIT_BIT)==VK_SUCCESS)
-      if(vk->ctx) vk->ctx->copy_gpu_ms=(double)(ct[1]-ct[0])*vk->ts_period*1e-6; }
+  if(vk->ts_pool) vk->copy_q_pending=1;  /* PR #39: defer blocking query read */
   vkResetFences(vk->dev,1,&vk->xfer_fence);
+  clear_ring(vk);  /* PR #39: this fence wait covered all queued ring submits */
 }
 
 static VkShaderModule shader(RtVk* vk, const unsigned char* words, size_t bytes) {
@@ -311,9 +325,12 @@ void rt_vk_init(RT* c) {
   vkAllocateCommandBuffers(vk->dev, &ai, &vk->replay_cmd);  /* prebuilt replay graph */
   ai.commandBufferCount=RT_MAX_GRAPHS;
   vkAllocateCommandBuffers(vk->dev, &ai, vk->graph_cmds);   /* PR #38 stream graphs */
+  ai.commandBufferCount=RT_RING;
+  vkAllocateCommandBuffers(vk->dev, &ai, vk->ring_cmd);     /* PR #39 eager ring */
 
   VkFenceCreateInfo fci = { .sType=VK_STRUCTURE_TYPE_FENCE_CREATE_INFO };
   vkCreateFence(vk->dev, &fci, NULL, &vk->fence);
+  for(int i=0;i<RT_RING;++i) vkCreateFence(vk->dev,&fci,NULL,&vk->ring_fence[i]);
 
   VkSemaphoreTypeCreateInfo stci = { .sType=VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO,
     .semaphoreType=VK_SEMAPHORE_TYPE_TIMELINE, .initialValue=0 };
@@ -333,13 +350,17 @@ void rt_vk_init(RT* c) {
     .setLayoutCount=1, .pSetLayouts=&vk->set_layout, .pushConstantRangeCount=1, .pPushConstantRanges=&pcr };
   vkCreatePipelineLayout(vk->dev, &plci, NULL, &vk->playout);
   VkDescriptorPoolSize ps = { .type=VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-    .descriptorCount=2*(RT_CAPTURE_SLOTS+1) };
+    .descriptorCount=2*(RT_CAPTURE_SLOTS+1+RT_RING) };
   VkDescriptorPoolCreateInfo dpci = { .sType=VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-    .maxSets=RT_CAPTURE_SLOTS+1, .poolSizeCount=1, .pPoolSizes=&ps };
+    .maxSets=RT_CAPTURE_SLOTS+1+RT_RING, .poolSizeCount=1, .pPoolSizes=&ps };
   vkCreateDescriptorPool(vk->dev, &dpci, NULL, &vk->dpool);
   VkDescriptorSetAllocateInfo dsai = { .sType=VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
     .descriptorPool=vk->dpool, .descriptorSetCount=1, .pSetLayouts=&vk->set_layout };
   vkAllocateDescriptorSets(vk->dev, &dsai, &vk->set);
+  { VkDescriptorSetLayout lays[RT_RING];
+    for(int i=0;i<RT_RING;++i) lays[i]=vk->set_layout;
+    dsai.descriptorSetCount=RT_RING; dsai.pSetLayouts=lays;
+    vkAllocateDescriptorSets(vk->dev, &dsai, vk->ring_set); }
 
   VkPipelineCacheCreateInfo pcc = { .sType=VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO };
   vkCreatePipelineCache(vk->dev, &pcc, NULL, &vk->pcache);
@@ -390,6 +411,15 @@ void rt_vk_init(RT* c) {
   vkBindBufferMemory(vk->dev, vk->params, vk->params_mem, 0);
   vkMapMemory(vk->dev, vk->params_mem, 0, req.size, 0, &vk->params_map);
 
+  /* PR #39: one params buffer + mapped view per ring slot. */
+  for(int i=0;i<RT_RING;++i) {
+    vkCreateBuffer(vk->dev,&bci,NULL,&vk->ring_params[i]);
+    vkGetBufferMemoryRequirements(vk->dev,vk->ring_params[i],&req);
+    vkAllocateMemory(vk->dev,&mai,NULL,&vk->ring_params_mem[i]);
+    vkBindBufferMemory(vk->dev,vk->ring_params[i],vk->ring_params_mem[i],0);
+    vkMapMemory(vk->dev,vk->ring_params_mem[i],0,req.size,0,&vk->ring_params_map[i]);
+  }
+
   vkCreateBuffer(vk->dev, &bci, NULL, &vk->out);
   vkGetBufferMemoryRequirements(vk->dev, vk->out, &req);
   mai.allocationSize=req.size;
@@ -415,6 +445,16 @@ void rt_vk_init(RT* c) {
       .descriptorCount=1, .descriptorType=VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, .pBufferInfo=&oinfo },
   };
   vkUpdateDescriptorSets(vk->dev, 2, w, 0, NULL);
+  for(int i=0;i<RT_RING;++i) {
+    VkDescriptorBufferInfo pi={.buffer=vk->ring_params[i],.offset=0,.range=64*1024};
+    VkDescriptorBufferInfo oi={.buffer=vk->out,.offset=0,.range=64*1024};
+    VkWriteDescriptorSet rw[2]={
+      {.sType=VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,.dstSet=vk->ring_set[i],.dstBinding=0,
+       .descriptorCount=1,.descriptorType=VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,.pBufferInfo=&pi},
+      {.sType=VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,.dstSet=vk->ring_set[i],.dstBinding=1,
+       .descriptorCount=1,.descriptorType=VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,.pBufferInfo=&oi}};
+    vkUpdateDescriptorSets(vk->dev,2,rw,0,NULL);
+  }
 }
 
 void rt_vk_shutdown(RT* c) {
@@ -447,12 +487,15 @@ void rt_vk_shutdown(RT* c) {
   if (vk->reduce_part) { vkDestroyBuffer(vk->dev,vk->reduce_part,NULL); vkFreeMemory(vk->dev,vk->reduce_part_mem,NULL); }
   vkDestroySemaphore(vk->dev, vk->timeline, NULL);
   vkDestroyFence(vk->dev, vk->fence, NULL);
+  for(int i=0;i<RT_RING;++i) if(vk->ring_fence[i]) vkDestroyFence(vk->dev,vk->ring_fence[i],NULL);
   vkDestroyPipelineCache(vk->dev, vk->pcache, NULL);
   vkDestroyDescriptorPool(vk->dev, vk->dpool, NULL);
   vkDestroyDescriptorSetLayout(vk->dev, vk->set_layout, NULL);
   vkDestroyPipelineLayout(vk->dev, vk->playout, NULL);
   vkDestroyCommandPool(vk->dev, vk->pool, NULL);
   vkDestroyBuffer(vk->dev, vk->params, NULL); vkFreeMemory(vk->dev, vk->params_mem, NULL);
+  for(int i=0;i<RT_RING;++i) if(vk->ring_params[i]){
+    vkDestroyBuffer(vk->dev,vk->ring_params[i],NULL); vkFreeMemory(vk->dev,vk->ring_params_mem[i],NULL); }
   vkDestroyBuffer(vk->dev, vk->out, NULL); vkFreeMemory(vk->dev, vk->out_mem, NULL);
   vkDestroyDevice(vk->dev, NULL); vkDestroyInstance(vk->inst, NULL);
   free(vk); c->vk = NULL;
@@ -505,11 +548,39 @@ static void pack_addr(int* p, int idx, uint64_t a) {
   p[idx+1] = (int)(uint32_t)(a >> 32);
 }
 
-static void submit_wait(RtVk* vk) {
-  VkSubmitInfo si = { .sType=VK_STRUCTURE_TYPE_SUBMIT_INFO, .commandBufferCount=1, .pCommandBuffers=&vk->cmd };
-  vkQueueSubmit(vk->queue, 1, &si, vk->fence);
-  vkWaitForFences(vk->dev, 1, &vk->fence, VK_TRUE, UINT64_MAX);
-  vkResetFences(vk->dev, 1, &vk->fence);
+/* PR #39: ring-slot helpers. Each eager dispatch records into its own command
+ * buffer + params buffer + descriptor set, so it never clobbers a still-running
+ * predecessor. We wait only when a slot is reused (every RT_RING ops) or when
+ * the host needs the result. */
+static int ring_acquire(RtVk* vk) {
+  int i = vk->ring_idx & (RT_RING-1);
+  if (vk->ring_pending[i]) {
+    vkWaitForFences(vk->dev,1,&vk->ring_fence[i],VK_TRUE,UINT64_MAX);
+    vkResetFences(vk->dev,1,&vk->ring_fence[i]);
+    vk->ring_pending[i]=0;
+  }
+  return i;
+}
+static void submit_ring(RtVk* vk, int i) {
+  VkSubmitInfo si = { .sType=VK_STRUCTURE_TYPE_SUBMIT_INFO, .commandBufferCount=1, .pCommandBuffers=&vk->ring_cmd[i] };
+  vkQueueSubmit(vk->queue, 1, &si, vk->ring_fence[i]);
+  vk->ring_pending[i]=1; vk->ring_last=vk->ring_fence[i]; vk->ring_any=1;
+  vk->ring_idx++;
+}
+/* Block until all submitted ring work completes, then recycle every fence. */
+static void wait_eager(RtVk* vk) {
+  if (!vk->ring_any) return;
+  vkWaitForFences(vk->dev,1,&vk->ring_last,VK_TRUE,UINT64_MAX);
+  for (int j=0;j<RT_RING;++j) if (vk->ring_pending[j]) vkResetFences(vk->dev,1,&vk->ring_fence[j]);
+  memset(vk->ring_pending,0,sizeof(vk->ring_pending));
+  vk->ring_any=0;
+}
+/* Recycle ring fences AFTER another sync (e.g. copy_buffer's fence) already
+ * guaranteed every queued submit completed — avoids a second redundant wait. */
+static void clear_ring(RtVk* vk) {
+  for (int j=0;j<RT_RING;++j) if (vk->ring_pending[j]) vkResetFences(vk->dev,1,&vk->ring_fence[j]);
+  memset(vk->ring_pending,0,sizeof(vk->ring_pending));
+  vk->ring_any=0;
 }
 
 /* Create a self-contained params+out buffer pair and descriptor set for one
@@ -601,6 +672,7 @@ static void cap_record(RtVk* vk, RtCaptureSlot* s, VkPipeline pipe,
 static void finish_output(RtVk* vk, RtBuf* out) {
   RtVkBuf* vb = out->vk ? (RtVkBuf*)out->vk : NULL;
   if (vb && vb->map) {
+    wait_eager(vk);  /* PR #39: mapped output needs GPU completion before CPU read */
     VkMappedMemoryRange r={.sType=VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
       .memory=vb->mem,.offset=0,.size=vb->size};
     vkInvalidateMappedMemoryRanges(vk->dev,1,&r);
@@ -611,7 +683,8 @@ static void finish_output(RtVk* vk, RtBuf* out) {
 void rt_vk_fused(RT* c, RtFusion* f, RtBuf* out) {
   RtVk* vk = c->vk; if (!vk->dev) return;
   RtCaptureSlot* slot = vk->capturing ? cap_slot_new(vk, out) : NULL;
-  int* p = (int*)(slot ? slot->params_map : vk->params_map);
+  int ri = slot ? -1 : ring_acquire(vk);
+  int* p = (int*)(slot ? slot->params_map : vk->ring_params_map[ri]);
   /* output device address */
   uint64_t outaddr;
   if (slot) {
@@ -648,21 +721,19 @@ void rt_vk_fused(RT* c, RtFusion* f, RtBuf* out) {
   }
   int pc[4] = { out->n, f->ninst, f->ninputs, f->ndim };
   if (slot) { cap_record(vk, slot, pipe, pc, groups); return; }
+  VkCommandBuffer cmd = vk->ring_cmd[ri]; VkDescriptorSet ds=vk->ring_set[ri];
   VkCommandBufferBeginInfo bi = { .sType=VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
-  vkBeginCommandBuffer(vk->cmd, &bi);
+  vkBeginCommandBuffer(cmd, &bi);
   if(vk->ts_pool) vkResetQueryPool(vk->dev,vk->ts_pool,0,2);
-  if(vk->ts_pool) vkCmdWriteTimestamp(vk->cmd,VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,vk->ts_pool,0);
-  vkCmdBindPipeline(vk->cmd, VK_PIPELINE_BIND_POINT_COMPUTE, pipe);
-  vkCmdBindDescriptorSets(vk->cmd, VK_PIPELINE_BIND_POINT_COMPUTE, vk->playout, 0,1,&vk->set,0,NULL);
-  vkCmdPushConstants(vk->cmd, vk->playout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(pc), pc);
-  vkCmdDispatch(vk->cmd, groups, 1, 1);
-  if(vk->ts_pool) vkCmdWriteTimestamp(vk->cmd,VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,vk->ts_pool,1);
-  vkEndCommandBuffer(vk->cmd);
-  submit_wait(vk);
-  if(vk->ts_pool){ uint64_t ts[2];
-    if(vkGetQueryPoolResults(vk->dev,vk->ts_pool,0,2,sizeof(ts),ts,sizeof(uint64_t),
-        VK_QUERY_RESULT_64_BIT|VK_QUERY_RESULT_WAIT_BIT)==VK_SUCCESS)
-      c->last_gpu_ms=(double)(ts[1]-ts[0])*vk->ts_period*1e-6; }
+  if(vk->ts_pool) vkCmdWriteTimestamp(cmd,VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,vk->ts_pool,0);
+  vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, pipe);
+  vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, vk->playout, 0,1,&ds,0,NULL);
+  vkCmdPushConstants(cmd, vk->playout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(pc), pc);
+  vkCmdDispatch(cmd, groups, 1, 1);
+  if(vk->ts_pool) vkCmdWriteTimestamp(cmd,VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,vk->ts_pool,1);
+  vkEndCommandBuffer(cmd);
+  submit_ring(vk, ri);
+  if(vk->ts_pool) vk->gpu_q_pending=1;  /* PR #39: defer blocking query read */
   finish_output(vk, out);
 }
 
@@ -687,7 +758,8 @@ void rt_vk_gemm(RT* c, RtBuf* a, RtBuf* b, RtBuf* bias,
   int br=(int)b->dims[0], bc=(int)b->dims[1];
   int M = trans_a?ac:ar, K = trans_a?ar:ac, N = trans_b?br:bc;
   RtCaptureSlot* slot = vk->capturing ? cap_slot_new(vk, out) : NULL;
-  int* p=(int*)(slot ? slot->params_map : vk->params_map);
+  int ri = slot ? -1 : ring_acquire(vk);
+  int* p=(int*)(slot ? slot->params_map : vk->ring_params_map[ri]);
   p[0]=M;p[1]=N;p[2]=K; p[3]=trans_a | (trans_b<<1) | (bias?4:0) | (relu?8:0);
   p[4]=ar; p[5]=ac; p[6]=br; p[7]=bc;
   pack_addr(p,8,buf_addr(c,a)); pack_addr(p,10,buf_addr(c,b));
@@ -707,14 +779,15 @@ void rt_vk_gemm(RT* c, RtBuf* a, RtBuf* b, RtBuf* bias,
   int pc[4]={M,N,K,p[3]};
   uint32_t groups=((M+BM-1)/BM)*((N+BN-1)/BN);
   if (slot) { cap_record(vk, slot, gp, pc, groups); return; }
+  VkCommandBuffer cmd=vk->ring_cmd[ri]; VkDescriptorSet ds=vk->ring_set[ri];
   VkCommandBufferBeginInfo bi={.sType=VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
-  vkBeginCommandBuffer(vk->cmd,&bi);
-  vkCmdBindPipeline(vk->cmd,VK_PIPELINE_BIND_POINT_COMPUTE,gp);
-  vkCmdBindDescriptorSets(vk->cmd,VK_PIPELINE_BIND_POINT_COMPUTE,vk->playout,0,1,&vk->set,0,NULL);
-  vkCmdPushConstants(vk->cmd,vk->playout,VK_SHADER_STAGE_COMPUTE_BIT,0,sizeof(pc),pc);
-  vkCmdDispatch(vk->cmd, groups, 1,1);
-  vkEndCommandBuffer(vk->cmd);
-  submit_wait(vk);
+  vkBeginCommandBuffer(cmd,&bi);
+  vkCmdBindPipeline(cmd,VK_PIPELINE_BIND_POINT_COMPUTE,gp);
+  vkCmdBindDescriptorSets(cmd,VK_PIPELINE_BIND_POINT_COMPUTE,vk->playout,0,1,&ds,0,NULL);
+  vkCmdPushConstants(cmd,vk->playout,VK_SHADER_STAGE_COMPUTE_BIT,0,sizeof(pc),pc);
+  vkCmdDispatch(cmd, groups, 1,1);
+  vkEndCommandBuffer(cmd);
+  submit_ring(vk, ri);
   finish_output(vk, out);
 }
 
@@ -722,7 +795,8 @@ void rt_vk_sgd_update(RT* c, RtBuf* w, RtBuf* g, float lr, float wd) {
   RtVk* vk=c->vk; if(!vk->dev) return;
   int n=w->n;
   RtCaptureSlot* slot = vk->capturing ? cap_slot_new(vk,NULL) : NULL;
-  int* p=(int*)(slot?slot->params_map:vk->params_map);
+  int ri = slot ? -1 : ring_acquire(vk);
+  int* p=(int*)(slot?slot->params_map:vk->ring_params_map[ri]);
   p[0]=n;
   uint64_t waddr=vkbuf(c,w)->addr;   /* stable leaf buffer: updated in place */
   uint64_t gaddr=buf_addr(c,g);      /* grad may live in a capture slot */
@@ -731,8 +805,8 @@ void rt_vk_sgd_update(RT* c, RtBuf* w, RtBuf* g, float lr, float wd) {
   memcpy(&lrbits,&lr,sizeof(float)); memcpy(&wdbits,&wd,sizeof(float));
   p[5]=(int)lrbits; p[6]=(int)wdbits;
   int pc[4]={n,0,0,0}; uint32_t groups=((n+255)/256);
-  VkCommandBuffer cmd = slot?vk->cap_cmd:vk->cmd;
-  VkDescriptorSet set = slot?slot->set:vk->set;
+  VkCommandBuffer cmd = slot?vk->cap_cmd:vk->ring_cmd[ri];
+  VkDescriptorSet set = slot?slot->set:vk->ring_set[ri];
   if(!slot){ VkCommandBufferBeginInfo bi={.sType=VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
     vkBeginCommandBuffer(cmd,&bi); }
   vkCmdBindPipeline(cmd,VK_PIPELINE_BIND_POINT_COMPUTE,vk->sgd);
@@ -746,14 +820,15 @@ void rt_vk_sgd_update(RT* c, RtBuf* w, RtBuf* g, float lr, float wd) {
   VkDependencyInfo dep={.sType=VK_STRUCTURE_TYPE_DEPENDENCY_INFO,.memoryBarrierCount=1,.pMemoryBarriers=&mb};
   vkCmdPipelineBarrier2(cmd,&dep);
   if(slot){ if(slot->pipeline==VK_NULL_HANDLE){slot->pipeline=vk->sgd;memcpy(slot->pc,pc,sizeof(int)*4);slot->groups=1;} return; }
-  vkEndCommandBuffer(cmd); submit_wait(vk);
+  vkEndCommandBuffer(cmd); submit_ring(vk, ri);
 }
 
 void rt_vk_transpose(RT* c, RtBuf* in, RtBuf* out) {
   RtVk* vk=c->vk; if(!vk->dev) return;
   int M=(int)in->dims[0], N=(int)in->dims[1];
   RtCaptureSlot* slot = vk->capturing ? cap_slot_new(vk,out) : NULL;
-  int* p=(int*)(slot?slot->params_map:vk->params_map);
+  int ri = slot ? -1 : ring_acquire(vk);
+  int* p=(int*)(slot?slot->params_map:vk->ring_params_map[ri]);
   p[0]=M; p[1]=N;
   pack_addr(p,2,buf_addr(c,in));
   uint64_t outaddr;
@@ -763,14 +838,15 @@ void rt_vk_transpose(RT* c, RtBuf* in, RtBuf* out) {
   pack_addr(p,4,outaddr);
   int pc[4]={M,N,0,0}; uint32_t groups=((M*N+255)/256);
   if(slot){ cap_record(vk,slot,vk->transpose,pc,groups); return; }
+  VkCommandBuffer cmd=vk->ring_cmd[ri]; VkDescriptorSet ds=vk->ring_set[ri];
   VkCommandBufferBeginInfo bi={.sType=VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
-  vkBeginCommandBuffer(vk->cmd,&bi);
-  vkCmdBindPipeline(vk->cmd,VK_PIPELINE_BIND_POINT_COMPUTE,vk->transpose);
-  vkCmdBindDescriptorSets(vk->cmd,VK_PIPELINE_BIND_POINT_COMPUTE,vk->playout,0,1,&vk->set,0,NULL);
-  vkCmdPushConstants(vk->cmd,vk->playout,VK_SHADER_STAGE_COMPUTE_BIT,0,sizeof(pc),pc);
-  vkCmdDispatch(vk->cmd,groups,1,1);
-  vkEndCommandBuffer(vk->cmd);
-  submit_wait(vk); finish_output(vk,out);
+  vkBeginCommandBuffer(cmd,&bi);
+  vkCmdBindPipeline(cmd,VK_PIPELINE_BIND_POINT_COMPUTE,vk->transpose);
+  vkCmdBindDescriptorSets(cmd,VK_PIPELINE_BIND_POINT_COMPUTE,vk->playout,0,1,&ds,0,NULL);
+  vkCmdPushConstants(cmd,vk->playout,VK_SHADER_STAGE_COMPUTE_BIT,0,sizeof(pc),pc);
+  vkCmdDispatch(cmd,groups,1,1);
+  vkEndCommandBuffer(cmd);
+  submit_ring(vk,ri); finish_output(vk,out);
 }
 
 void rt_vk_layernorm(RT* c, RtBuf* x, RtBuf* w, RtBuf* b, RtBuf* res, RtBuf* out, float eps) {
@@ -779,7 +855,8 @@ void rt_vk_layernorm(RT* c, RtBuf* x, RtBuf* w, RtBuf* b, RtBuf* res, RtBuf* out
   int cols=(int)x->dims[x->ndim-1], rows=1;
   for(int i=0;i<x->ndim-1;++i) rows*=(int)x->dims[i];
   RtCaptureSlot* slot = vk->capturing ? cap_slot_new(vk, out) : NULL;
-  int* p=(int*)(slot ? slot->params_map : vk->params_map);
+  int ri = slot ? -1 : ring_acquire(vk);
+  int* p=(int*)(slot ? slot->params_map : vk->ring_params_map[ri]);
   p[0]=rows; p[1]=cols; memcpy(&p[2],&eps,sizeof(float));
   pack_addr(p,4,buf_addr(c,x)); pack_addr(p,6,buf_addr(c,w)); pack_addr(p,8,buf_addr(c,b));
   uint64_t outaddr;
@@ -789,8 +866,8 @@ void rt_vk_layernorm(RT* c, RtBuf* x, RtBuf* w, RtBuf* b, RtBuf* res, RtBuf* out
   pack_addr(p,10,outaddr);
   if(res) pack_addr(p,12,buf_addr(c,res));
   int pc[4]={rows,cols,0,0};
-  VkCommandBuffer cmd = slot?vk->cap_cmd:vk->cmd;
-  VkDescriptorSet set = slot?slot->set:vk->set;
+  VkCommandBuffer cmd = slot?vk->cap_cmd:vk->ring_cmd[ri];
+  VkDescriptorSet set = slot?slot->set:vk->ring_set[ri];
   if(!slot){ VkCommandBufferBeginInfo bi={.sType=VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
     vkBeginCommandBuffer(cmd,&bi); }
   vkCmdBindPipeline(cmd,VK_PIPELINE_BIND_POINT_COMPUTE,vk->layernorm[res?1:0]);
@@ -798,7 +875,7 @@ void rt_vk_layernorm(RT* c, RtBuf* x, RtBuf* w, RtBuf* b, RtBuf* res, RtBuf* out
   vkCmdPushConstants(cmd,vk->playout,VK_SHADER_STAGE_COMPUTE_BIT,0,sizeof(pc),pc);
   vkCmdDispatch(cmd,rows,1,1);
   if(slot){ if(slot->pipeline==VK_NULL_HANDLE){slot->pipeline=vk->layernorm[res?1:0];memcpy(slot->pc,pc,sizeof(int)*4);slot->groups=1;} return; }
-  vkEndCommandBuffer(cmd); submit_wait(vk); finish_output(vk,out);
+  vkEndCommandBuffer(cmd); submit_ring(vk,ri); finish_output(vk,out);
 }
 
 void rt_vk_softmax(RT* c, RtBuf* in, RtBuf* bias, RtBuf* out, int kind) {
@@ -807,7 +884,8 @@ void rt_vk_softmax(RT* c, RtBuf* in, RtBuf* bias, RtBuf* out, int kind) {
   int cols=(int)in->dims[in->ndim-1], rows=1;
   for(int i=0;i<in->ndim-1;++i) rows*=(int)in->dims[i];
   RtCaptureSlot* slot = vk->capturing ? cap_slot_new(vk, out) : NULL;
-  int* p=(int*)(slot ? slot->params_map : vk->params_map);
+  int ri = slot ? -1 : ring_acquire(vk);
+  int* p=(int*)(slot ? slot->params_map : vk->ring_params_map[ri]);
   p[0]=rows; p[1]=cols;
   pack_addr(p,2,buf_addr(c,in));
   uint64_t outaddr;
@@ -823,14 +901,15 @@ void rt_vk_softmax(RT* c, RtBuf* in, RtBuf* bias, RtBuf* out, int kind) {
     vkCmdBindDescriptorSets(vk->cap_cmd,VK_PIPELINE_BIND_POINT_COMPUTE,vk->playout,0,1,&slot->set,0,NULL);
     vkCmdPushConstants(vk->cap_cmd,vk->playout,VK_SHADER_STAGE_COMPUTE_BIT,0,sizeof(pc),pc);
     vkCmdDispatch(vk->cap_cmd,rows,1,1); return; }
+  VkCommandBuffer cmd=vk->ring_cmd[ri]; VkDescriptorSet ds=vk->ring_set[ri];
   VkCommandBufferBeginInfo bi={.sType=VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
-  vkBeginCommandBuffer(vk->cmd,&bi);
-  vkCmdBindPipeline(vk->cmd,VK_PIPELINE_BIND_POINT_COMPUTE,pipe);
-  vkCmdBindDescriptorSets(vk->cmd,VK_PIPELINE_BIND_POINT_COMPUTE,vk->playout,0,1,&vk->set,0,NULL);
-  vkCmdPushConstants(vk->cmd,vk->playout,VK_SHADER_STAGE_COMPUTE_BIT,0,sizeof(pc),pc);
-  vkCmdDispatch(vk->cmd,rows,1,1);
-  vkEndCommandBuffer(vk->cmd);
-  submit_wait(vk);
+  vkBeginCommandBuffer(cmd,&bi);
+  vkCmdBindPipeline(cmd,VK_PIPELINE_BIND_POINT_COMPUTE,pipe);
+  vkCmdBindDescriptorSets(cmd,VK_PIPELINE_BIND_POINT_COMPUTE,vk->playout,0,1,&ds,0,NULL);
+  vkCmdPushConstants(cmd,vk->playout,VK_SHADER_STAGE_COMPUTE_BIT,0,sizeof(pc),pc);
+  vkCmdDispatch(cmd,rows,1,1);
+  vkEndCommandBuffer(cmd);
+  submit_ring(vk,ri);
   finish_output(vk,out);
 }
 
@@ -859,7 +938,8 @@ void rt_vk_reduce(RT* c, RtBuf* in, int kind, int axis, RtBuf* out) {
   for(int i=0;i<axis;++i)outer*=(int)in->dims[i];
   for(int i=axis+1;i<in->ndim;++i)inner*=(int)in->dims[i];
   RtCaptureSlot* slot = vk->capturing ? cap_slot_new(vk, out) : NULL;
-  int* p=(int*)(slot ? slot->params_map : vk->params_map);
+  int ri = slot ? -1 : ring_acquire(vk);
+  int* p=(int*)(slot ? slot->params_map : vk->ring_params_map[ri]);
   p[0]=outer;p[1]=stride;p[2]=inner;p[3]=kind;
   p[10]=outer*inner;   /* total output lines for stage 1 */
   VkBufferDeviceAddressInfo pai={.sType=VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,.buffer=vk->reduce_part};
@@ -877,11 +957,12 @@ void rt_vk_reduce(RT* c, RtBuf* in, int kind, int axis, RtBuf* out) {
     slot->pipeline=vk->reduce_s1; memcpy(slot->pc,pc,sizeof(int)*4); slot->groups=1;
     return;
   }
+  VkCommandBuffer cmd=vk->ring_cmd[ri]; VkDescriptorSet ds=vk->ring_set[ri];
   VkCommandBufferBeginInfo bi={.sType=VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
-  vkBeginCommandBuffer(vk->cmd,&bi);
-  record_reduce(vk,vk->cmd,vk->set,pc,(uint32_t)total);
-  vkEndCommandBuffer(vk->cmd);
-  submit_wait(vk);
+  vkBeginCommandBuffer(cmd,&bi);
+  record_reduce(vk,cmd,ds,pc,(uint32_t)total);
+  vkEndCommandBuffer(cmd);
+  submit_ring(vk,ri);
   finish_output(vk, out);
 }
 
@@ -1003,6 +1084,21 @@ void rt_vk_replay_n(RT* c, int n) {
   vkWaitSemaphores(vk->dev,&wi,UINT64_MAX);
   vk->pending=0;
 }
+/* PR #39: read GPU timestamps lazily in the getters, keeping the blocking
+ * VK_QUERY_RESULT_WAIT_BIT out of the eager dispatch hot path. */
+void rt_vk_flush_timestamps(RT* c) {
+  RtVk* vk=c->vk; if(!vk||!vk->dev||!vk->ts_pool) return;
+  if(vk->gpu_q_pending){ uint64_t ts[2];
+    if(vkGetQueryPoolResults(vk->dev,vk->ts_pool,0,2,sizeof(ts),ts,sizeof(uint64_t),
+        VK_QUERY_RESULT_64_BIT|VK_QUERY_RESULT_WAIT_BIT)==VK_SUCCESS)
+      c->last_gpu_ms=(double)(ts[1]-ts[0])*vk->ts_period*1e-6;
+    vk->gpu_q_pending=0; }
+  if(vk->copy_q_pending){ uint64_t ct[2];
+    if(vkGetQueryPoolResults(vk->dev,vk->ts_pool,2,2,sizeof(ct),ct,sizeof(uint64_t),
+        VK_QUERY_RESULT_64_BIT|VK_QUERY_RESULT_WAIT_BIT)==VK_SUCCESS)
+      c->copy_gpu_ms=(double)(ct[1]-ct[0])*vk->ts_period*1e-6;
+    vk->copy_q_pending=0; }
+}
 void rt_vk_download_outputs(RT* c){
   RtVk* vk=c->vk; if(!vk||!vk->dev)return;
   rt_vk_wait_pending(vk);   /* async submits must complete before reading */
@@ -1098,7 +1194,7 @@ void rt_vk_download_to(RT* c, RtBuf* b, float* out){
   if (b->vk) {
     RtVkBuf* vb=(RtVkBuf*)b->vk;
     VkDeviceSize sz=sizeof(float)*(size_t)b->n;
-    if (vb->map) { memcpy(out,vb->map,sz); return; }   /* HOST_CACHED */
+    if (vb->map) { wait_eager(vk); memcpy(out,vb->map,sz); return; }   /* HOST_CACHED */
     staging_ensure(vk,sz);
     copy_buffer(vk,vb->buf,vk->staging,sz);
     staging_invalidate(vk,sz);
@@ -1145,6 +1241,7 @@ const float* rt_vk_read_ptr(RT* c, RtBuf* b, int slot) {
   } else if (b->vk) {
     RtVkBuf* vb=(RtVkBuf*)b->vk;
     if (vb->map) { /* already HOST_CACHED — return its own pointer */
+      wait_eager(vk);
       VkMappedMemoryRange r={.sType=VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
         .memory=vb->mem,.offset=0,.size=vb->size};
       vkInvalidateMappedMemoryRanges(vk->dev,1,&r);
@@ -1199,6 +1296,7 @@ void rt_vk_stream_begin(RT* c,int i){ (void)c;(void)i; }
 void rt_vk_stream_end(RT* c,int i){ (void)c;(void)i; }
 void rt_vk_stream_submit(RT* c,int n){ (void)c;(void)n; }
 void rt_vk_download_outputs(RT* c){ (void)c; }
+void rt_vk_flush_timestamps(RT* c){ (void)c; }
 void rt_vk_download_to(RT* c, RtBuf* b, float* out){ (void)c; (void)b; (void)out; }
 const float* rt_vk_read_ptr(RT* c, RtBuf* b, int slot){ (void)c; (void)slot; return b?(const float*)b->host:NULL; }
 void rt_vk_upload(RT* c, RtBuf* b, const float* d){ (void)c;(void)b;(void)d; }

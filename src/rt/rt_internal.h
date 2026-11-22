@@ -113,6 +113,7 @@ void rt_vk_flush_input(RT*, RtBuf*);
 void rt_vk_stream_begin(RT*, int idx);
 void rt_vk_stream_end(RT*, int idx);
 void rt_vk_stream_submit(RT*, int n);
+void rt_vk_flush_timestamps(RT*);
 void rt_vk_capture_begin(RT*);
 void rt_vk_capture_end(RT*);
 void rt_vk_replay(RT*);

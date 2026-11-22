@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-22T08:41:16.156715+00:00",
+  "generated_at": "2026-11-22T10:38:30.430597+00:00",
   "gpu": "NVIDIA GeForce GTX 1660 SUPER",
   "clock": [
     1530.0,
@@ -13,28 +13,28 @@
     "result_path": "E:\\__PROJECTS__\\Hagane\\benchmarks\\results\\timestamp_profile.json"
   },
   "median_ms": {
-    "wall": 1.4331500133266672,
-    "gpu_kernel": 0.06675199999999999,
-    "gpu_copy": 0.319984,
-    "host_overhead": 1.0464140133266673
+    "wall": 1.1298500030534342,
+    "gpu_kernel": 0.066496,
+    "gpu_copy": 0.320192,
+    "host_overhead": 0.7431620030534343
   },
   "fraction": {
-    "gpu_kernel": 0.04657711989623013,
-    "gpu_copy": 0.22327320728780117,
-    "host_overhead": 0.7301496728159687
+    "gpu_kernel": 0.05885382999539204,
+    "gpu_copy": 0.2833933700355596,
+    "host_overhead": 0.6577527999690485
   },
   "spread_ms": {
     "wall": [
-      1.277300005313009,
-      1.977599982637912
+      0.9764999849721789,
+      1.4561999996658415
     ],
     "gpu_kernel": [
       0.065536,
-      0.06758399999999999
+      0.06736
     ],
     "gpu_copy": [
-      0.319488,
-      0.334368
+      0.319424,
+      0.32192
     ]
   },
   "note": "GPU times from Vulkan timestamp queries (period 1ns); wall from perf_counter."

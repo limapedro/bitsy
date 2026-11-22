@@ -58,6 +58,37 @@ this GPU — see FINDINGS_PR15).
 
 ---
 
+## 2026-11-22 09:25 — PR #39: per-op ring — 24% off single-call wall, no fence stall on re-record
+
+PR #38 measured the single-call bottleneck: `vkWaitForFences` ~0.44 ms vs
+PyTorch add+sync 0.038 ms. This turn removes the stall that forced a wait before
+**re-recording** shared GPU state.
+
+Added a per-op ring (8 slots) of command buffers, params buffers, and descriptor
+sets (`RT_RING`): an eager dispatch records into its own slot, so a still-running
+predecessor is never clobbered. We wait only when a slot is reused (every 8 ops)
+or at host readback. Timestamp-query waits are deferred to the getters so they
+are paid only by the profiler; `copy_buffer`'s existing fence wait doubles as the
+ring sync. Added `eager_ring_wrap` parity gate (24 fused dispatches before
+readback; 96 → **99 cases** after restoring a dropped stream gate).
+
+Single-call `(X+X).numpy()` on 1M floats (warmup/median/spread, clock 1530):
+```
+before: wall 1.493 ms | kernel 0.0666 | copy 0.320 | host 1.106 (74.1%)
+after:  wall 1.130 ms | kernel 0.0665 | copy 0.320 | host 0.743 (65.8%)
+        = 24% faster wall, host overhead 74% -> 66%
+```
+Systematic single-op sweep (`common_ops_bench.py`): pointwise ops 1.2–1.6×,
+reductions 4–5× vs PyTorch — **still not overall parity**. Async loop
+(10 steps) remains 0.66× gap (1.5× faster).
+
+Also tried a GPU-written mapped completion counter (`signal.comp`) polled by the
+CPU to replace the driver fence wait: correctness held but wall regressed
+(1.287 ms), so it was **reverted** — the fence round trip is not the only cost.
+
+Gates: v2 48/48, op 27/27, gradcheck 25/25, model 10/10, API **99/99**, ctest 2/2.
+Core 3,128 lines.
+
 ## 2026-11-22 08:50 — PR #38: true streaming update loop (fresh data per step) beats PyTorch + single-call overhead investigation
 
 PR #36's win replayed fixed-shape steps on the SAME inputs. This turn removes
