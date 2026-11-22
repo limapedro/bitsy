@@ -1,0 +1,58 @@
+{
+  "generated_at": "2026-11-22T12:05:08.583069+00:00",
+  "environment": {
+    "torch": "2.11.0+cu126",
+    "gpu": "GTX 1660 SUPER",
+    "clock": [
+      1530.0,
+      1530.0
+    ]
+  },
+  "config": {
+    "build_dir": "E:\\__PROJECTS__\\Hagane\\build-rtvk",
+    "batch": 64,
+    "dims": [
+      256,
+      128,
+      128,
+      64,
+      1
+    ],
+    "lr": 0.0001,
+    "K": 6,
+    "steps": 600,
+    "warmup": 2,
+    "iters": 6,
+    "tol": 0.001,
+    "result_path": "E:\\__PROJECTS__\\Hagane\\benchmarks\\results\\end_to_end.json"
+  },
+  "correctness": {
+    "diffs": [
+      3.725290298461914e-09,
+      1.4901161193847656e-08,
+      7.450580596923828e-09,
+      2.9103830456733704e-11
+    ],
+    "passed": true
+  },
+  "compiled": {
+    "median_ms": 256.272300001001,
+    "spread_ms": [
+      254.61770000401884,
+      258.4822000062559
+    ]
+  },
+  "torch": {
+    "median_ms": 324.7382999979891,
+    "spread_ms": [
+      315.06480000098236,
+      357.36999998334795
+    ]
+  },
+  "per_step": {
+    "compiled": 0.4271205000016683,
+    "torch": 0.5412304999966485
+  },
+  "gap": 0.7891656142887609,
+  "note": "4-layer MLP full fwd+bwd+SGD on fresh batches via compile_many (K graphs, one submit/batch)."
+}

@@ -11,8 +11,8 @@ from pathlib import Path
 from .tensor import Tensor
 from . import nn, optim, functional
 
-from .compiled import Compiled, CompiledMany
-__all__ = ["Engine", "Tensor", "nn", "optim", "functional", "Compiled", "CompiledMany"]
+from .compiled import Compiled, CompiledMany, AutoCapture
+__all__ = ["Engine", "Tensor", "nn", "optim", "functional", "Compiled", "CompiledMany", "AutoCapture"]
 
 
 class _ZeroCopyArray(np.ndarray):
@@ -125,6 +125,10 @@ class Engine:
     self.capture_end()
     return Compiled(self, fn, inputs, outs, ptrs)
 
+  def auto(self, K=6):
+    """Return an AutoCapture that compiles recurring shapes once and replays
+    them thereafter (captured execution as the default path)."""
+    return AutoCapture(self, K)
   def compile_many(self, fn, shapes, K, zero_grads=None):
     """Capture K graphs with distinct mapped inputs; one call runs all K in a
     single submit. Returns a callable taking K input batches (the amortized
