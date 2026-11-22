@@ -76,3 +76,14 @@ def logical_or(a: Tensor, b: Tensor) -> Tensor:
 def logical_xor(a: Tensor, b: Tensor) -> Tensor:
   z, o = Tensor.scalar(a.rt, 0.0), Tensor.scalar(a.rt, 1.0)
   return a.ne(z).ne(b.ne(z)).where(o, z)
+
+
+def isclose(a: Tensor, b: Tensor, rtol: float = 1e-5, atol: float = 1e-8) -> Tensor:
+  """Elementwise |a-b| <= atol + rtol*|b| (PyTorch default rtol/atol)."""
+  tol = Tensor.scalar(a.rt, atol) + Tensor.scalar(a.rt, rtol) * b.abs()
+  return (a - b).abs().le(tol).where(Tensor.scalar(a.rt, 1.0),
+                                      Tensor.scalar(a.rt, 0.0))
+
+
+def allclose(a: Tensor, b: Tensor, rtol: float = 1e-5, atol: float = 1e-8) -> Tensor:
+  return isclose(a, b, rtol, atol).all()

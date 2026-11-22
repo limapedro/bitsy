@@ -1,50 +1,75 @@
 #version 450
 #extension GL_EXT_buffer_reference2 : require
 #extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
-/* Bitsy 0.2 tiled GEMM with optional bias epilogue and transpose flags.
- * Y = opA(A) @ opB(B) + bias, where opX is transpose if the flag is set.
- * Tile sizes BM/BN/BK are specialization constants (BEAM-lite autotune). */
+/* Bitsy 0.2 GEMM: shared-memory tiled, optional bias epilogue and transpose.
+ * Y = opA(A) @ opB(B) + bias. BM/BN/BK are specialization constants so the
+ * compiler can unroll the per-thread accumulator loop (PR #12 tile autotune).
+ *
+ * local_size = 256; each workgroup computes a BM x BN output tile; each thread
+ * accumulates BM*BN/256 output elements. A and B tiles are loaded cooperatively
+ * into shared memory once per BK step, giving data reuse across the tile.
+ */
 layout(local_size_x = 256) in;
-layout(constant_id = 0) const int BM = 16;
-layout(constant_id = 1) const int BN = 16;
-layout(constant_id = 2) const int BK = 16;
+layout(constant_id = 0) const int BM = 32;
+layout(constant_id = 1) const int BN = 32;
+layout(constant_id = 2) const int BK = 8;
 
 layout(buffer_reference, std430, buffer_reference_align = 4) readonly buffer F32 {
   float v[];
 };
-/* params words:
- * [0]=M [1]=N [2]=K [3]=flags(bit0=transA,bit1=transB,bit2=has_bias)
- * [4]=arows [5]=acols [6]=brows [7]=bcols
- * [8]=Aaddr [10]=Baddr [12]=Caddr [14]=biasaddr (2 words each) */
-/* NOTE: addresses are packed 2 words each at 8/10/12/14 to match rt_vk.c. */
+/* params: [0]=M [1]=N [2]=K [3]=flags(bit0=transA,bit1=transB,bit2=has_bias)
+ * [4..7]=unused shape metadata; [8]=A [10]=B [12]=C [14]=bias (uint64 each) */
 layout(std430, binding = 0) readonly buffer Params { int param[]; };
-uint64_t paddr(int base) {
-  return (uint64_t(uint(param[base])) | (uint64_t(uint(param[base + 1])) << 32));
+uint64_t paddr(int b) {
+  return (uint64_t(uint(param[b])) | (uint64_t(uint(param[b + 1])) << 32));
 }
+
+shared float As[BM * BK];
+shared float Bs[BK * BN];
+
 void main() {
-  int M = param[0], N = param[1], K = param[2];
-  int flags = param[3];
+  int M = param[0], N = param[1], K = param[2], flags = param[3];
   bool ta = (flags & 1) != 0, tb = (flags & 2) != 0, hb = (flags & 4) != 0;
-  int ar = param[4], ac = param[5], br = param[6], bc = param[7];
-  F32 A = F32(paddr(8)), B = F32(paddr(10)), C = F32(paddr(12));
-  F32 bias = F32(paddr(14));
+  F32 A = F32(paddr(8)), B = F32(paddr(10)), C = F32(paddr(12)), bias = F32(paddr(14));
+
   int tile = int(gl_WorkGroupID.x);
   int tid = int(gl_LocalInvocationID.x);
   int tilesN = (N + BN - 1) / BN;
-  int row = (tile / tilesN) * BM;
-  int col = (tile % tilesN) * BN;
-  if (row >= M || col >= N) return;
-  int threads = int(gl_WorkGroupSize.x);
-  for (int e = 0; e < BM * BN; ++e) {
-    int r = row + e / BN, c = col + e % BN;
-    if ((e % threads) != tid || r >= M || c >= N) continue;
-    float acc = 0.0;
-    for (int k = 0; k < K; ++k) {
-      float av = ta ? A.v[k * M + r] : A.v[r * K + k];
-      float bv = tb ? B.v[c * K + k] : B.v[k * N + c];
-      acc += av * bv;
+  int row0 = (tile / tilesN) * BM;
+  int col0 = (tile % tilesN) * BN;
+  if (row0 >= M || col0 >= N) return;   /* whole workgroup returns together */
+
+  int NE = (BM * BN) / 256;             /* outputs per thread (compile-time) */
+  float acc[16];
+  for (int e = 0; e < NE; ++e) acc[e] = 0.0;
+
+  for (int k0 = 0; k0 < K; k0 += BK) {
+    /* cooperative tile loads */
+    for (int idx = tid; idx < BM * BK; idx += 256) {
+      int r = idx / BK, kk = idx % BK;
+      int gr = row0 + r, gk = k0 + kk;
+      As[idx] = (gr < M && gk < K) ? (ta ? A.v[gk * M + gr] : A.v[gr * K + gk]) : 0.0;
     }
-    if (hb) acc += bias.v[c];
-    C.v[r * N + c] = acc;
+    for (int idx = tid; idx < BK * BN; idx += 256) {
+      int kk = idx / BN, c = idx % BN;
+      int gk = k0 + kk, gc = col0 + c;
+      Bs[idx] = (gk < K && gc < N) ? (tb ? B.v[gc * K + gk] : B.v[gk * N + gc]) : 0.0;
+    }
+    barrier();
+    /* compute partial sums from shared memory */
+    for (int e = 0; e < NE; ++e) {
+      int ei = e * 256 + tid;
+      int r = ei / BN, c = ei % BN;
+      float s = 0.0;
+      for (int kk = 0; kk < BK; ++kk) s += As[r * BK + kk] * Bs[kk * BN + c];
+      acc[e] += s;
+    }
+    barrier();
+  }
+
+  for (int e = 0; e < NE; ++e) {
+    int ei = e * 256 + tid;
+    int r = row0 + ei / BN, c = col0 + ei % BN;
+    if (r < M && c < N) C.v[r * N + c] = acc[e] + (hb ? bias.v[c] : 0.0);
   }
 }

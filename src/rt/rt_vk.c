@@ -60,7 +60,8 @@ struct RtVk {
   VkPipeline sp_cache[256]; /* specialized fused pipelines keyed by program hash */
   int sp_keys[256];         /* 0 = empty; else key+1 */
   int sp_count;
-  VkPipeline gemm[3];       /* tile variants: 16,32,64 */
+  VkPipeline gemm[3];       /* tile variants: 16x16x16, 32x32x8, 64x64x8 */
+  int gemm_bm[3], gemm_bn[3];
   VkPipeline reduce;
   VkPipelineCache pcache;
   RtVkBuf bufs[RT_NBUF];
@@ -306,8 +307,11 @@ void rt_vk_init(RT* c) {
   VkShaderModule sr = shader(vk, rt_reduce_spv, rt_reduce_spv_bytes);
   vk->fused[0] = make_pipeline(vk, sf, 0, 0,0,0);
   vk->gemm[0] = make_pipeline(vk, sg, 1, 16,16,16);
-  vk->gemm[1] = make_pipeline(vk, sg, 1, 32,32,16);
-  vk->gemm[2] = make_pipeline(vk, sg, 1, 64,64,16);
+  vk->gemm[1] = make_pipeline(vk, sg, 1, 32,32,8);
+  vk->gemm[2] = make_pipeline(vk, sg, 1, 64,64,8);
+  vk->gemm_bm[0]=16; vk->gemm_bn[0]=16;
+  vk->gemm_bm[1]=32; vk->gemm_bn[1]=32;
+  vk->gemm_bm[2]=64; vk->gemm_bn[2]=64;
   vk->reduce = make_pipeline(vk, sr, 0, 0,0,0);
 
   /* params + output staging buffers (host visible) */
@@ -541,6 +545,20 @@ void rt_vk_fused(RT* c, RtFusion* f, RtBuf* out) {
   download_device(vk, out);
 }
 
+/* PR #12: pick a GEMM tile variant by output size. Larger tiles reuse shared
+ * memory more but reduce occupancy; validated by gemm_bench.py. */
+static int gemm_variant(int M, int N) {
+  const char* ov = getenv("BT_GEMM_VARIANT");   /* benchmark override */
+  if (ov && *ov) { int v = atoi(ov); if (v >= 0 && v <= 2) return v; }
+  /* Sweep (gemm_bench.py, median ms, n=256/512/1024):
+   *   16x16: 0.565 / 1.910 / 8.107
+   *   32x32: 0.586 / 1.414 / 5.791
+   *   64x64: 0.557 / 1.305 / 5.292  <- best at every measured size
+   * BK=8 beat BK=4 and BK=16 for the 64x64 tile. Keep it simple: 64x64. */
+  (void)M; (void)N;
+  return 2;
+}
+
 void rt_vk_gemm(RT* c, RtBuf* a, RtBuf* b, RtBuf* bias,
                 int trans_a, int trans_b, RtBuf* out) {
   RtVk* vk=c->vk; if(!vk->dev) return;
@@ -555,11 +573,15 @@ void rt_vk_gemm(RT* c, RtBuf* a, RtBuf* b, RtBuf* bias,
   pack_addr(p,12,vkbuf(c,out)->addr);
   uint64_t baddr = bias ? vkbuf(c,bias)->addr : 0;
   pack_addr(p,14,baddr);
-  int pc[4]={M,N,K,p[3]}; uint32_t groups=((M+15)/16)*((N+15)/16);
-  if (slot) { cap_record(vk, slot, vk->gemm[0], pc, groups); return; }
+  int variant = gemm_variant(M, N);
+  VkPipeline gp = vk->gemm[variant];
+  int BM = vk->gemm_bm[variant], BN = vk->gemm_bn[variant];
+  int pc[4]={M,N,K,p[3]};
+  uint32_t groups=((M+BM-1)/BM)*((N+BN-1)/BN);
+  if (slot) { cap_record(vk, slot, gp, pc, groups); return; }
   VkCommandBufferBeginInfo bi={.sType=VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
   vkBeginCommandBuffer(vk->cmd,&bi);
-  vkCmdBindPipeline(vk->cmd,VK_PIPELINE_BIND_POINT_COMPUTE,vk->gemm[0]);
+  vkCmdBindPipeline(vk->cmd,VK_PIPELINE_BIND_POINT_COMPUTE,gp);
   vkCmdBindDescriptorSets(vk->cmd,VK_PIPELINE_BIND_POINT_COMPUTE,vk->playout,0,1,&vk->set,0,NULL);
   vkCmdPushConstants(vk->cmd,vk->playout,VK_SHADER_STAGE_COMPUTE_BIT,0,sizeof(pc),pc);
   vkCmdDispatch(vk->cmd, groups, 1,1);

@@ -1,0 +1,84 @@
+{
+  "generated_at": "2026-11-22T04:56:39.949272+00:00",
+  "environment": {
+    "torch": "2.11.0+cu126",
+    "gpu": "NVIDIA GeForce GTX 1660 SUPER",
+    "clock": [
+      1530.0,
+      1935.0
+    ]
+  },
+  "config": {
+    "build_dir": "E:\\__PROJECTS__\\Hagane\\build-rtvk",
+    "device": 1,
+    "sizes": [
+      256,
+      512,
+      1024
+    ],
+    "warmup": 5,
+    "iters": 20,
+    "tol": 0.0001,
+    "result_path": "E:\\__PROJECTS__\\Hagane\\benchmarks\\results\\compact_gemm.json"
+  },
+  "rows": [
+    {
+      "n": 256,
+      "diff": 1.9073486328125e-05,
+      "bitsy": {
+        "median_ms": 0.8278000022983178,
+        "spread_ms": [
+          0.5976000102236867,
+          1.4290999970398843
+        ]
+      },
+      "torch": {
+        "median_ms": 0.122799989185296,
+        "spread_ms": [
+          0.10580001980997622,
+          0.4597999795805663
+        ]
+      },
+      "torch_vs_bitsy": 6.741042957660441
+    },
+    {
+      "n": 512,
+      "diff": 5.340576171875e-05,
+      "bitsy": {
+        "median_ms": 2.3501999967265874,
+        "spread_ms": [
+          1.5607999812345952,
+          3.4921000187750906
+        ]
+      },
+      "torch": {
+        "median_ms": 0.3433499950915575,
+        "spread_ms": [
+          0.3279999946244061,
+          0.5944000149611384
+        ]
+      },
+      "torch_vs_bitsy": 6.844910529560033
+    },
+    {
+      "n": 1024,
+      "diff": 8.392333984375e-05,
+      "bitsy": {
+        "median_ms": 6.803199998103082,
+        "spread_ms": [
+          6.101299979491159,
+          8.419799996772781
+        ]
+      },
+      "torch": {
+        "median_ms": 1.693749989499338,
+        "spread_ms": [
+          1.4507000159937888,
+          2.632499992614612
+        ]
+      },
+      "torch_vs_bitsy": 4.016649470276346
+    }
+  ],
+  "note": "ratios >1 mean bitsy slower. Median+warmup+spread+clock logged."
+}

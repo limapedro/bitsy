@@ -25,7 +25,7 @@ See `experiments/exp_040/` and `docs/study/`.
 | R2c | Python nn/optim | Lean Python compositions over C primitives | **done** (PR #4: MLP/LN/RNN/SGD/AdamW, 10/10 vs PyTorch CUDA, ~0 new C lines) |
 | R4 | Exec | Vulkan device + capture/replay (driver bypass) | **done** (PR #5: replay 1.48x vs eager) |
 | R6 | Perf | Attack the PyTorch speed gap (evidence-driven) | **done** (PR #6: 194x->3.5x via HOST_CACHED+lazy download; PR #7: DEVICE_LOCAL + specialized kernel ->1.5-1.9x; PR #8: async submit + direct download + reused readback buffers -> **0.95x per-step, speed parity reached on the fair async loop benchmark**; single-step forced download still slower than torch) |
-| R3 | Kernels | One parameterized GEMM + reduce + fused elementwise; drop 10 GEMM variants | **done** (PR #2: gemm+bias/transpose, reduce sum/mean/max/min, 27/27 vs PyTorch CUDA) |
+| R3 | Kernels | One parameterized GEMM + reduce + fused elementwise; drop 10 GEMM variants | **done** (PR #2: gemm+bias/transpose, reduce variants, 27/27; PR #12: shared-memory tiled GEMM + tile sweep cut gap 207x->4x at n=1024; GEMM still ~4-7x off cuBLAS) |
 | R4 | Exec | Vulkan device/allocator + command-buffer capture/replay (JIT) | planned |
 | R5 | Verify | Parity gate green, ≤4096 lines, benchmarks, tag 0.2, push main | **done** (PR #9: 29 new pure-Python APIs, 44/44; PR #10: 48-case audit + v2 runner with identical report shape, 48/48; PR #11: cutover steps 3-5 COMPLETE — CI flipped to `v2_runner.py`, 5710-line legacy core deleted, re-baselined. Gates: v2 48/48, op 27/27, gradcheck 25/25, model 10/10, API 44/44, ctest 2/2; core 2026 lines; perf 0.9x per-step) |
 
