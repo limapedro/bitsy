@@ -36,6 +36,7 @@ typedef struct RtBuf {
   void* vk;                     /* Vulkan buffer handle (opaque) */
   void* cap_slot;               /* capture slot holding this buf's replay output */
   int dirty;                    /* output changed on device; download before host read */
+  int host_valid;               /* host[] holds real data to upload (leaf), else output scratch */
   int ref;
 } RtBuf;
 

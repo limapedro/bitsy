@@ -37,6 +37,7 @@ RtBuf* rt_buf_new(RT* c, int nd, const int64_t* d, int dev) {
   contiguous_strides(nd, d, b->stride);
   b->host = (float*)malloc(sizeof(float) * (size_t)(b->n ? b->n : 1));
   if (!b->host) { free(b); rt_errf(c, "buf host OOM"); return NULL; }
+  b->host_valid = 0;   /* output scratch: no need to upload to device */
   b->ref = 1;
   if (dev == RT_VULKAN && c->vk) { /* device buffer allocated by backend on upload */ }
   return b;
@@ -113,9 +114,9 @@ RTTensor* rt_from_host(RT* c, const float* data, int nd, const int64_t* d, int r
   t->requires_grad = rg;
   int n = t->buf->n;
   if (data && n) {
-    if (c->device == RT_VULKAN && c->vk) { /* backend upload hook */ }
     memcpy(t->buf->host, data, sizeof(float) * (size_t)n);
   } else if (n) memset(t->buf->host, 0, sizeof(float) * (size_t)n);
+  t->buf->host_valid = 1;   /* leaf carries real host data -> upload on first vkbuf */
   return t;
 }
 RTTensor* rt_zeros(RT* c, int nd, const int64_t* d) { return rt_from_host(c, NULL, nd, d, 0); }
@@ -555,16 +556,20 @@ static void realize_node(RT* c, RTTensor* t) {
   }
   if (t->op == RT_RESHAPE) {
     RtBuf* in = t->src[0]->buf;
+    if (in && in->dirty && c->vk) rt_vk_download(c, in);   /* host copy needs fresh data */
     RtBuf* out = rt_buf_new(c, t->ndim, t->dims, c->device);
     memcpy(out->host, in->host, sizeof(float) * (size_t)out->n);
+    out->host_valid = 1;   /* host-side copy -> must upload to device on first vkbuf */
     c->dispatch_count++; t->buf = out; return;
   }
   if (t->op == RT_TRANSPOSE) {
     /* materialize transpose as a fused permuted copy */
     RtBuf* in = t->src[0]->buf;
+    if (in && in->dirty && c->vk) rt_vk_download(c, in);   /* host copy needs fresh data */
     RtBuf* out = rt_buf_new(c, 2, t->dims, c->device);
     int M=(int)in->dims[0], N=(int)in->dims[1];
     for (int i=0;i<M;++i) for (int j=0;j<N;++j) out->host[j*M+i]=in->host[i*N+j];
+    out->host_valid = 1;   /* host-side copy -> must upload to device on first vkbuf */
     c->dispatch_count++; t->buf = out; return;
   }
   realize_fused(c, t);
