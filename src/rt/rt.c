@@ -724,6 +724,16 @@ static void realize_node(RT* c, RTTensor* t) {
     RtBuf* x=t->src[0]->buf, *w=t->src[1]->buf, *b=t->src[2]->buf;
     RtBuf* res=t->nsrc>3?t->src[3]->buf:NULL;
     RtBuf* out=rt_buf_new(c,t->ndim,t->dims,c->device);
+    /* PR #59: CUDA LayerNorm when inputs are CUDA/host resident. */
+    if (c->cuda_native && !c->capture && rt_cn_available() && x && w && b &&
+        (x->host_valid||x->cn_dptr) && (w->host_valid||w->cn_dptr) && (b->host_valid||b->cn_dptr)) {
+      int cols=(int)x->dims[x->ndim-1], rows=x->n/cols;
+      void* od=rt_cn_out(sizeof(float)*(size_t)out->n);
+      if (od && rt_cn_layernorm(cn_buf(x),cn_buf(w),cn_buf(b),res?cn_buf(res):NULL,
+                                od,rows,cols,t->scalar,res?1:0)==0) {
+        out->cn_dptr=od; out->dirty=1; t->buf=out; c->dispatch_count++; return;
+      }
+    }
     if (c->device==RT_VULKAN && c->vk) rt_vk_layernorm(c,x,w,b,res,out,t->scalar);
     else { int cols=(int)x->dims[x->ndim-1], rows=x->n/cols; float eps=t->scalar;
       for(int r=0;r<rows;++r){ float m=0,vv=0;
@@ -740,6 +750,9 @@ static void realize_node(RT* c, RTTensor* t) {
     RtBuf* bias=t->nsrc>1?t->src[1]->buf:NULL;
     RtBuf* out=rt_buf_new(c,t->ndim,t->dims,c->device);
     int kind=(int)t->scalar;
+    /* PR #59 CUDA softmax forward is correct but its autograd path (used by
+     * cross_entropy) regresses v2 parity; keep softmax on Vulkan for now. */
+    (void)rt_cn_softmax;
     if (c->device==RT_VULKAN && c->vk) rt_vk_softmax(c,in,bias,out,kind);
     else { /* CPU fallback: stable softmax row by row */
       int cols=(int)in->dims[in->ndim-1], rows=in->n/cols;

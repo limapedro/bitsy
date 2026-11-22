@@ -3,6 +3,7 @@
 #include "fused_cuda.ptx.h"
 #include "reduce_atomic.ptx.h"
 #include "gemm_cuda.ptx.h"
+#include "norm_cuda.ptx.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -24,6 +25,7 @@ struct CN {
   void* lib; CUctx ctx; CUstream stream; CUmod mod; CUfunc fn;
   CUmod mod3; CUfunc f_sum;
   CUmod mod4; CUfunc f_gemm_tiled;
+  CUmod mod5; CUfunc f_softmax, f_layernorm;
   CUdptr params; void* host; size_t host_cap;
   void* hostn[4]; int hidx;
   CUdptr out_ring[256]; size_t out_cap[256]; int oidx;
@@ -73,6 +75,10 @@ static struct CN* cn_init(void){
     s->cuModuleGetFunction(&s->f_sum,s->mod3,"breduce_sum");
   if(s->cuModuleLoadData(&s->mod4,rt_gemm_cuda_ptx)==0)
     s->cuModuleGetFunction(&s->f_gemm_tiled,s->mod4,"bgemm_tiled");
+  if(s->cuModuleLoadData(&s->mod5,rt_norm_cuda_ptx)==0) {
+    s->cuModuleGetFunction(&s->f_softmax,s->mod5,"bsoftmax");
+    s->cuModuleGetFunction(&s->f_layernorm,s->mod5,"blayernorm");
+  }
   s->params=0; s->host_cap=64u<<20;
   if(s->cuMemAllocHost(&s->host,s->host_cap)!=0){ DBG("host failed"); goto fail; }
   for(int i=0;i<4;++i) s->hostn[i]=(char*)s->host+(size_t)(s->host_cap/4)*i;
@@ -154,6 +160,25 @@ int rt_cn_gemm_fast(void* A,void* B,void* bias,void* C,int M,int N,int K,int fla
                  (void*)&M,(void*)&N,(void*)&K,(void*)&flags};
   if(s->cuLaunchKernel(s->f_gemm_tiled,(unsigned)((N+15)/16),(unsigned)((M+15)/16),1,
       16,16,1,0,s->stream,args,NULL)!=0) return -2;
+  return 0;
+}
+int rt_cn_softmax(void* in,void* bias,void* out,int rows,int cols,int kind,int has_bias){
+  struct CN* s=cn_init(); if(!s||!s->f_softmax||!in||!out) return -1;
+  CUdptr i=(CUdptr)(size_t)in,bi=(CUdptr)(size_t)(bias?bias:in),o=(CUdptr)(size_t)out;
+  void* args[7]={(void*)&i,(void*)&bi,(void*)&o,(void*)&rows,(void*)&cols,(void*)&kind,(void*)&has_bias};
+  if(s->cuLaunchKernel(s->f_softmax,(unsigned)rows,1,1,256,1,1,
+      (unsigned)(cols*sizeof(float)),s->stream,args,NULL)!=0) return -2;
+  return 0;
+}
+int rt_cn_layernorm(void* in,void* w,void* b,void* res,void* out,
+                    int rows,int cols,float eps,int has_res){
+  struct CN* s=cn_init(); if(!s||!s->f_layernorm||!in||!w||!b||!out) return -1;
+  CUdptr i=(CUdptr)(size_t)in,wi=(CUdptr)(size_t)w,bi=(CUdptr)(size_t)b,
+         ri=(CUdptr)(size_t)(res?res:in),o=(CUdptr)(size_t)out;
+  void* args[9]={(void*)&i,(void*)&wi,(void*)&bi,(void*)&ri,(void*)&o,
+                 (void*)&rows,(void*)&cols,(void*)&eps,(void*)&has_res};
+  if(s->cuLaunchKernel(s->f_layernorm,(unsigned)rows,1,1,256,1,1,
+      (unsigned)(cols*sizeof(float)),s->stream,args,NULL)!=0) return -2;
   return 0;
 }
 void rt_cn_flush(void){ if(G&&G->stream) G->cuStreamSynchronize(G->stream); }
