@@ -680,7 +680,10 @@ static void realize_node(RT* c, RTTensor* t) {
     RtBuf* out = rt_buf_new(c, t->ndim, t->dims, c->device);
     int kind = (int)t->scalar;
     RtBuf* ib=t->src[0]->buf;
-    /* PR #55: single-kernel CUDA reduction for sum/mean/max (min stays Vulkan). */
+    /* PR #60 two-stage max/min measured slower than Vulkan (2 launches +
+     * D2H sync ~0.29ms vs 0.23ms); keep max/min on Vulkan. */
+    (void)rt_cn_reduce_max;
+    /* PR #55: single-kernel CUDA reduction for sum/mean. */
     if (c->cuda_native && !c->capture && (kind==0||kind==1) && rt_cn_available() && ib &&
         (ib->host_valid || ib->cn_dptr)) {
       int outer=1, stride=(int)ib->dims[t->axis], inner=1;
@@ -750,9 +753,16 @@ static void realize_node(RT* c, RTTensor* t) {
     RtBuf* bias=t->nsrc>1?t->src[1]->buf:NULL;
     RtBuf* out=rt_buf_new(c,t->ndim,t->dims,c->device);
     int kind=(int)t->scalar;
-    /* PR #59 CUDA softmax forward is correct but its autograd path (used by
-     * cross_entropy) regresses v2 parity; keep softmax on Vulkan for now. */
-    (void)rt_cn_softmax;
+    /* PR #60: CUDA softmax (enabled after fixing the pinned-readback alias). */
+    if (c->cuda_native && !c->capture && rt_cn_available() && in &&
+        (in->host_valid||in->cn_dptr)) {
+      int cols=(int)in->dims[in->ndim-1], rows=in->n/cols;
+      void* od=rt_cn_out(sizeof(float)*(size_t)out->n);
+      if (od && rt_cn_softmax(cn_buf(in),bias?cn_buf(bias):NULL,od,
+                              rows,cols,kind,bias?1:0)==0) {
+        out->cn_dptr=od; out->dirty=1; t->buf=out; c->dispatch_count++; return;
+      }
+    }
     if (c->device==RT_VULKAN && c->vk) rt_vk_softmax(c,in,bias,out,kind);
     else { /* CPU fallback: stable softmax row by row */
       int cols=(int)in->dims[in->ndim-1], rows=in->n/cols;
