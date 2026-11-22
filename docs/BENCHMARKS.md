@@ -58,6 +58,25 @@ this GPU — see FINDINGS_PR15).
 
 ---
 
+## 2026-11-22 22:30 — PR #62: block-level atomic max/min + inference at parity
+
+Reduced atomic contention in the single-kernel max/min: warp-shuffle reduce
+into shared memory, then **one atomic per block** instead of one per warp
+(up to 128× fewer atomics on the output address). Correctness diff 0.0 for
+max/min on both 2-D and 1-D 1M-element inputs.
+
+Standard benchmark (`common_ops_bench.py`): max 0.057 vs PyTorch 0.043 ms
+(1.30×, down from 1.38× in PR #61), sum 1.37×, mean 1.15×. The 10-step
+async loop is 0.69× (1.45× faster).
+
+Inference re-measured under the default CUDA pointwise path:
+`inference_bench.py` N=200 auto-eager **0.0444 vs 0.0454 ms/step (0.98×,
+slightly FASTER)** — the previously reported 1.12× inference gap is closed.
+
+All gates green across repeated rounds: v2 48/48, op 27/27, gradcheck 25/25,
+model 10/10, API 113/113, CTest 2/2. End-to-end 4-layer MLP 0.4095 vs 0.4411
+ms/step (0.93×, 1.07× faster). Core 3,602 lines.
+
 ## 2026-11-22 21:55 — PR #61: single-kernel atomicCAS max/min — gap cut from ~5× to ~1.4×
 
 Replaced the two-stage max/min CUDA path (0.29 ms, two launches) with a
