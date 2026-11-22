@@ -40,21 +40,21 @@ Per-function numeric and performance evidence lives in [PROGRESS.md](PROGRESS.md
 |---|---|
 | `add`, `sub`, `mul`, `div` | done (cpu_ref + Vulkan, broadcast) |
 | `relu`, `sigmoid`, `tanh`, `exp`, `log` | done (cpu_ref + Vulkan) |
-| `true_divide`, `floor_divide`, `mod`, `remainder`, `fmod`, `pow`, `rpow`, `neg`, `abs`, `sign` | missing |
+| `true_divide`, `floor_divide`, `mod`, `remainder`, `fmod`, `pow`, `rpow`, `neg`, `abs`, `sign` | partial (PR #2: `pow`/`neg`/`abs`/`sign` done; division variants, mod/fmod missing) |
 | `sqrt` | done (exp_037: cpu_ref + Vulkan, backward `1/(2*sqrt(x))`; clamps negatives at 0, PyTorch returns NaN — documented in exp_037 FINDINGS) |
-| `rsqrt`, `square`, `reciprocal`, `exp2`, `expm1`, `log2`, `log10`, `log1p`, `logaddexp` | missing |
+| `rsqrt`, `square`, `reciprocal`, `exp2`, `expm1`, `log2`, `log10`, `log1p`, `logaddexp` | partial (PR #9: `rsqrt`/`square`/`reciprocal`/`exp2`/`log2` done; `expm1`/`log10`/`log1p`/`logaddexp` missing) |
 | `sin`, `cos`, `tan`, `asin`, `acos`, `atan`, `atan2`, `sinh`, `cosh`, `asinh`, `acosh`, `atanh` | missing |
 | `erf`, `erfc`, `erfinv`, `lgamma`, `gamma`, `digamma` | missing |
-| `clamp`, `clip`, `round`, `floor`, `ceil`, `trunc`, `frac`, `nan_to_num`, `nan_to_num_` | missing |
-| `hypot`, `copysign`, `nextafter`, `lerp`, `addcmul`, `addcdiv` | missing |
+| `clamp`, `clip`, `round`, `floor`, `ceil`, `trunc`, `frac`, `nan_to_num`, `nan_to_num_` | partial (PR #9: `clamp`/`clip` done; rounding family missing) |
+| `hypot`, `copysign`, `nextafter`, `lerp`, `addcmul`, `addcdiv` | partial (PR #9: `lerp` done; rest missing) |
 
 ## 4. Comparisons, logical, bitwise
 
 | Representative API | Status |
 |---|---|
-| `eq`, `ne`, `gt`, `ge`, `lt`, `le`, `equal`, `greater`, `less` | missing |
+| `eq`, `ne`, `gt`, `ge`, `lt`, `le`, `equal`, `greater`, `less` | done (PR #2 C primitives; PR #9 Python `Tensor` methods, 44-case parity) |
 | `isclose`, `allclose`, `isnan`, `isinf`, `isfinite` | missing (only used inside the parity harness) |
-| `logical_and`, `logical_or`, `logical_not`, `logical_xor`, `all`, `any` | missing |
+| `logical_and`, `logical_or`, `logical_not`, `logical_xor`, `all`, `any` | partial (PR #9: four logical helpers done; `all`/`any` missing) |
 | `bitwise_and`, `bitwise_or`, `bitwise_xor`, `bitwise_not`, `left_shift`, `right_shift` | missing |
 
 ## 5. Reductions
@@ -62,7 +62,7 @@ Per-function numeric and performance evidence lives in [PROGRESS.md](PROGRESS.md
 | Representative API | Status |
 |---|---|
 | `sum`, `argmax` | partial (Python helper via matmul; NumPy argmax in eval) |
-| `mean`, `median`, `prod`, `min`, `max`, `argmin`, `std`, `var`, `norm`, `logsumexp` | missing |
+| `mean`, `median`, `prod`, `min`, `max`, `argmin`, `std`, `var`, `norm`, `logsumexp` | partial (PR #9: `std`/`var`/`norm`/`logsumexp` done; `median`/`prod`/`argmin` missing) |
 | `topk`, `kthvalue`, `sort`, `argsort`, `cumsum`, `cumprod`, `cummax`, `cummin`, `diff` | missing |
 | `unique`, `bincount`, `histc`, `bucketize`, `nonzero`, `count_nonzero` | missing |
 
@@ -126,9 +126,9 @@ Per-function numeric and performance evidence lives in [PROGRESS.md](PROGRESS.md
 | `relu`, `sigmoid`, `tanh`, `softmax` (via `log_softmax` internally) | done (exp_037: softmax dx 1.7e-7) |
 | fused `add + relu` pointwise kernel | done |
 | `gelu`, `log_softmax` | done (exp_037: exact-erf gelu fwd/bwd 1.2e-7; `log_softmax` now handles >256 cols) |
-| `silu`, `mish`, `leaky_relu`, `elu`, `selu`, `softplus`, `glu` | missing |
+| `silu`, `mish`, `leaky_relu`, `elu`, `selu`, `softplus`, `glu` | partial (PR #9: six activations done incl. hardswish/hardtanh; `glu` missing) |
 | `mse_loss`, `cross_entropy` | done |
-| `nll_loss`, `l1_loss`, `smooth_l1_loss`/`huber_loss`, `bce_loss`, `bce_with_logits_loss` | missing |
+| `nll_loss`, `l1_loss`, `smooth_l1_loss`/`huber_loss`, `bce_loss`, `bce_with_logits_loss` | done (PR #9: all five, pure Python compositions, fwd+grad parity) |
 | `kl_div`, `poisson_nll_loss`, `hinge_loss`, `triplet_margin_loss`, `ctc_loss` | missing |
 
 ## 12. Optimizers and schedulers

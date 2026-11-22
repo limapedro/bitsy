@@ -1,0 +1,287 @@
+{
+  "generated_at": "2026-11-22T04:30:49.350475+00:00",
+  "environment": {
+    "torch": "2.11.0+cu126",
+    "gpu": "NVIDIA GeForce GTX 1660 SUPER"
+  },
+  "config": {
+    "build_dir": "E:\\__PROJECTS__\\Hagane\\build-rtvk",
+    "device": 1,
+    "n": 128,
+    "seed": 0,
+    "tol_fwd": 0.0001,
+    "tol_grad": 0.001,
+    "result_path": "E:\\__PROJECTS__\\Hagane\\benchmarks\\results\\bitsy_v2_api_parity.json"
+  },
+  "summary": {
+    "total": 44,
+    "passed": 44,
+    "failed": 0
+  },
+  "cases": [
+    {
+      "name": "silu_fwd",
+      "max_abs_diff": 1.1920928955078125e-07,
+      "tol": 0.0001,
+      "passed": true
+    },
+    {
+      "name": "silu_grad",
+      "max_abs_diff": 1.1920928955078125e-07,
+      "tol": 0.001,
+      "passed": true
+    },
+    {
+      "name": "softplus_fwd",
+      "max_abs_diff": 2.384185791015625e-07,
+      "tol": 0.0001,
+      "passed": true
+    },
+    {
+      "name": "softplus_grad",
+      "max_abs_diff": 5.960464477539063e-08,
+      "tol": 0.001,
+      "passed": true
+    },
+    {
+      "name": "mish_fwd",
+      "max_abs_diff": 2.086162567138672e-07,
+      "tol": 0.0001,
+      "passed": true
+    },
+    {
+      "name": "mish_grad",
+      "max_abs_diff": 1.3597309589385986e-07,
+      "tol": 0.001,
+      "passed": true
+    },
+    {
+      "name": "leaky_relu_fwd",
+      "max_abs_diff": 0.0,
+      "tol": 0.0001,
+      "passed": true
+    },
+    {
+      "name": "leaky_relu_grad",
+      "max_abs_diff": 0.0,
+      "tol": 0.001,
+      "passed": true
+    },
+    {
+      "name": "elu_fwd",
+      "max_abs_diff": 5.960464477539063e-08,
+      "tol": 0.0001,
+      "passed": true
+    },
+    {
+      "name": "elu_grad",
+      "max_abs_diff": 1.1920928955078125e-07,
+      "tol": 0.001,
+      "passed": true
+    },
+    {
+      "name": "selu_fwd",
+      "max_abs_diff": 2.384185791015625e-07,
+      "tol": 0.0001,
+      "passed": true
+    },
+    {
+      "name": "selu_grad",
+      "max_abs_diff": 2.384185791015625e-07,
+      "tol": 0.001,
+      "passed": true
+    },
+    {
+      "name": "hardtanh_fwd",
+      "max_abs_diff": 0.0,
+      "tol": 0.0001,
+      "passed": true
+    },
+    {
+      "name": "hardtanh_grad",
+      "max_abs_diff": 0.0,
+      "tol": 0.001,
+      "passed": true
+    },
+    {
+      "name": "hardswish_fwd",
+      "max_abs_diff": 0.0,
+      "tol": 0.0001,
+      "passed": true
+    },
+    {
+      "name": "hardswish_grad",
+      "max_abs_diff": 2.384185791015625e-07,
+      "tol": 0.001,
+      "passed": true
+    },
+    {
+      "name": "var",
+      "max_abs_diff": 1.1920928955078125e-07,
+      "tol": 0.0001,
+      "passed": true
+    },
+    {
+      "name": "std",
+      "max_abs_diff": 1.1920928955078125e-07,
+      "tol": 0.0001,
+      "passed": true
+    },
+    {
+      "name": "logsumexp",
+      "max_abs_diff": 4.76837158203125e-07,
+      "tol": 0.0001,
+      "passed": true
+    },
+    {
+      "name": "norm2",
+      "max_abs_diff": 1.9073486328125e-06,
+      "tol": 0.0001,
+      "passed": true
+    },
+    {
+      "name": "norm1",
+      "max_abs_diff": 0.0,
+      "tol": 0.0001,
+      "passed": true
+    },
+    {
+      "name": "square",
+      "max_abs_diff": 0.0,
+      "tol": 0.0001,
+      "passed": true
+    },
+    {
+      "name": "reciprocal",
+      "max_abs_diff": 1.1920928955078125e-07,
+      "tol": 0.0001,
+      "passed": true
+    },
+    {
+      "name": "rsqrt",
+      "max_abs_diff": 0.0,
+      "tol": 0.0001,
+      "passed": true
+    },
+    {
+      "name": "exp2",
+      "max_abs_diff": 4.76837158203125e-07,
+      "tol": 0.0001,
+      "passed": true
+    },
+    {
+      "name": "log2",
+      "max_abs_diff": 1.7881393432617188e-07,
+      "tol": 0.0001,
+      "passed": true
+    },
+    {
+      "name": "clamp",
+      "max_abs_diff": 0.0,
+      "tol": 0.0001,
+      "passed": true
+    },
+    {
+      "name": "l1_loss_fwd",
+      "max_abs_diff": 2.384185791015625e-07,
+      "tol": 0.0001,
+      "passed": true
+    },
+    {
+      "name": "l1_loss_grad",
+      "max_abs_diff": 0.0,
+      "tol": 0.001,
+      "passed": true
+    },
+    {
+      "name": "smooth_l1_loss_fwd",
+      "max_abs_diff": 1.7881393432617188e-07,
+      "tol": 0.0001,
+      "passed": true
+    },
+    {
+      "name": "smooth_l1_loss_grad",
+      "max_abs_diff": 0.0,
+      "tol": 0.001,
+      "passed": true
+    },
+    {
+      "name": "bce_loss_fwd",
+      "max_abs_diff": 5.960464477539063e-08,
+      "tol": 0.0001,
+      "passed": true
+    },
+    {
+      "name": "bce_loss_grad",
+      "max_abs_diff": 1.4901161193847656e-08,
+      "tol": 0.001,
+      "passed": true
+    },
+    {
+      "name": "bce_with_logits_fwd",
+      "max_abs_diff": 0.0,
+      "tol": 0.0001,
+      "passed": true
+    },
+    {
+      "name": "bce_with_logits_grad",
+      "max_abs_diff": 9.313225746154785e-10,
+      "tol": 0.001,
+      "passed": true
+    },
+    {
+      "name": "nll_loss_fwd",
+      "max_abs_diff": 0.0,
+      "tol": 0.0001,
+      "passed": true
+    },
+    {
+      "name": "nll_loss_grad",
+      "max_abs_diff": 3.725290298461914e-09,
+      "tol": 0.001,
+      "passed": true
+    },
+    {
+      "name": "logical_not",
+      "max_abs_diff": 0.0,
+      "tol": 0.0001,
+      "passed": true
+    },
+    {
+      "name": "logical_and",
+      "max_abs_diff": 0.0,
+      "tol": 0.0001,
+      "passed": true
+    },
+    {
+      "name": "logical_or",
+      "max_abs_diff": 0.0,
+      "tol": 0.0001,
+      "passed": true
+    },
+    {
+      "name": "logical_xor",
+      "max_abs_diff": 0.0,
+      "tol": 0.0001,
+      "passed": true
+    },
+    {
+      "name": "cmp_gt",
+      "max_abs_diff": 0.0,
+      "tol": 0.0001,
+      "passed": true
+    },
+    {
+      "name": "cmp_le",
+      "max_abs_diff": 0.0,
+      "tol": 0.0001,
+      "passed": true
+    },
+    {
+      "name": "lerp",
+      "max_abs_diff": 0.0,
+      "tol": 0.0001,
+      "passed": true
+    }
+  ]
+}

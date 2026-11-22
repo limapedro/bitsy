@@ -1,0 +1,175 @@
+"""bitsy_v2 v0.2 extra-API parity vs PyTorch CUDA (PR #9).
+
+Tests the new pure-Python compositions over the frozen C primitive set:
+activations (silu/mish/softplus/leaky_relu/elu/selu/hardtanh/hardswish),
+losses (l1/smooth_l1/bce/bce_with_logits/nll), reductions (var/std/logsumexp/norm),
+logical helpers and comparisons. All add ZERO new C lines.
+
+Forward and (where differentiable) gradient parity. Dataclass config, no argparse.
+"""
+from __future__ import annotations
+
+import json, sys
+from dataclasses import asdict, dataclass
+from datetime import datetime, timezone
+from pathlib import Path
+
+import numpy as np
+import torch
+
+ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "python"))
+import bitsy_v2 as bv
+from bitsy_v2 import functional as F
+
+@dataclass(frozen=True, slots=True)
+class Config:
+  build_dir:Path = ROOT / "build-rtvk"
+  device:int = bv.Engine.VULKAN
+  n:int = 128
+  seed:int = 0
+  tol_fwd:float = 1e-4
+  tol_grad:float = 1e-3
+  result_path:Path = ROOT / "benchmarks" / "results" / "bitsy_v2_api_parity.json"
+
+CFG = Config()
+
+def md(a,b): return float(np.abs(np.asarray(a,np.float32)-np.asarray(b,np.float32)).max())
+
+def rec(results, name, diff, tol, print_it=True):
+  ok = diff <= tol
+  results.append({"name":name,"max_abs_diff":diff,"tol":tol,"passed":ok})
+  if print_it: print(f"[{'PASS' if ok else 'FAIL'}] {name:28s} diff={diff:.3e}")
+  return ok
+
+def run(cfg=CFG):
+  if not torch.cuda.is_available():
+    print("CUDA unavailable; skipping"); return 0
+  eng = bv.Engine(cfg.build_dir, cfg.device)
+  rng = np.random.default_rng(cfg.seed)
+  x = rng.standard_normal(cfg.n).astype(np.float32)
+  ydata = rng.standard_normal(cfg.n).astype(np.float32)
+  probs = (1/(1+np.exp(-rng.standard_normal(cfg.n).astype(np.float32)))).astype(np.float32)
+  logits2d = rng.standard_normal((cfg.n//4, 4)).astype(np.float32)
+  labels = rng.integers(0, 4, logits2d.shape[0])
+
+  results = []
+  rec_fwd = lambda nm, d: rec(results, nm, d, cfg.tol_fwd)
+  rec_grad = lambda nm, d: rec(results, nm, d, cfg.tol_grad)
+
+  # ---- unary activations (forward + grad) ----
+  acts = [
+    ("silu",      lambda t: t.silu(),                       lambda t: torch.nn.functional.silu(t)),
+    ("softplus",  lambda t: t.softplus(),                   lambda t: torch.nn.functional.softplus(t)),
+    ("mish",      lambda t: t.mish(),                       lambda t: torch.nn.functional.mish(t)),
+    ("leaky_relu",lambda t: t.leaky_relu(0.01),             lambda t: torch.nn.functional.leaky_relu(t, 0.01)),
+    ("elu",       lambda t: t.elu(1.0),                     lambda t: torch.nn.functional.elu(t, 1.0)),
+    ("selu",      lambda t: t.selu(),                       lambda t: torch.nn.functional.selu(t)),
+    ("hardtanh",  lambda t: t.hardtanh(-1.0, 1.0),          lambda t: torch.nn.functional.hardtanh(t, -1.0, 1.0)),
+    ("hardswish", lambda t: t.hardswish(),                   lambda t: torch.nn.functional.hardswish(t)),
+  ]
+  for nm, bf, tf in acts:
+    bx = bv.Tensor.from_numpy(eng.rt, x.copy(), requires_grad=True)
+    tx = torch.tensor(x, device="cuda", requires_grad=True)
+    bo, to = bf(bx), tf(tx)
+    rec_fwd(nm+"_fwd", md(bo.numpy(), to.detach().cpu().numpy()))
+    bo.backward(params=[bx]); to.backward(torch.ones_like(to))
+    if bx.grad is not None:
+      rec_grad(nm+"_grad", md(bx.grad, tx.grad.detach().cpu().numpy()))
+    else:
+      results.append({"name":nm+"_grad","max_abs_diff":None,"tol":cfg.tol_grad,"passed":False})
+      print(f"[FAIL] {nm+'_grad':28s} no grad")
+
+  # ---- reductions (forward) ----
+  reds = [
+    ("var",    lambda t: t.var(0, True),   lambda t: torch.var(t, dim=0, unbiased=True)),
+    ("std",    lambda t: t.std(0, True),   lambda t: torch.std(t, dim=0, unbiased=True)),
+    ("logsumexp", lambda t: t.logsumexp(0),lambda t: torch.logsumexp(t, dim=0)),
+    ("norm2",  lambda t: t.norm(2.0, 0),   lambda t: torch.linalg.vector_norm(t, ord=2, dim=0)),
+    ("norm1",  lambda t: t.norm(1.0, 0),   lambda t: torch.linalg.vector_norm(t, ord=1, dim=0)),
+    ("square", lambda t: t.square(),       lambda t: torch.square(t)),
+    ("reciprocal", lambda t: t.reciprocal(), lambda t: torch.reciprocal(t)),
+    ("rsqrt",  lambda t: t.rsqrt(),        lambda t: torch.rsqrt(t)),
+    ("exp2",   lambda t: t.exp2(),         lambda t: torch.exp2(t)),
+    ("log2",   lambda t: t.log2(),         lambda t: torch.log2(t)),
+    ("clamp",  lambda t: t.clamp(-0.5, 0.5), lambda t: torch.clamp(t, -0.5, 0.5)),
+  ]
+  # positive inputs: C sqrt clamps negatives at 0 (documented exp_037 deviation),
+  # while PyTorch rsqrt/log2 return NaN — compare on the overlapping domain.
+  xpos = np.abs(x) + 0.5
+  for nm, bf, tf in reds:
+    bx = bv.Tensor.from_numpy(eng.rt, xpos.copy())
+    tx = torch.tensor(xpos, device="cuda")
+    rec_fwd(nm, md(bf(bx).numpy(), tf(tx).detach().cpu().numpy()))
+
+  # ---- two-input losses (forward + grad on first input) ----
+  losses = [
+    ("l1_loss",      lambda a,b: F.l1_loss(a,b),            lambda a,b: torch.nn.functional.l1_loss(a,b)),
+    ("smooth_l1_loss",lambda a,b: F.smooth_l1_loss(a,b,1.0),lambda a,b: torch.nn.functional.smooth_l1_loss(a,b,beta=1.0)),
+    ("bce_loss",     lambda a,b: F.bce_loss(a,b),            lambda a,b: torch.nn.functional.binary_cross_entropy(a,b)),
+    ("bce_with_logits",lambda a,b: F.bce_with_logits_loss(a,b),
+                                                              lambda a,b: torch.nn.functional.binary_cross_entropy_with_logits(a,b)),
+  ]
+  for nm, bf, tf in losses:
+    is_bce = nm.startswith("bce")
+    xa = probs.copy() if nm == "bce_loss" else x.copy()
+    tdata = (ydata > 0).astype(np.float32) if is_bce else ydata
+    bx = bv.Tensor.from_numpy(eng.rt, xa, requires_grad=True)
+    by = bv.Tensor.from_numpy(eng.rt, tdata.copy())
+    ta = torch.tensor(xa, device="cuda", requires_grad=True)
+    ty = torch.tensor(tdata, device="cuda")
+    bo, to = bf(bx,by), tf(ta,ty)
+    rec_fwd(nm+"_fwd", md(bo.numpy(), np.array([to.item()],np.float32)))
+    bo.backward(params=[bx]); to.backward()
+    if bx.grad is not None:
+      rec_grad(nm+"_grad", md(bx.grad, ta.grad.detach().cpu().numpy()))
+    else:
+      results.append({"name":nm+"_grad","max_abs_diff":None,"tol":cfg.tol_grad,"passed":False})
+      print(f"[FAIL] {nm+'_grad':28s} no grad")
+
+  # ---- nll_loss (host integer labels) ----
+  bx = bv.Tensor.from_numpy(eng.rt, logits2d.copy(), requires_grad=True)
+  bl = bx.log_softmax(axis=-1)
+  bo = F.nll_loss(bl, labels)
+  tl = torch.tensor(logits2d, device="cuda", requires_grad=True)
+  to = torch.nn.functional.nll_loss(torch.log_softmax(tl, dim=-1),
+        torch.tensor(labels, device="cuda"))
+  rec_fwd("nll_loss_fwd", md(bo.numpy(), np.array([to.item()],np.float32)))
+  bo.backward(params=[bx]); to.backward()
+  if bx.grad is not None:
+    rec_grad("nll_loss_grad", md(bx.grad, tl.grad.detach().cpu().numpy()))
+
+  # ---- logical helpers + comparisons ----
+  z1 = (x > 0).astype(np.float32)
+  z2 = (ydata > 0).astype(np.float32)
+  b1 = bv.Tensor.from_numpy(eng.rt, z1)
+  b2 = bv.Tensor.from_numpy(eng.rt, z2)
+  t1 = torch.tensor(z1, device="cuda")
+  t2 = torch.tensor(z2, device="cuda")
+  logical = [
+    ("logical_not",  lambda a,b: F.logical_not(a),  lambda a,b: a.logical_not().float()),
+    ("logical_and",  lambda a,b: F.logical_and(a,b),lambda a,b: torch.logical_and(a,b).float()),
+    ("logical_or",   lambda a,b: F.logical_or(a,b), lambda a,b: torch.logical_or(a,b).float()),
+    ("logical_xor",  lambda a,b: F.logical_xor(a,b),lambda a,b: torch.logical_xor(a,b).float()),
+    ("cmp_gt",       lambda a,b: a.gt(b),            lambda a,b: (a>b).float()),
+    ("cmp_le",       lambda a,b: a.le(b),            lambda a,b: (a<=b).float()),
+    ("lerp",         lambda a,b: a.lerp(b, 0.25),    lambda a,b: torch.lerp(a,b,0.25)),
+  ]
+  for nm, bf, tf in logical:
+    rec_fwd(nm, md(bf(b1,b2).numpy(), tf(t1,t2).detach().cpu().numpy()))
+
+  passed = sum(r["passed"] for r in results)
+  report = {
+    "generated_at":datetime.now(timezone.utc).isoformat(),
+    "environment":{"torch":torch.__version__,"gpu":torch.cuda.get_device_name(0)},
+    "config":{k:str(v) if isinstance(v,Path) else v for k,v in asdict(cfg).items()},
+    "summary":{"total":len(results),"passed":passed,"failed":len(results)-passed},
+    "cases":results,
+  }
+  cfg.result_path.parent.mkdir(parents=True, exist_ok=True)
+  cfg.result_path.write_text(json.dumps(report,indent=2)+"\n",encoding="utf-8")
+  print(f"\n{passed}/{len(results)} bitsy_v2 extra-API parity cases passed")
+  return 0 if passed==len(results) else 1
+
+if __name__=="__main__": raise SystemExit(run())
