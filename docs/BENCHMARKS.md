@@ -58,6 +58,30 @@ this GPU — see FINDINGS_PR15).
 
 ---
 
+## 2026-11-22 20:10 — PR #58: root-caused the corruption — fast path back on by default, CUDA GEMM shipped
+
+Found the real cause of PR #57's intermittent `grad_reshape` corruption: the
+host-side `RT_RESHAPE` realization does `memcpy(out->host, in->host)`, but when
+`in` was produced by a CUDA op its `host[]` was stale (`host_valid=0`). Adding a
+`rt_cn_read()` CUDA→host sync there made gradcheck **5/5** consecutive green
+(previously 0/3 with the fast path on). Bisection had shown the corruption
+required a CUDA cut op (reduce/GEMM) feeding a CUDA pointwise grad that then hit
+a host reshape — this fix addresses exactly that path.
+
+With correctness restored:
+- Fast CUDA path re-enabled by default (`cuda_native=1`), with device-side
+  `cuMemsetD8Async` zeroing in the reduction (removes shared pinned-buffer hazard).
+- Tiled CUDA GEMM (`gemm_cuda.cu`, 16×16 shared-memory tiles) ported and enabled
+  by default. Correctness diff 5.3e-05. GEMM 64×256 @ 256×128: 0.051 vs 0.051 ms
+  torch (parity; earlier 1.7× slower).
+- Repeated full gate runs (2 rounds) all green: v2 48/48, op 27/27, gradcheck
+  25/25, model 10/10, API 113/113, CTest 2/2. Core 3,481 lines.
+- Sum/mean reductions ~parity (0.048–0.087 vs 0.044–0.091 ms); MAX/MIN still
+  ~5× (Vulkan). End-to-end 4-layer MLP 0.441 vs 0.613 ms/step (0.72×).
+
+This corrects PR #57's conclusion: the fast path was not inherently unsafe; the
+bug was a missing CUDA→host sync in the reshape realization.
+
 ## 2026-11-22 19:30 — PR #57: CUDA fast path returned to opt-in (intermittent gradcheck corruption)
 
 Attempted to port GEMM to a tiled CUDA kernel (16×16 shared-memory tiles) and

@@ -58,9 +58,10 @@ RT* rt_create(int device) {
   if (!c) return NULL;
   c->device = device;
   c->next_id = 1;
-  c->cuda_native = 0;  /* Opt-in: the CUDA path is faster for pointwise ops but
-                        * shows intermittent gradcheck corruption when enabled
-                        * by default; see BENCHMARKS.md PR #57. */
+  c->cuda_native = 1;  /* PR #58: fast pointwise path on by default; the CUDA
+                        * context is initialized lazily at first use. The
+                        * reduction zeroing now uses a device memset (PR #57
+                        * corruption fix). Falls back to Vulkan when no CUDA. */
   if (device == RT_VULKAN) rt_vk_init(c);
   return c;
 }
@@ -653,6 +654,19 @@ static void realize_node(RT* c, RTTensor* t) {
     RtBuf* bias = t->nsrc > 2 && t->src[2] ? t->src[2]->buf : NULL;
     int ta = t->axis, tb = t->keepdim;
     int relu = t->op == RT_GEMM_RELU;
+    /* PR #58: tiled CUDA GEMM when operands are CUDA/host resident. */
+    if (c->cuda_native && !c->capture && rt_cn_available()) {
+      RtBuf* A=t->src[0]->buf, *B=t->src[1]->buf;
+      if (A && B && (A->host_valid||A->cn_dptr) && (B->host_valid||B->cn_dptr)) {
+        int M=(int)out->dims[0], N=(int)out->dims[1];
+        int K=ta?(int)A->dims[0]:(int)A->dims[1];
+        void* od=rt_cn_out(sizeof(float)*(size_t)out->n);
+        int flags=(ta?1:0)|(tb?2:0)|(bias?4:0)|(relu?8:0);
+        if (od && rt_cn_gemm_fast(cn_buf(A),cn_buf(B),bias?cn_buf(bias):NULL,od,M,N,K,flags)==0) {
+          out->cn_dptr=od; out->dirty=1; t->buf=out; c->dispatch_count++; return;
+        }
+      }
+    }
     if (c->device == RT_VULKAN && c->vk)
       rt_vk_gemm(c, t->src[0]->buf, t->src[1]->buf, bias, ta, tb, relu, out);
     else gemm_cpu(t->src[0]->buf, t->src[1]->buf, bias, ta, tb, out);
@@ -674,7 +688,7 @@ static void realize_node(RT* c, RTTensor* t) {
       for (int i=t->axis+1;i<ib->ndim;++i) inner*=(int)ib->dims[i];
       void* od=rt_cn_out(sizeof(float)*(size_t)out->n);
       if (od && rt_cn_reduce_fast(cn_buf(ib),od,outer,stride,inner,kind)==0) {
-        out->cn_dptr=od; out->dirty=1; t->buf=out; return;
+        out->cn_dptr=od; out->dirty=1; t->buf=out; c->dispatch_count++; return;
       }
     }
     if (c->device == RT_VULKAN && c->vk)
@@ -685,6 +699,10 @@ static void realize_node(RT* c, RTTensor* t) {
   }
   if (t->op == RT_RESHAPE) {
     RtBuf* in = t->src[0]->buf;
+    if (in && in->cn_dptr && !in->host_valid && in->host) {  /* PR #58: CUDA-produced input */
+      size_t ibytes=sizeof(float)*(size_t)(in->n?in->n:1);
+      if (rt_cn_read(in->cn_dptr,in->host,ibytes)==0) in->host_valid=1;
+    }
     if (in && in->dirty && c->vk) rt_vk_download(c, in);   /* host copy needs fresh data */
     RtBuf* out = rt_buf_new(c, t->ndim, t->dims, c->device);
     memcpy(out->host, in->host, sizeof(float) * (size_t)out->n);

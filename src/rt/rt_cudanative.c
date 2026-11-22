@@ -2,6 +2,7 @@
 #include "rt_cudanative.h"
 #include "fused_cuda.ptx.h"
 #include "reduce_atomic.ptx.h"
+#include "gemm_cuda.ptx.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -22,9 +23,10 @@ typedef void* CUmod; typedef void* CUfunc; typedef unsigned long long CUdptr;
 struct CN {
   void* lib; CUctx ctx; CUstream stream; CUmod mod; CUfunc fn;
   CUmod mod3; CUfunc f_sum;
+  CUmod mod4; CUfunc f_gemm_tiled;
   CUdptr params; void* host; size_t host_cap;
   void* hostn[4]; int hidx;
-  CUdptr out_ring[8]; size_t out_cap[8]; int oidx;
+  CUdptr out_ring[256]; size_t out_cap[256]; int oidx;
   int dbg;
   CUres (*cuInit)(unsigned); CUres (*cuCtxGetCurrent)(CUctx*);
   CUres (*cuCtxCreate)(CUctx*,unsigned,int); CUres (*cuDeviceGet)(int*,int);
@@ -34,6 +36,7 @@ struct CN {
   CUres (*cuMemAlloc)(CUdptr*,size_t); CUres (*cuMemAllocHost)(void**,size_t);
   CUres (*cuMemcpyHtoDAsync)(CUdptr,const void*,size_t,CUstream);
   CUres (*cuMemcpyDtoHAsync)(void*,CUdptr,size_t,CUstream);
+  CUres (*cuMemsetD8Async)(CUdptr,unsigned char,size_t,CUstream);
   CUres (*cuLaunchKernel)(CUfunc,unsigned,unsigned,unsigned,unsigned,unsigned,unsigned,
                           unsigned,CUstream,void**,void**);
   CUres (*cuStreamCreate)(CUstream*,unsigned); CUres (*cuStreamSynchronize)(CUstream);
@@ -53,6 +56,7 @@ static struct CN* cn_init(void){
   L(cuModuleLoadData,"cuModuleLoadData"); L(cuModuleGetFunction,"cuModuleGetFunction");
   L(cuMemAlloc,"cuMemAlloc_v2"); L(cuMemAllocHost,"cuMemAllocHost_v2");
   L(cuMemcpyHtoDAsync,"cuMemcpyHtoDAsync_v2"); L(cuMemcpyDtoHAsync,"cuMemcpyDtoHAsync_v2");
+  L(cuMemsetD8Async,"cuMemsetD8Async");
   L(cuLaunchKernel,"cuLaunchKernel"); L(cuStreamCreate,"cuStreamCreate");
   L(cuStreamSynchronize,"cuStreamSynchronize");
   if(s->cuInit(0)!=0){ DBG("init failed"); goto fail; }
@@ -67,6 +71,8 @@ static struct CN* cn_init(void){
   if(s->cuModuleGetFunction(&s->fn,s->mod,"bfused")!=0){ DBG("function failed"); goto fail; }
   if(s->cuModuleLoadData(&s->mod3,rt_reduce_atomic_ptx)==0)
     s->cuModuleGetFunction(&s->f_sum,s->mod3,"breduce_sum");
+  if(s->cuModuleLoadData(&s->mod4,rt_gemm_cuda_ptx)==0)
+    s->cuModuleGetFunction(&s->f_gemm_tiled,s->mod4,"bgemm_tiled");
   s->params=0; s->host_cap=64u<<20;
   if(s->cuMemAllocHost(&s->host,s->host_cap)!=0){ DBG("host failed"); goto fail; }
   for(int i=0;i<4;++i) s->hostn[i]=(char*)s->host+(size_t)(s->host_cap/4)*i;
@@ -87,7 +93,7 @@ int rt_cn_upload(void* dptr,const float* host,size_t bytes){
 
 void* rt_cn_out(size_t bytes){
   struct CN* s=cn_init(); if(!s) return NULL;
-  int i=s->oidx&7; s->oidx++;
+  int i=s->oidx&255; s->oidx++;
   if(bytes>s->out_cap[i]){
     if(s->cuMemAlloc(&s->out_ring[i],bytes)!=0) return NULL;
     s->out_cap[i]=bytes;
@@ -124,8 +130,9 @@ int rt_cn_reduce_fast(void* in,void* out,int outer,int stride,int inner,int kind
   struct CN* s=cn_init(); if(!s||!s->f_sum||!in||!out) return -1;
   int lines=outer*inner;
   size_t bytes=sizeof(float)*(size_t)lines;
-  memset(s->host,0,bytes);
-  if(s->cuMemcpyHtoDAsync((CUdptr)(size_t)out,s->host,bytes,s->stream)!=0) return -2;
+  /* Zero on-device with a stream-ordered memset: never touch the pinned host
+   * buffer that may back a live zero-copy numpy view (gradcheck corruption). */
+  if(s->cuMemsetD8Async((CUdptr)(size_t)out,0,bytes,s->stream)!=0) return -2;
   int nblocks = stride > 8192 ? 1024 : (stride > 512 ? 64 : 1);
   if(nblocks>stride) nblocks=stride>0?stride:1;
   float scale=(kind==1)?(1.f/(float)stride):1.f;
@@ -137,6 +144,16 @@ int rt_cn_reduce_fast(void* in,void* out,int outer,int stride,int inner,int kind
   if(s->cuLaunchKernel(s->f_sum,(unsigned)lines,(unsigned)nblocks,1,256,1,1,
       0,s->stream,args7,NULL)!=0) return -4;
   (void)args;
+  return 0;
+}
+int rt_cn_gemm_fast(void* A,void* B,void* bias,void* C,int M,int N,int K,int flags){
+  struct CN* s=cn_init(); if(!s||!s->f_gemm_tiled||!A||!B||!C) return -1;
+  CUdptr a=(CUdptr)(size_t)A,b=(CUdptr)(size_t)B,
+         bi=(CUdptr)(size_t)(bias?bias:A),c=(CUdptr)(size_t)C;
+  void* args[8]={(void*)&a,(void*)&b,(void*)&bi,(void*)&c,
+                 (void*)&M,(void*)&N,(void*)&K,(void*)&flags};
+  if(s->cuLaunchKernel(s->f_gemm_tiled,(unsigned)((N+15)/16),(unsigned)((M+15)/16),1,
+      16,16,1,0,s->stream,args,NULL)!=0) return -2;
   return 0;
 }
 void rt_cn_flush(void){ if(G&&G->stream) G->cuStreamSynchronize(G->stream); }
