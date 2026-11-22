@@ -142,8 +142,8 @@ RT_API void rt_stream_submit(RT*, int n);
 RT_API const float* rt_read_ptr(RT*, RTTensor*, int slot);
 
 /* Last eager kernel GPU time in ms (Vulkan timestamp query; 0 if unsupported). */
-RT_API double rt_device_time_ms(const RT*);
-RT_API double rt_copy_time_ms(const RT*);
+RT_API double rt_device_time_ms(RT*);
+RT_API double rt_copy_time_ms(RT*);
 
 /* Version */
 RT_API const char* rt_version(void);

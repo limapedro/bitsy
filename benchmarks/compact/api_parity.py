@@ -357,6 +357,17 @@ def run(cfg=CFG):
   rec_grad("stream_fresh_w1", md(sga,stw1.detach().numpy()))
   rec_grad("stream_fresh_w2", md(sgb,stw2.detach().numpy()))
 
+  # ---- PR #39: eager ring wrap (>RT_RING dispatches before readback) ----
+  rx=rng.standard_normal(2048).astype(np.float32)
+  re=bv.Engine(device=bv.Engine.VULKAN)
+  RX=re.tensor(rx)
+  rnode=RX
+  for _ in range(12): rnode=rnode*1.0001+0.0001   # 24 fused dispatches > ring size 8
+  rgot=rnode.numpy()
+  rwant=rx.copy()
+  for _ in range(12): rwant=rwant*np.float32(1.0001)+np.float32(0.0001)
+  rec_fwd("eager_ring_wrap", md(rgot,rwant))
+
   passed = sum(r["passed"] for r in results)
   report = {
     "generated_at":datetime.now(timezone.utc).isoformat(),
