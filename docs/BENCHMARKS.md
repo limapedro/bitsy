@@ -58,7 +58,30 @@ this GPU — see FINDINGS_PR15).
 
 ---
 
-## 2026-11-22 04:50 — PR #26 (doc-only): combined kernel+D2H submit A/B (negative)
+## 2026-11-22 05:05 — PR #27 (doc-only): D2H fence profiling + dedicated transfer queue A/B (negative)
+
+Profiled the remaining D2H copy with high-resolution timers (BT_PROF, 4 MB):
+```
+[copy] submit 14-44us   wait 550-1320us   size 4194304
+```
+The fence wait — not the DMA — dominates, and grows under repeated submissions
+(0.55 ms first → ~1.2 ms steady). Tried a **dedicated transfer-only queue**
+(family 1 exists on this GPU) via `BT_XFERQ=1` with its own queue + command pool:
+```
+baseline  fused_chain 0.87/0.87/0.90ms, loop 0.66x
+xfer queue fused_chain 0.98/0.90/1.15ms, loop 0.53-0.64x  (no win, often worse)
+```
+The compute queue's existing copy path is as good or better on this driver;
+the dedicated queue's fence wait was similar (0.67-1.58 ms). Reverted the entire
+experiment; gates green again (v2 48/48, gradcheck 25/25, model 10/10).
+No code change shipped — recorded so it is not retried.
+
+**D2H approaches now tested and rejected on this GPU/driver:**
+pinned host import (PR #22, 3× worse), combined kernel+copy submit (PR #26,
+incorrect), dedicated transfer queue (this PR, no win). The ~1 ms fence wait
+appears driver-bound; further gains need a different runtime path or hardware.
+
+## 2026-11-22 04:50 — PR #26: combined kernel+D2H submit A/B (negative)
 
 Searched for Vulkan D2H techniques (web search returned no usable results), then
 A/B-tested recording the staging copy **in the same command buffer** as the
