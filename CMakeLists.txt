@@ -22,7 +22,7 @@ endif()
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
 # v0.2 compact core: the only runtime after the legacy cutover (PR #11).
-add_library(bitsy_rt SHARED src/rt/rt.c src/rt/rt_vk.c)
+add_library(bitsy_rt SHARED src/rt/rt.c src/rt/rt_vk.c src/rt/rt_cudanative.c)
 target_include_directories(bitsy_rt PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}/include
   ${CMAKE_CURRENT_SOURCE_DIR}/include/bitsy_rt)

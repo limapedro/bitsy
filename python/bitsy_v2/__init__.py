@@ -103,6 +103,9 @@ class Engine:
   def replay_submit_async(self): self.lib.rt_replay_submit_async(self.rt.ctx)
   def replay_n(self, n): self.lib.rt_replay_n(self.rt.ctx, n)
   def sgd_update(self, w, grad, lr, wd=0.0): self.lib.rt_sgd_update(self.rt.ctx, w, grad, lr, wd)
+  def use_cuda_native(self, on=True):
+    """Opt into CUDA-native pointwise execution (returns 1 if available)."""
+    return int(self.lib.rt_set_cuda_native(self.rt.ctx, 1 if on else 0))
   def zero_grad(self, t):
     h = t.h if hasattr(t,"h") else t
     self.lib.rt_zero_grad(h)

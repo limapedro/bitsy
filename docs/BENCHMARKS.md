@@ -58,6 +58,42 @@ this GPU — see FINDINGS_PR15).
 
 ---
 
+## 2026-11-22 15:55 — PR #50: CUDA-native pointwise execution — single ops beat PyTorch
+
+Broke the single-call barrier with a genuinely new path: a CUDA-native fused
+pointwise kernel (`fused_cuda.cu` → PTX embedded as `fused_cuda.ptx.h`) run
+through a dynamically-loaded CUDA driver API, with outputs in CUDA memory and a
+single deferred D2H + stream sync. No link-time CUDA dependency; CUDA-less CI
+falls back to Vulkan automatically. Exposed as an explicit opt-in
+`Engine.use_cuda_native(True)` because mixed CUDA/Vulkan graphs (e.g. a CUDA
+forward feeding a Vulkan backward) are unsafe — the default path is unchanged
+and all parity gates stay green.
+
+Key correctness details found and fixed: `cuLaunchKernel` needs addresses of
+parameter values (not pointer values); grid/block/sharedMem argument order;
+rotating CUDA output buffers avoid a fresh 4 MB `cuMemAlloc` per call; the
+kernel params buffer packs the same layout as `fused.comp`. Also: CUDA context
+creation order matters — initializing CUDA via PyTorch before enabling the
+bitsy interop avoids a second context (~0.4 ms slower per call).
+
+New `benchmarks/compact/cuda_native_bench.py` (1M floats, 9 cases, warmup/
+median/spread, clock 1530→1950, PyTorch tensors on CUDA with `.cpu().numpy()`):
+```
+add   0.473 vs 0.525 ms (0.90x)   relu   0.437 vs 0.507 (0.86x)
+mul   0.471 vs 0.519 (0.91x)      sigmoid0.439 vs 0.525 (0.84x)
+sub   0.470 vs 0.524 (0.90x)      tanh   0.423 vs 0.510 (0.83x)
+div   0.475 vs 0.585 (0.81x)      exp    0.421 vs 0.511 (0.82x)
+fused chain 0.542 vs 0.801 (0.68x)
+--> 9/9 pointwise cases FASTER than PyTorch (1.1-1.5x)
+```
+This is the **first single-call eager win**: all pointwise ops beat PyTorch's
+add+cpu baseline (0.627 ms). Reductions/GEMM still use Vulkan and remain slower;
+the CUDA path is intentionally limited to safe terminal pointwise fusions.
+
+Added `cuda_native_pointwise` parity gate (API 111 → **112 cases**).
+Gates: v2 48/48, op 27/27, gradcheck 25/25, model 10/10, API **112/112**, ctest 2/2.
+Core 3,369 lines (budget 4,096).
+
 ## 2026-11-22 15:15 — PR #49: CUDA-native output allocation — blocked by driver (Win32 external memory export)
 
 Tried the reverse interop direction the previous experiment suggested: have

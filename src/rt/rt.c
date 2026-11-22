@@ -3,6 +3,7 @@
  * programs; executor runs them; backward walks the graph. No per-op dispatch.
  */
 #include "rt_internal.h"
+#include "rt_cudanative.h"
 
 #include <math.h>
 #include <stdarg.h>
@@ -557,6 +558,41 @@ static void reduce_cpu(RtBuf* in, int kind, int axis, RtBuf* out) {
 
 static void realize_node(RT* c, RTTensor* t);
 
+/* PR #50: CUDA-native fused pointwise execution. */
+static void* cn_buf(RtBuf* b) {
+  if (!b->cn_dptr) {
+    size_t bytes=sizeof(float)*(size_t)(b->n?b->n:1);
+    b->cn_dptr=rt_cn_alloc(bytes);
+    if (b->cn_dptr && b->host_valid && b->host) rt_cn_upload(b->cn_dptr,b->host,bytes);
+  }
+  return b->cn_dptr;
+}
+static void cn_fused(RT* c, RtFusion* f, RtBuf* out) {
+  int p[256]; memset(p,0,sizeof(p));
+  size_t obytes=sizeof(float)*(size_t)(out->n?out->n:1);
+  void* od=rt_cn_out(obytes);
+  p[0]=out->n; p[1]=f->ninst; p[2]=f->ninputs; p[3]=f->ndim;
+  for (int j=0;j<f->ndim;++j) p[4+j]=(int)f->dims[j];
+  for (int i=0;i<f->ninputs;++i)
+    for (int j=0;j<RT_MAXDIMS;++j) p[8+i*RT_MAXDIMS+j]=(int)f->in_stride[i][j];
+  uint64_t oa=(uint64_t)(size_t)od;
+  p[40]=(int)(uint32_t)oa; p[41]=(int)(uint32_t)(oa>>32);
+  for (int i=0;i<f->ninputs;++i) {
+    uint64_t ia=(uint64_t)(size_t)cn_buf(f->in_buf[i]);
+    p[42+i*2]=(int)(uint32_t)ia; p[43+i*2]=(int)(uint32_t)(ia>>32);
+  }
+  for (int k=0;k<f->ninst;++k) {
+    RtInst in=f->inst[k]; int b=58+k*4;
+    p[b]=in.op; p[b+1]=in.a; p[b+2]=in.b;
+    memcpy(&p[b+3],&in.c,sizeof(float));
+  }
+  int words=58+f->ninst*4;
+  size_t bytes=sizeof(float)*(size_t)(out->n?out->n:1);
+  out->cn_dptr=rt_cn_run(p,words,out->n,od);
+  out->dirty=1;
+  (void)c;
+}
+
 static void realize_fused(RT* c, RTTensor* t) {
   /* A single fusion can hold at most RT_MAXIN distinct leaf inputs. Deep
    * composition trees (e.g. isnan/isinf built from several scalar constants)
@@ -581,7 +617,22 @@ static void realize_fused(RT* c, RTTensor* t) {
     f.sp_ok = fusion_to_spec(&f);
     RtBuf* out = rt_buf_new(c, t->ndim, t->dims, c->device);
     if (!out) return;
-    if (c->device == RT_VULKAN && c->vk) rt_vk_fused(c, &f, out);  /* records if capturing */
+    /* PR #50: CUDA-native pointwise path is only safe when every input already
+     * lives in CUDA memory (or is a host leaf) and the program uses supported
+     * ops, and this tensor is terminal (no Vulkan consumer of its buffer). */
+    int cn_ok = c->cuda_native && !c->capture && t->nconsumer == 0;
+    if (cn_ok) {
+      for (int i=0;i<f.ninputs;++i) {
+        RtBuf* ib=f.in_buf[i];
+        if (!ib || !ib->host_valid) { cn_ok=0; break; }  /* only host leaves */
+      }
+      for (int k=0;k<f.ninst && cn_ok;++k) {
+        int op=f.inst[k].op;
+        if (op==14 || op==26) { cn_ok=0; break; }  /* GELUB / WHERE unsupported */
+      }
+    }
+    if (cn_ok && rt_cn_available()) cn_fused(c, &f, out);
+    else if (c->device == RT_VULKAN && c->vk) rt_vk_fused(c, &f, out);  /* records if capturing */
     else fused_cpu(&f, out);
     if (c->capture && c->capture_nout < RT_MAXBUF) c->capture_outputs[c->capture_nout++] = out;
     c->dispatch_count++;
@@ -676,6 +727,10 @@ void rt_realize(RT* c, RTTensor* t) { realize_node(c, t); }
 
 void rt_to_host(RTTensor* t, float* out) {
   if (!t->buf) rt_realize(t->ctx, t);
+  if (t->buf && t->buf->cn_dptr) {
+    size_t bytes=sizeof(float)*(size_t)(t->buf->n?t->buf->n:1);
+    if (rt_cn_read(t->buf->cn_dptr,out,bytes)==0) return;
+  }
   if (!t->buf) return;
   if (t->buf->dirty && t->ctx->vk) {
     rt_vk_download_to(t->ctx, t->buf, out);   /* direct staging->user, no cache copy */
@@ -885,12 +940,19 @@ RTTensor* rt_grad(const RTTensor* t) { return t->grad; }
 const float* rt_read_ptr(RT* c, RTTensor* t, int slot) {
   if (!t) return NULL;
   if (!t->buf) rt_realize(c, t);
+  if (t->buf && t->buf->cn_dptr)
+    return rt_cn_ptr(t->buf->cn_dptr,sizeof(float)*(size_t)(t->buf->n?t->buf->n:1));
   if (!t->buf) return NULL;
   if (c->vk) return rt_vk_read_ptr(c, t->buf, slot);
   return (const float*)t->buf->host;
 }
 
 void rt_zero_grad(RTTensor* t) { if (t) t->grad=NULL; }
+int rt_set_cuda_native(RT* c, int on) {
+  if (!c) return 0;
+  c->cuda_native = (on && rt_cn_available()) ? 1 : 0;
+  return c->cuda_native;
+}
 void rt_stream_begin(RT* c, int idx) { if (c && c->vk) rt_vk_stream_begin(c,idx); }
 void rt_stream_end(RT* c, int idx) { if (c && c->vk) rt_vk_stream_end(c,idx); }
 void rt_stream_submit(RT* c, int n) { if (c && c->vk) rt_vk_stream_submit(c,n); }

@@ -35,6 +35,7 @@ typedef struct RtBuf {
   float* host;                  /* CPU storage (owned) */
   void* vk;                     /* Vulkan buffer handle (opaque) */
   void* cap_slot;               /* capture slot holding this buf's replay output */
+  void* cn_dptr;                /* PR #50: CUDA-native device buffer */
   int dirty;                    /* output changed on device; download before host read */
   int host_valid;               /* host[] holds real data to upload (leaf), else output scratch */
   int ref;
@@ -83,6 +84,7 @@ struct RT {
   double last_gpu_ms;           /* Vulkan timestamp query result (PR #31) */
   double copy_gpu_ms;
   int capture;                  /* capture/replay state machine */
+  int cuda_native;              /* PR #50: opt-in CUDA pointwise execution */
   RtFusion capture_fusion[RT_MAXBUF];
   int capture_n;
   RTTensor* capture_src[RT_MAXBUF];

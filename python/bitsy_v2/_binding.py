@@ -41,6 +41,7 @@ def load(build_dir: Path) -> C.CDLL:
   lib.rt_tensor_map.argtypes=[C.c_void_p,C.c_void_p]; lib.rt_tensor_map.restype=C.POINTER(C.c_float)
   lib.rt_tensor_flush.argtypes=[C.c_void_p,C.c_void_p]
   lib.rt_zero_grad.argtypes=[C.c_void_p]
+  lib.rt_set_cuda_native.argtypes=[C.c_void_p,C.c_int]; lib.rt_set_cuda_native.restype=C.c_int
   lib.rt_stream_begin.argtypes=[C.c_void_p,C.c_int]
   lib.rt_stream_end.argtypes=[C.c_void_p,C.c_int]
   lib.rt_stream_submit.argtypes=[C.c_void_p,C.c_int]
