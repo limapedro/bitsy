@@ -500,6 +500,7 @@ void rt_realize(RT* c, RTTensor* t) { realize_node(c, t); }
 void rt_to_host(RTTensor* t, float* out) {
   if (!t->buf) rt_realize(t->ctx, t);
   if (!t->buf) return;
+  if (t->buf->dirty && t->ctx->vk) rt_vk_download_lazy(t->ctx, t->buf);
   memcpy(out, t->buf->host, sizeof(float) * (size_t)t->buf->n);
 }
 
@@ -680,4 +681,11 @@ void rt_replay(RT* c) {
     free(out.host);
     c->dispatch_count++;
   }
+}
+
+void rt_replay_submit_only(RT* c) {
+  if (!c->vk) return;
+  rt_vk_submit_only(c);
+  /* mark captured outputs dirty; downloaded lazily by rt_to_host */
+  for (int i=0;i<c->capture_nout;++i) c->capture_outputs[i]->dirty = 1;
 }

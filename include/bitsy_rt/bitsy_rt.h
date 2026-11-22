@@ -113,6 +113,7 @@ RT_API RTTensor* rt_grad(const RTTensor*);
 RT_API void rt_capture_begin(RT*);
 RT_API void rt_capture_end(RT*);
 RT_API void rt_replay(RT*);
+RT_API void rt_replay_submit_only(RT*);  /* submit + wait, skip output download (profiling) */
 
 /* Version */
 RT_API const char* rt_version(void);

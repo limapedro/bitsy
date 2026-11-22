@@ -34,6 +34,8 @@ typedef struct RtBuf {
   int64_t stride[RT_MAXDIMS];   /* byte-element strides; 0 means broadcast */
   float* host;                  /* CPU storage (owned) */
   void* vk;                     /* Vulkan buffer handle (opaque) */
+  void* cap_slot;               /* capture slot holding this buf's replay output */
+  int dirty;                    /* output changed on device; download before host read */
   int ref;
 } RtBuf;
 
@@ -98,8 +100,11 @@ void rt_vk_reduce(RT*, RtBuf* in, int kind, int axis, RtBuf* out);
 void rt_vk_capture_begin(RT*);
 void rt_vk_capture_end(RT*);
 void rt_vk_replay(RT*);
+void rt_vk_submit_only(RT*);
+void rt_vk_download_outputs(RT*);
 void rt_vk_upload(RT*, RtBuf* b, const float* data);   /* refresh a leaf's device data */
 void rt_vk_download(RT*, RtBuf* b);                    /* copy device result back to b->host */
+void rt_vk_download_lazy(RT*, RtBuf* b);               /* download once if dirty */
 
 /* rt.c internal helpers */
 void rt_errf(RT*, const char* fmt, ...);

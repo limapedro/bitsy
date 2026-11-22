@@ -1,0 +1,52 @@
+{
+  "generated_at": "2026-11-22T03:30:23.364156+00:00",
+  "environment": {
+    "torch": "2.11.0+cu126",
+    "gpu": "NVIDIA GeForce GTX 1660 SUPER",
+    "clock": [
+      1530.0,
+      1530.0
+    ]
+  },
+  "config": {
+    "build_dir": "E:\\__PROJECTS__\\Hagane\\build-rtvk",
+    "device": 1,
+    "n": 1048576,
+    "warmup": 5,
+    "iters": 30,
+    "result_path": "E:\\__PROJECTS__\\Hagane\\benchmarks\\results\\compact_profile.json"
+  },
+  "replay_submit_only": {
+    "median_ms": 0.4675999953178689,
+    "spread_ms": [
+      0.4330000083427876,
+      0.9552999981679022
+    ]
+  },
+  "replay_full_with_download": {
+    "median_ms": 11.267850000876933,
+    "spread_ms": [
+      10.64389999373816,
+      12.868700025137514
+    ]
+  },
+  "torch_gpu_only": {
+    "median_ms": 0.023249987862072885,
+    "spread_ms": [
+      0.020100007532164454,
+      0.02680000034160912
+    ]
+  },
+  "torch_with_download": {
+    "median_ms": 0.6518500013044104,
+    "spread_ms": [
+      0.5826999840792269,
+      1.183700020192191
+    ]
+  },
+  "download_cost_ms": 10.800250005559064,
+  "gaps": {
+    "torch_gpu_vs_submit": 20.111838255221326,
+    "torch_gpu_vs_full": 484.63896272642324
+  }
+}

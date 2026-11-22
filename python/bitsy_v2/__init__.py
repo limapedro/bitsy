@@ -72,5 +72,6 @@ class Engine:
   def capture_begin(self): self.lib.rt_capture_begin(self.rt.ctx)
   def capture_end(self): self.lib.rt_capture_end(self.rt.ctx)
   def replay(self): self.lib.rt_replay(self.rt.ctx)
+  def replay_submit_only(self): self.lib.rt_replay_submit_only(self.rt.ctx)
   def dispatch(self): return self.lib.rt_dispatch_count(self.rt.ctx)
   def reset_dispatch(self): self.lib.rt_reset_dispatch_count(self.rt.ctx)
