@@ -58,7 +58,23 @@ this GPU — see FINDINGS_PR15).
 
 ---
 
-## 2026-11-22 04:20 — PR #24 (in progress): fused softmax/log_softmax (4 → 1 dispatch)
+## 2026-11-22 04:35 — PR #25 (in progress): fused LayerNorm (4 → 1 dispatch)
+
+`LayerNorm` previously took **4 dispatches** (mean, var, inv-sqrt+scale, affine).
+Added `src/rt/shaders/layernorm.comp`: one 256-thread workgroup per row,
+cooperative shared-memory load, tree-reduce mean → variance → normalize with
+weight/bias. `RT_LAYERNORM` node + `rt_layernorm()` API; Python `nn.LayerNorm`
+uses it for last-dim ≤256 (composition fallback otherwise). Autograd implements
+the standard LayerNorm backward from existing primitives.
+
+```
+dispatch count: 4 -> 1 (verified)
+numeric diff vs composition: 1.2e-07
+end-to-end (4096x128): fused 0.95ms vs torch 0.37ms (~2.6x)
+```
+All gates green (48/48, 27/27, 25/25, 10/10, 79/79, ctest 2/2).
+
+## 2026-11-22 04:20 — PR #24: fused softmax/log_softmax (4 → 1 dispatch)
 
 `X.softmax(axis=-1)` previously took **4 dispatches** (max, exp, sum, div).
 Added `src/rt/shaders/softmax.comp`: one 256-thread workgroup per row, cooperative

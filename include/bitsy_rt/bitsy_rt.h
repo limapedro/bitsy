@@ -38,7 +38,8 @@ typedef enum {
   /* internal derivative primitives (fuse like pointwise) */
   RT_GT0, RT_GELUB,
   RT_GEMM_RELU,  /* PR #23: GEMM + bias + ReLU in one dispatch */
-  RT_SOFTMAX     /* PR #24: fused softmax/log_softmax along last axis */
+  RT_SOFTMAX,    /* PR #24: fused softmax/log_softmax along last axis */
+  RT_LAYERNORM   /* PR #25: fused LayerNorm along last axis */
 } RTOp;
 
 /* Reduce kind (rt_reduce). */
@@ -95,6 +96,7 @@ RT_API RTTensor* rt_matmul(RT*, RTTensor*, RTTensor*);
 /* Generic reduce: kind = RT_REDUCE_SUM/MEAN/MAX/MIN */
 RT_API RTTensor* rt_reduce(RT*, RTTensor*, int kind, int axis, int keepdim);
 RT_API RTTensor* rt_softmax(RT*, RTTensor*, int kind);  /* kind 0=softmax, 1=log_softmax */
+RT_API RTTensor* rt_layernorm(RT*, RTTensor* x, RTTensor* w, RTTensor* b, float eps);
 RT_API RTTensor* rt_reduce_sum(RT*, RTTensor*, int axis, int keepdim);
 RT_API RTTensor* rt_transpose(RT*, RTTensor*);
 RT_API RTTensor* rt_reshape(RT*, RTTensor*, int ndim, const int64_t* dims);

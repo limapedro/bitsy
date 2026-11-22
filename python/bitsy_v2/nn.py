@@ -67,6 +67,11 @@ class LayerNorm(Module):
     self.eps, self.dim = eps, dim
 
   def forward(self, x):
+    if len(x.shape) >= 1 and x.shape[-1] <= 256:
+      # PR #25: one fused dispatch (was 4)
+      h = x.rt.layernorm(x.h, self.W.h, self.b.h, self.eps)
+      return type(x)(x.rt, h, x.shape,
+                     x.requires_grad or self.W.requires_grad or self.b.requires_grad)
     mean = x.mean(axis=-1, keepdim=True)
     d = x - mean
     var = (d * d).mean(axis=-1, keepdim=True)
