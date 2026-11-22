@@ -1,0 +1,20 @@
+#version 450
+#extension GL_EXT_buffer_reference2 : require
+#extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
+/* 2D transpose: out[j,i] = in[i,j]. One invocation per output element.
+ * Device-side so it participates in capture/replay (host transpose reads stale
+ * b->host when its input lives in a capture slot). */
+layout(local_size_x = 256) in;
+layout(buffer_reference, std430, buffer_reference_align = 4) readonly buffer F32 { float v[]; };
+layout(buffer_reference, std430, buffer_reference_align = 4) writeonly buffer F32W { float v[]; };
+/* params: [0]=rows(M) [1]=cols(N) [2]=Inaddr [4]=Outaddr */
+layout(std430, binding = 0) readonly buffer Params { int param[]; };
+uint64_t paddr(int b){ return uint64_t(uint(param[b])) | (uint64_t(uint(param[b+1]))<<32); }
+void main(){
+  uint i=gl_GlobalInvocationID.x;
+  int M=param[0], N=param[1];
+  if(i>=uint(M*N)) return;
+  int r=int(i)/N, c=int(i)%N;
+  F32 In=F32(paddr(2)); F32W Out=F32W(paddr(4));
+  Out.v[c*M+r]=In.v[i];
+}

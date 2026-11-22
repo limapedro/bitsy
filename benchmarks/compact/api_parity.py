@@ -268,6 +268,26 @@ def run(cfg=CFG):
       yy=build(ce,cx,cw1,cw2); ce.replay_n(3); want=ref(cx,cw1,cw2)
     rec_fwd(nm, md(yy.numpy(),want))
 
+  # ---- PR #35: backward capture correctness (device transpose fix) ----
+  bx=rng.standard_normal((8,16)).astype(np.float32)
+  bw1=rng.standard_normal((12,16)).astype(np.float32)
+  bw2=rng.standard_normal((4,12)).astype(np.float32)
+  bt=rng.standard_normal((8,4)).astype(np.float32)
+  be=bv.Engine(device=bv.Engine.VULKAN)
+  BX=be.tensor(bx); BW1=be.tensor(bw1,requires_grad=True)
+  BW2=be.tensor(bw2,requires_grad=True); BT=be.tensor(bt)
+  by=bv.functional.mse_loss(BX.matmul(BW1.T()).relu().matmul(BW2.T()),BT)
+  by.backward(params=[BW1,BW2]); br1,br2=BW1.grad.copy(),BW2.grad.copy()
+  be2=bv.Engine(device=bv.Engine.VULKAN)
+  BX2=be2.tensor(bx); BA=be2.tensor(bw1,requires_grad=True)
+  BB=be2.tensor(bw2,requires_grad=True); BT2=be2.tensor(bt)
+  be2.capture_begin()
+  by2=bv.functional.mse_loss(BX2.matmul(BA.T()).relu().matmul(BB.T()),BT2)
+  by2.backward(params=[BA,BB]); be2.capture_end()
+  be2.replay_n(3)
+  rec_fwd("capture_mlp_backward_w1", md(be2.rt.grad_refresh(BA.h,(12,16)),br1))
+  rec_fwd("capture_mlp_backward_w2", md(be2.rt.grad_refresh(BB.h,(4,12)),br2))
+
   passed = sum(r["passed"] for r in results)
   report = {
     "generated_at":datetime.now(timezone.utc).isoformat(),

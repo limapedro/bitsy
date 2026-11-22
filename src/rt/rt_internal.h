@@ -105,6 +105,7 @@ void rt_vk_gemm(RT*, RtBuf* a, RtBuf* b, RtBuf* bias,
 void rt_vk_reduce(RT*, RtBuf* in, int kind, int axis, RtBuf* out);
 void rt_vk_softmax(RT*, RtBuf* in, RtBuf* bias, RtBuf* out, int kind);
 void rt_vk_layernorm(RT*, RtBuf* x, RtBuf* w, RtBuf* b, RtBuf* res, RtBuf* out, float eps);
+void rt_vk_transpose(RT*, RtBuf* in, RtBuf* out);
 void rt_vk_capture_begin(RT*);
 void rt_vk_capture_end(RT*);
 void rt_vk_replay(RT*);

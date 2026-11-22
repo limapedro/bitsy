@@ -598,13 +598,14 @@ static void realize_node(RT* c, RTTensor* t) {
     c->dispatch_count++; t->buf = out; return;
   }
   if (t->op == RT_TRANSPOSE) {
-    /* materialize transpose as a fused permuted copy */
+    /* PR #35: device-side transpose so it participates in capture/replay. A
+     * host-side memcpy reads stale b->host when the input lives in a slot. */
     RtBuf* in = t->src[0]->buf;
-    if (in && in->dirty && c->vk) rt_vk_download(c, in);   /* host copy needs fresh data */
     RtBuf* out = rt_buf_new(c, 2, t->dims, c->device);
-    int M=(int)in->dims[0], N=(int)in->dims[1];
-    for (int i=0;i<M;++i) for (int j=0;j<N;++j) out->host[j*M+i]=in->host[i*N+j];
-    out->host_valid = 1;   /* host-side copy -> must upload to device on first vkbuf */
+    if (c->device==RT_VULKAN && c->vk) rt_vk_transpose(c,in,out);
+    else { int M=(int)in->dims[0], N=(int)in->dims[1];
+      for (int i=0;i<M;++i) for (int j=0;j<N;++j) out->host[j*M+i]=in->host[i*N+j]; }
+    if (c->capture && c->capture_nout<RT_MAXBUF) c->capture_outputs[c->capture_nout++]=out;
     c->dispatch_count++; t->buf = out; return;
   }
   if (t->op == RT_LAYERNORM) {
@@ -841,6 +842,12 @@ void rt_backward(RT* c, RTTensor* loss) {
       RTTensor* g = grad_wrt(c, n, s, n->grad);
       accum(c, p, g);
     }
+  }
+  /* PR #35: realise every requires_grad leaf's final grad inside the capture
+   * window so its dispatch writes to a capture slot, not a stale eager buffer. */
+  for (int i=0;i<c->nnodes;++i) {
+    RTTensor* n=c->nodes[i];
+    if (n->requires_grad && n->grad) rt_realize(c,n->grad);
   }
   free(topo);
 }
