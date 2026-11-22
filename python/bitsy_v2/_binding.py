@@ -38,6 +38,12 @@ def load(build_dir: Path) -> C.CDLL:
   lib.rt_replay_submit_async.argtypes=[C.c_void_p]
   lib.rt_replay_n.argtypes=[C.c_void_p,C.c_int]
   lib.rt_sgd_update.argtypes=[C.c_void_p,C.c_void_p,C.c_void_p,C.c_float,C.c_float]
+  lib.rt_tensor_map.argtypes=[C.c_void_p,C.c_void_p]; lib.rt_tensor_map.restype=C.POINTER(C.c_float)
+  lib.rt_tensor_flush.argtypes=[C.c_void_p,C.c_void_p]
+  lib.rt_zero_grad.argtypes=[C.c_void_p]
+  lib.rt_stream_begin.argtypes=[C.c_void_p,C.c_int]
+  lib.rt_stream_end.argtypes=[C.c_void_p,C.c_int]
+  lib.rt_stream_submit.argtypes=[C.c_void_p,C.c_int]
   lib.rt_softmax.argtypes=[C.c_void_p,C.c_void_p,C.c_void_p,C.c_int]; lib.rt_softmax.restype=C.c_void_p
   lib.rt_layernorm.argtypes=[C.c_void_p,C.c_void_p,C.c_void_p,C.c_void_p,C.c_void_p,C.c_float]
   lib.rt_layernorm.restype=C.c_void_p

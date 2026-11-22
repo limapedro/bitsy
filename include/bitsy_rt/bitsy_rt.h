@@ -125,6 +125,14 @@ RT_API void rt_replay_submit_async(RT*); /* submit without wait; read waits auto
 RT_API void rt_replay_n(RT*, int n);
 /* PR #36: device-side in-place SGD (capturable): w -= lr*(g + wd*w). */
 RT_API void rt_sgd_update(RT*, RTTensor* w, RTTensor* grad, float lr, float wd);
+/* PR #38: map an input leaf's device buffer to CPU memory for fresh per-step data. */
+RT_API float* rt_tensor_map(RT*, RTTensor*);
+RT_API void rt_tensor_flush(RT*, RTTensor*);
+/* PR #38: capture/submit several graphs (distinct inputs) in one submit. */
+RT_API void rt_zero_grad(RTTensor*);  /* clear accumulated leaf grad (zero_grad) */
+RT_API void rt_stream_begin(RT*, int idx);
+RT_API void rt_stream_end(RT*, int idx);
+RT_API void rt_stream_submit(RT*, int n);
 
 /* Zero-copy readback: returns a pointer to a persistent HOST_CACHED buffer
  * holding t's data (downloads if dirty). Valid for N_READBACK_SLOT consecutive

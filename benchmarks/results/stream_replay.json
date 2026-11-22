@@ -1,0 +1,50 @@
+{
+  "generated_at": "2026-11-22T10:17:30.309521+00:00",
+  "environment": {
+    "torch": "2.11.0+cu126",
+    "gpu": "GTX 1660 SUPER",
+    "clock": [
+      1530.0,
+      1950.0
+    ]
+  },
+  "config": {
+    "build_dir": "E:\\__PROJECTS__\\Hagane\\build-rtvk",
+    "batch": 64,
+    "in_f": 256,
+    "hidden": 128,
+    "out_f": 1,
+    "lr": 0.0001,
+    "graphs": 6,
+    "steps": 600,
+    "warmup": 2,
+    "iters": 6,
+    "tol": 0.001,
+    "result_path": "E:\\__PROJECTS__\\Hagane\\benchmarks\\results\\stream_replay.json"
+  },
+  "correctness": {
+    "w1": 2.384185791015625e-07,
+    "w2": 2.384185791015625e-07,
+    "passed": true
+  },
+  "bitsy_stream": {
+    "median_ms": 155.7046500092838,
+    "spread_ms": [
+      151.31410001777112,
+      171.00690002553165
+    ]
+  },
+  "torch_stream": {
+    "median_ms": 186.59425000078045,
+    "spread_ms": [
+      181.2287000066135,
+      204.99239998753183
+    ]
+  },
+  "per_step": {
+    "bitsy": 0.259507750015473,
+    "torch": 0.3109904166679674
+  },
+  "gap": 0.8344557777564559,
+  "note": "K captured fwd+bwd+SGD graphs, distinct CPU-mapped fresh inputs, K graphs in one submit per batch."
+}

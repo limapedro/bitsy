@@ -107,6 +107,12 @@ void rt_vk_softmax(RT*, RtBuf* in, RtBuf* bias, RtBuf* out, int kind);
 void rt_vk_layernorm(RT*, RtBuf* x, RtBuf* w, RtBuf* b, RtBuf* res, RtBuf* out, float eps);
 void rt_vk_transpose(RT*, RtBuf* in, RtBuf* out);
 void rt_vk_sgd_update(RT*, RtBuf* w, RtBuf* g, float lr, float wd);
+/* PR #38: CPU-mapped HOST_CACHED input buffer (fresh data, no H2D submit). */
+float* rt_vk_map_input(RT*, RtBuf*);
+void rt_vk_flush_input(RT*, RtBuf*);
+void rt_vk_stream_begin(RT*, int idx);
+void rt_vk_stream_end(RT*, int idx);
+void rt_vk_stream_submit(RT*, int n);
 void rt_vk_capture_begin(RT*);
 void rt_vk_capture_end(RT*);
 void rt_vk_replay(RT*);

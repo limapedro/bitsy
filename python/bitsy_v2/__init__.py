@@ -102,6 +102,18 @@ class Engine:
   def replay_submit_async(self): self.lib.rt_replay_submit_async(self.rt.ctx)
   def replay_n(self, n): self.lib.rt_replay_n(self.rt.ctx, n)
   def sgd_update(self, w, grad, lr, wd=0.0): self.lib.rt_sgd_update(self.rt.ctx, w, grad, lr, wd)
+  def zero_grad(self, t):
+    h = t.h if hasattr(t,"h") else t
+    self.lib.rt_zero_grad(h)
+  def stream_begin(self, idx): self.lib.rt_stream_begin(self.rt.ctx, idx)
+  def stream_end(self, idx): self.lib.rt_stream_end(self.rt.ctx, idx)
+  def stream_submit(self, n): self.lib.rt_stream_submit(self.rt.ctx, n)
+  def map_input(self, t):
+    h = t.h if hasattr(t,"h") else t
+    return self.lib.rt_tensor_map(self.rt.ctx, h)
+  def flush_input(self, t):
+    h = t.h if hasattr(t,"h") else t
+    self.lib.rt_tensor_flush(self.rt.ctx, h)
   def grad_tensor(self, leaf):
     h = leaf.h if hasattr(leaf, "h") else leaf
     return self.lib.rt_grad(h)

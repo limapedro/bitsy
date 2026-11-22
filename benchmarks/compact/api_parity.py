@@ -328,6 +328,35 @@ def run(cfg=CFG):
   rec_grad("capture_full_update_w1", md(ga,tw1.detach().numpy()))
   rec_grad("capture_full_update_w2", md(gb,tw2.detach().numpy()))
 
+  # ---- PR #38: multi-graph streaming with FRESH per-step mapped inputs ----
+  K=2; slr=1e-4
+  sw1=rng.standard_normal((16,32)).astype(np.float32)
+  sw2=rng.standard_normal((1,16)).astype(np.float32)
+  st=rng.standard_normal((8,1)).astype(np.float32)
+  sdata=[rng.standard_normal((8,32)).astype(np.float32) for _ in range(K)]
+  se=bv.Engine(device=bv.Engine.VULKAN)
+  sA=se.tensor(sw1,requires_grad=True); sB=se.tensor(sw2,requires_grad=True)
+  sT=se.tensor(st); sxs=[]; sptrs=[]
+  for i in range(K):
+    sx=se.tensor(sdata[i]); sxs.append(sx); sptrs.append(se.map_input(sx))
+    se.stream_begin(i)
+    sy=bv.functional.mse_loss(sx.matmul(sA.T()).relu().matmul(sB.T()),sT)
+    sy.backward(params=[sA,sB])
+    se.sgd_update(sA.h,se.grad_tensor(sA),slr,0.0)
+    se.sgd_update(sB.h,se.grad_tensor(sB),slr,0.0)
+    se.stream_end(i); se.zero_grad(sA); se.zero_grad(sB)
+  se.stream_submit(K)
+  sga=se.get(sA.h,(16,32)); sgb=se.get(sB.h,(1,16))
+  tsx=[torch.from_numpy(d) for d in sdata]
+  stw1=torch.from_numpy(sw1).requires_grad_(True); stw2=torch.from_numpy(sw2).requires_grad_(True)
+  stt=torch.from_numpy(st); sopt=torch.optim.SGD([stw1,stw2],lr=slr)
+  for i in range(K):
+    sopt.zero_grad()
+    sl=torch.nn.functional.mse_loss(torch.relu(tsx[i]@stw1.T)@stw2.T,stt)
+    sl.backward(); sopt.step()
+  rec_grad("stream_fresh_w1", md(sga,stw1.detach().numpy()))
+  rec_grad("stream_fresh_w2", md(sgb,stw2.detach().numpy()))
+
   passed = sum(r["passed"] for r in results)
   report = {
     "generated_at":datetime.now(timezone.utc).isoformat(),
