@@ -248,6 +248,26 @@ def run(cfg=CFG):
     for nm,bg,tg in pairs:
       rec_fwd(f"ln_bwd_{shp}_{nm}", md(bg.reshape(tg.shape),tg))
 
+  # ---- capture/replay correctness for multi-dispatch graphs (PR #33) ----
+  for nm, build, ref in (
+    ("capture_gemm",
+      lambda e,x,w: (lambda X,W: (e.capture_begin(), X.matmul(W).realize(), e.capture_end(), X.matmul(W))[3])(e.tensor(x),e.tensor(w)),
+      lambda x,w: x@w),
+    ("capture_mlp",
+      lambda e,x,w1,w2: (lambda X,W1,W2: (e.capture_begin(), X.matmul(W1.T()).relu().matmul(W2.T()).realize(), e.capture_end(), X.matmul(W1.T()).relu().matmul(W2.T()))[3])(e.tensor(x),e.tensor(w1),e.tensor(w2)),
+      lambda x,w1,w2: np.maximum(x@w1.T,0)@w2.T),
+  ):
+    ce=bv.Engine(device=bv.Engine.VULKAN)
+    cx=rng.standard_normal((8,16)).astype(np.float32)
+    if nm=="capture_gemm":
+      cw=rng.standard_normal((16,8)).astype(np.float32)
+      yy=build(ce,cx,cw); ce.replay_n(3); want=ref(cx,cw)
+    else:
+      cw1=rng.standard_normal((12,16)).astype(np.float32)
+      cw2=rng.standard_normal((4,12)).astype(np.float32)
+      yy=build(ce,cx,cw1,cw2); ce.replay_n(3); want=ref(cx,cw1,cw2)
+    rec_fwd(nm, md(yy.numpy(),want))
+
   passed = sum(r["passed"] for r in results)
   report = {
     "generated_at":datetime.now(timezone.utc).isoformat(),

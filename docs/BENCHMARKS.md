@@ -58,7 +58,27 @@ this GPU — see FINDINGS_PR15).
 
 ---
 
-## 2026-11-22 06:45 — PR #32 (in progress): batched graph replay — 4.2× faster than PyTorch at N=500
+## 2026-11-22 07:05 — PR #33 (in progress): multi-dispatch capture fixed — batched MLP works
+
+Fixed the capture gap documented in PR #32:
+- GEMM capture wrote to the **eager** out buffer address even in capture mode → captured output stayed zeros. Now uses `slot->out` device address.
+- Multi-dispatch chains read inputs from the eager buffer address; added `buf_addr()` which resolves any input produced by an earlier captured dispatch to that slot's out buffer.
+- Added `capture_gemm` and `capture_mlp` parity cases (API harness 88 → **90 cases**).
+
+Captured MLP (2 GEMMs + ReLU, batch 64 / 256→128→10) correctness diff 1.5e-04.
+New `benchmarks/compact/mlp_replay_bench.py` (warmup/median/spread, clock 1530→1950):
+```
+N= 10   batch 0.1058 | N-submits 0.0951 | torch 0.0491 ms/step | gap 2.16x
+N=100   batch 0.0778 | N-submits 0.0702 | torch 0.0519 ms/step | gap 1.50x
+N=500   batch 0.0308 | N-submits 0.0706 | torch 0.0537 ms/step | gap 0.57x (1.75x FASTER)
+```
+Batched replay now extends beyond pointwise chains to MLP steps; the win needs
+N≥~300 to overcome the small-graph overhead. Still slower than PyTorch at N≤100.
+
+Gates: v2 48/48, op 27/27, gradcheck 25/25, model 10/10, API 90/90, ctest 2/2.
+Core 2,765 lines.
+
+## 2026-11-22 06:45 — PR #32: batched graph replay — 4.2× faster than PyTorch at N=500
 
 PR #31 measured 73% host overhead in a single call. Added `rt_replay_n(RT*,n)`
 / `Engine.replay_n(n)`: N graph executions in **ONE** `vkQueueSubmit2` (one
