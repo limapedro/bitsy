@@ -1,0 +1,104 @@
+{
+  "generated_at": "2026-11-22T12:50:36.303368+00:00",
+  "environment": {
+    "torch": "2.11.0+cu126",
+    "gpu": "GTX 1660 SUPER",
+    "clock": [
+      1530.0,
+      1950.0
+    ]
+  },
+  "config": {
+    "build_dir": "E:\\__PROJECTS__\\Hagane\\build-rtvk",
+    "n": 1048576,
+    "warmup": 8,
+    "iters": 30,
+    "tol": 0.001,
+    "result_path": "E:\\__PROJECTS__\\Hagane\\benchmarks\\results\\cuda_native.json"
+  },
+  "results": [
+    {
+      "name": "add",
+      "diff": 0.0,
+      "passed": true,
+      "bitsy_ms": 0.47280000580940396,
+      "torch_ms": 0.5249000096227974,
+      "gap": 0.9007429932210643,
+      "faster": true
+    },
+    {
+      "name": "mul",
+      "diff": 0.0,
+      "passed": true,
+      "bitsy_ms": 0.4705500032287091,
+      "torch_ms": 0.5186500056879595,
+      "gap": 0.9072592269705106,
+      "faster": true
+    },
+    {
+      "name": "sub",
+      "diff": 0.0,
+      "passed": true,
+      "bitsy_ms": 0.4700999998021871,
+      "torch_ms": 0.52375000086613,
+      "gap": 0.897565630596236,
+      "faster": true
+    },
+    {
+      "name": "div",
+      "diff": 0.0,
+      "passed": true,
+      "bitsy_ms": 0.47485000686720014,
+      "torch_ms": 0.5850999878020957,
+      "gap": 0.8115707003361167,
+      "faster": true
+    },
+    {
+      "name": "relu",
+      "diff": 0.0,
+      "passed": true,
+      "bitsy_ms": 0.4371999966679141,
+      "torch_ms": 0.5066499870736152,
+      "gap": 0.8629231379105706,
+      "faster": true
+    },
+    {
+      "name": "sigmoid",
+      "diff": 1.1920928955078125e-07,
+      "passed": true,
+      "bitsy_ms": 0.4385000065667555,
+      "torch_ms": 0.5247999943094328,
+      "gap": 0.8355564240120912,
+      "faster": true
+    },
+    {
+      "name": "tanh",
+      "diff": 0.0,
+      "passed": true,
+      "bitsy_ms": 0.42329999268986285,
+      "torch_ms": 0.5095999949844554,
+      "gap": 0.830651485196296,
+      "faster": true
+    },
+    {
+      "name": "exp",
+      "diff": 2.288818359375e-05,
+      "passed": true,
+      "bitsy_ms": 0.42130000656470656,
+      "torch_ms": 0.5107500037411228,
+      "gap": 0.824865400839518,
+      "faster": true
+    },
+    {
+      "name": "fused",
+      "diff": 0.0,
+      "passed": true,
+      "bitsy_ms": 0.542300011147745,
+      "torch_ms": 0.8009000011952594,
+      "gap": 0.6771132605049557,
+      "faster": true
+    }
+  ],
+  "faster": 9,
+  "total": 9
+}

@@ -129,7 +129,9 @@ RT_API void rt_sgd_update(RT*, RTTensor* w, RTTensor* grad, float lr, float wd);
 RT_API float* rt_tensor_map(RT*, RTTensor*);
 RT_API void rt_tensor_flush(RT*, RTTensor*);
 /* PR #38: capture/submit several graphs (distinct inputs) in one submit. */
-RT_API void rt_zero_grad(RTTensor*);  /* clear accumulated leaf grad (zero_grad) */
+RT_API void rt_zero_grad(RTTensor*);
+/* PR #50: opt-in CUDA-native pointwise execution (no-op if CUDA unavailable). */
+RT_API int rt_set_cuda_native(RT*, int on);  /* clear accumulated leaf grad (zero_grad) */
 RT_API void rt_stream_begin(RT*, int idx);
 RT_API void rt_stream_end(RT*, int idx);
 RT_API void rt_stream_submit(RT*, int n);

@@ -464,6 +464,17 @@ def run(cfg=CFG):
   igot=ires[0][0].numpy()
   rec_fwd("auto_infer_eager", md(igot,np.maximum(ia@iw.T,0)))
 
+  # ---- PR #50: opt-in CUDA-native pointwise path (skip if CUDA unavailable) ----
+  ne=bv.Engine(device=bv.Engine.VULKAN)
+  if ne.use_cuda_native(True):
+    na=rng.standard_normal(1024).astype(np.float32)
+    nb=rng.standard_normal(1024).astype(np.float32)
+    NX,NY=ne.tensor(na),ne.tensor(nb)
+    nout=((NX+NY)*NX).relu().numpy()
+    nwant=np.maximum((na+nb)*na,0)
+    rec_fwd("cuda_native_pointwise", md(nout,nwant))
+    ne.use_cuda_native(False)
+
   passed = sum(r["passed"] for r in results)
   report = {
     "generated_at":datetime.now(timezone.utc).isoformat(),
