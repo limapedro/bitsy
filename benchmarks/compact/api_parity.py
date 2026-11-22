@@ -410,6 +410,23 @@ def run(cfg=CFG):
   tfl=(torch.from_numpy(fx)@tfw.T).sum(); tfl.backward()
   rec_grad("folded_gemm_grad", md(FW.grad,tfw.grad.numpy()))
 
+  # ---- PR #42: folded GEMM+bias epilogue (nn.Linear in one dispatch) ----
+  gx=rng.standard_normal((8,16)).astype(np.float32)
+  gw=rng.standard_normal((4,16)).astype(np.float32)
+  gb=rng.standard_normal((1,4)).astype(np.float32)
+  ge=bv.Engine(device=bv.Engine.VULKAN)
+  GX=ge.tensor(gx); GW=ge.tensor(gw,requires_grad=True); GB=ge.tensor(gb,requires_grad=True)
+  ge.rt.lib.rt_reset_dispatch_count(ge.rt.ctx)
+  gy=GX.matmul(GW.T())+GB; gy.numpy()
+  nd2=int(ge.rt.lib.rt_dispatch_count(ge.rt.ctx))
+  rec(results, "folded_gemm_bias_dispatch", abs(float(nd2)-1.0), 0.0)
+  gfl=gy.sum(axis=0).sum(axis=0); gfl.backward(params=[GW,GB])
+  tgw=torch.from_numpy(gw).requires_grad_(True); tgb=torch.from_numpy(gb).requires_grad_(True)
+  tgy=(torch.from_numpy(gx)@tgw.T+tgb).sum(); tgy.backward()
+  rec_fwd("folded_gemm_bias_fwd", md(gy.numpy(),(torch.from_numpy(gx)@torch.from_numpy(gw).T+torch.from_numpy(gb)).numpy()))
+  rec_grad("folded_gemm_bias_wgrad", md(GW.grad,tgw.grad.numpy()))
+  rec_grad("folded_gemm_bias_bgrad", md(GB.grad,tgb.grad.numpy()))
+
   passed = sum(r["passed"] for r in results)
   report = {
     "generated_at":datetime.now(timezone.utc).isoformat(),
