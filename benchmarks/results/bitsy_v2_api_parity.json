@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-22T08:50:12.812440+00:00",
+  "generated_at": "2026-11-22T09:01:37.166578+00:00",
   "environment": {
     "torch": "2.11.0+cu126",
     "gpu": "NVIDIA GeForce GTX 1660 SUPER"
@@ -14,8 +14,8 @@
     "result_path": "E:\\__PROJECTS__\\Hagane\\benchmarks\\results\\bitsy_v2_api_parity.json"
   },
   "summary": {
-    "total": 88,
-    "passed": 88,
+    "total": 90,
+    "passed": 90,
     "failed": 0
   },
   "cases": [
@@ -544,6 +544,18 @@
     {
       "name": "ln_bwd_(4,)_b",
       "max_abs_diff": 5.960464477539063e-08,
+      "tol": 0.0001,
+      "passed": true
+    },
+    {
+      "name": "capture_gemm",
+      "max_abs_diff": 2.86102294921875e-06,
+      "tol": 0.0001,
+      "passed": true
+    },
+    {
+      "name": "capture_mlp",
+      "max_abs_diff": 1.430511474609375e-06,
       "tol": 0.0001,
       "passed": true
     }

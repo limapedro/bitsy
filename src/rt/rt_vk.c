@@ -549,6 +549,19 @@ static RtCaptureSlot* cap_slot_new(RtVk* vk, RtBuf* out) {
   return s;
 }
 
+/* Address a buffer reads from: during capture/replay an input produced by an
+ * earlier captured dispatch lives in that slot's out buffer, not in its eager
+ * device buffer (which was never written in replay). */
+static uint64_t buf_addr(RT* c, RtBuf* b) {
+  RtVk* vk=c->vk;
+  if (b && b->cap_slot) {
+    RtCaptureSlot* sl=(RtCaptureSlot*)b->cap_slot;
+    VkBufferDeviceAddressInfo ai={.sType=VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,.buffer=sl->out};
+    return vkGetBufferDeviceAddress(vk->dev,&ai);
+  }
+  return vkbuf(c,b)->addr;
+}
+
 /* Record one dispatch into a capture slot; returns the slot (params already
  * written by caller via slot->params_map). */
 static void cap_record(RtVk* vk, RtCaptureSlot* s, VkPipeline pipe,
@@ -588,7 +601,7 @@ void rt_vk_fused(RT* c, RtFusion* f, RtBuf* out) {
     outaddr = vkGetBufferDeviceAddress(vk->dev,&oai);
   } else outaddr = vkbuf(c, out)->addr;
   pack_addr(p, 40, outaddr);
-  for (int i=0;i<f->ninputs;++i) pack_addr(p, 42+i*2, vkbuf(c, f->in_buf[i])->addr);
+  for (int i=0;i<f->ninputs;++i) pack_addr(p, 42+i*2, buf_addr(c, f->in_buf[i]));
 
   VkPipeline pipe = vk->fused[0];
   uint32_t groups = (out->n+255)/256;
@@ -659,9 +672,14 @@ void rt_vk_gemm(RT* c, RtBuf* a, RtBuf* b, RtBuf* bias,
   int* p=(int*)(slot ? slot->params_map : vk->params_map);
   p[0]=M;p[1]=N;p[2]=K; p[3]=trans_a | (trans_b<<1) | (bias?4:0) | (relu?8:0);
   p[4]=ar; p[5]=ac; p[6]=br; p[7]=bc;
-  pack_addr(p,8,vkbuf(c,a)->addr); pack_addr(p,10,vkbuf(c,b)->addr);
-  pack_addr(p,12,vkbuf(c,out)->addr);
-  uint64_t baddr = bias ? vkbuf(c,bias)->addr : 0;
+  pack_addr(p,8,buf_addr(c,a)); pack_addr(p,10,buf_addr(c,b));
+  uint64_t outaddr;
+  if (slot) {
+    VkBufferDeviceAddressInfo ao={.sType=VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,.buffer=slot->out};
+    outaddr=vkGetBufferDeviceAddress(vk->dev,&ao);
+  } else outaddr=vkbuf(c,out)->addr;
+  pack_addr(p,12,outaddr);
+  uint64_t baddr = bias ? buf_addr(c,bias) : 0;
   pack_addr(p,14,baddr);
   int variant = gemm_variant(M, N);
   int use_v4 = vk->gemm_v4 != VK_NULL_HANDLE;   /* PR #30: register-blocked default */
@@ -690,13 +708,13 @@ void rt_vk_layernorm(RT* c, RtBuf* x, RtBuf* w, RtBuf* b, RtBuf* res, RtBuf* out
   RtCaptureSlot* slot = vk->capturing ? cap_slot_new(vk, out) : NULL;
   int* p=(int*)(slot ? slot->params_map : vk->params_map);
   p[0]=rows; p[1]=cols; memcpy(&p[2],&eps,sizeof(float));
-  pack_addr(p,4,vkbuf(c,x)->addr); pack_addr(p,6,vkbuf(c,w)->addr); pack_addr(p,8,vkbuf(c,b)->addr);
+  pack_addr(p,4,buf_addr(c,x)); pack_addr(p,6,buf_addr(c,w)); pack_addr(p,8,buf_addr(c,b));
   uint64_t outaddr;
   if(slot){ VkBufferDeviceAddressInfo ao={.sType=VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,.buffer=slot->out};
     outaddr=vkGetBufferDeviceAddress(vk->dev,&ao); }
   else outaddr=vkbuf(c,out)->addr;
   pack_addr(p,10,outaddr);
-  if(res) pack_addr(p,12,vkbuf(c,res)->addr);
+  if(res) pack_addr(p,12,buf_addr(c,res));
   int pc[4]={rows,cols,0,0};
   VkCommandBuffer cmd = slot?vk->replay_cmd:vk->cmd;
   VkDescriptorSet set = slot?slot->set:vk->set;
@@ -718,13 +736,13 @@ void rt_vk_softmax(RT* c, RtBuf* in, RtBuf* bias, RtBuf* out, int kind) {
   RtCaptureSlot* slot = vk->capturing ? cap_slot_new(vk, out) : NULL;
   int* p=(int*)(slot ? slot->params_map : vk->params_map);
   p[0]=rows; p[1]=cols;
-  pack_addr(p,2,vkbuf(c,in)->addr);
+  pack_addr(p,2,buf_addr(c,in));
   uint64_t outaddr;
   if(slot){ VkBufferDeviceAddressInfo ao={.sType=VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,.buffer=slot->out};
     outaddr=vkGetBufferDeviceAddress(vk->dev,&ao); }
   else outaddr=vkbuf(c,out)->addr;
   pack_addr(p,4,outaddr);
-  if(bias) pack_addr(p,6,vkbuf(c,bias)->addr);
+  if(bias) pack_addr(p,6,buf_addr(c,bias));
   int pc[4]={rows,cols,kind,0};
   VkPipeline pipe=vk->softmax[(kind?1:0)+(bias?2:0)];
   if(slot){ if(slot->pipeline==VK_NULL_HANDLE){slot->pipeline=pipe;memcpy(slot->pc,pc,sizeof(int)*4);slot->groups=1;}
@@ -772,7 +790,7 @@ void rt_vk_reduce(RT* c, RtBuf* in, int kind, int axis, RtBuf* out) {
   p[0]=outer;p[1]=stride;p[2]=inner;p[3]=kind;
   p[10]=outer*inner;   /* total output lines for stage 1 */
   VkBufferDeviceAddressInfo pai={.sType=VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,.buffer=vk->reduce_part};
-  pack_addr(p,4,vkbuf(c,in)->addr);
+  pack_addr(p,4,buf_addr(c,in));
   pack_addr(p,6,vkGetBufferDeviceAddress(vk->dev,&pai));
   uint64_t outaddr;
   if (slot) {

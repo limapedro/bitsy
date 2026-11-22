@@ -1,0 +1,127 @@
+{
+  "generated_at": "2026-11-22T09:01:07.424703+00:00",
+  "environment": {
+    "torch": "2.11.0+cu126",
+    "gpu": "GTX 1660 SUPER",
+    "clock": [
+      1530.0,
+      1950.0
+    ]
+  },
+  "config": {
+    "build_dir": "E:\\__PROJECTS__\\Hagane\\build-rtvk",
+    "batch": 64,
+    "in_f": 256,
+    "hidden": 128,
+    "out_f": 10,
+    "steps": [
+      10,
+      100,
+      500
+    ],
+    "warmup": 5,
+    "iters": 20,
+    "tol": 0.001,
+    "result_path": "E:\\__PROJECTS__\\Hagane\\benchmarks\\results\\mlp_replay.json"
+  },
+  "correctness": {
+    "diff": 0.000152587890625,
+    "passed": true
+  },
+  "results": [
+    {
+      "N": 10,
+      "batch": {
+        "median_ms": 1.0576999775366858,
+        "spread_ms": [
+          1.0019000037573278,
+          1.7364000086672604
+        ]
+      },
+      "n_submits": {
+        "median_ms": 0.9510000236332417,
+        "spread_ms": [
+          0.9347999875899404,
+          1.263100013602525
+        ]
+      },
+      "torch": {
+        "median_ms": 0.49074999697040766,
+        "spread_ms": [
+          0.42329999268986285,
+          0.8425000123679638
+        ]
+      },
+      "per_step": {
+        "batch": 0.10576999775366858,
+        "n_submits": 0.09510000236332417,
+        "torch": 0.049074999697040766
+      },
+      "gap_batch_vs_torch": 2.1552725095594147,
+      "speedup_vs_n_submits": 0.8991207751068112
+    },
+    {
+      "N": 100,
+      "batch": {
+        "median_ms": 7.783550012391061,
+        "spread_ms": [
+          5.979100009426475,
+          8.748399995965883
+        ]
+      },
+      "n_submits": {
+        "median_ms": 7.024699996691197,
+        "spread_ms": [
+          6.893100013257936,
+          7.955499982926995
+        ]
+      },
+      "torch": {
+        "median_ms": 5.1923499995609745,
+        "spread_ms": [
+          4.593499994371086,
+          10.927700001047924
+        ]
+      },
+      "per_step": {
+        "batch": 0.0778355001239106,
+        "n_submits": 0.07024699996691197,
+        "torch": 0.051923499995609745
+      },
+      "gap_batch_vs_torch": 1.4990418621720758,
+      "speedup_vs_n_submits": 0.9025059240973838
+    },
+    {
+      "N": 500,
+      "batch": {
+        "median_ms": 15.375549992313609,
+        "spread_ms": [
+          14.910400001099333,
+          16.067699994891882
+        ]
+      },
+      "n_submits": {
+        "median_ms": 35.32390001055319,
+        "spread_ms": [
+          34.489600016968325,
+          35.85449999081902
+        ]
+      },
+      "torch": {
+        "median_ms": 26.872799993725494,
+        "spread_ms": [
+          21.027300012065098,
+          36.77449998212978
+        ]
+      },
+      "per_step": {
+        "batch": 0.030751099984627217,
+        "n_submits": 0.07064780002110638,
+        "torch": 0.05374559998745099
+      },
+      "gap_batch_vs_torch": 0.572160325530039,
+      "speedup_vs_n_submits": 2.2974072490552833
+    }
+  ],
+  "note": "gap>1=bitsy slower. MLP: 2 GEMMs + ReLU captured, replayed N times in one submit."
+}
