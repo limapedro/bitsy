@@ -1,0 +1,121 @@
+# BENCHMARKS — living performance ledger
+
+This is the **living** record of measured speed vs PyTorch CUDA on this machine.
+Every entry has a wall-clock timestamp (when the PR was created), the exact
+command, and honest before/after numbers. Nothing is claimed that was not
+measured. Ratios `>1` mean **bitsy is slower**; `<1` means **bitsy is faster**.
+
+## Machine / methodology
+- GPU: NVIDIA GeForce GTX 1660 SUPER, driver 621.1.0.0, 5.83 GiB VRAM.
+- fp32, warmup 5, median of 20 iterations, min/max spread recorded in JSON.
+- Live GPU clock via `nvidia-smi` (not pinned — noted per run).
+- Scripts: `benchmarks/compact/common_ops_bench.py` (17 common ops, end-to-end
+  op + host read), `gemm_bench.py`, `replay_bench.py`, `profile_replay.py`.
+- Results JSON: `benchmarks/results/{common_ops,compact_gemm,compact_replay}.json`.
+
+---
+
+## 2026-11-22 02:57 — PR #18 (in progress): skip useless uploads + lazy readback
+
+**Hypothesis**: single-op latency was 4–5× off PyTorch. Profile every call:
+
+```
+[eager] submit 20us  wait ~100us
+[dl]    copy ~390us  memcpy ~320us
+[vkbuf] alloc+upload 1286..1453us   <-- 1.3-1.4 ms per output tensor!
+```
+Two distinct wastes found:
+1. `vkbuf()` uploaded **uninitialized host scratch** to DEVICE_LOCAL for every
+   output buffer, which the kernel immediately overwrites (~1.3 ms).
+2. Eager `realize()` downloaded to `b->host`, then `rt_to_host` copied again to
+   the user's numpy array (two 4 MB memcpys).
+
+**Fixes**:
+- `RtBuf.host_valid` flag: only leaf inputs (real host data) upload to device.
+  Reshape/transpose host-copied outputs set it = 1.
+- Eager kernels mark output `dirty` instead of downloading; `rt_to_host` copies
+  DEVICE_LOCAL → HOST_CACHED staging → **user buffer directly**.
+- Host-read paths (reshape/transpose) explicitly sync dirty buffers first.
+
+**Before → after (median ms, clock 1530→1950 MHz)**:
+```
+op          before   after    torch    gap before -> gap after
+add          3.10     2.01     0.79       4.3x   ->  2.54x
+mul          2.86     1.46     0.89       4.1x   ->  1.64x
+relu         2.67     1.41     0.76       3.9x   ->  1.86x
+exp          2.90     1.28     0.88       4.3x   ->  1.46x
+gelu         3.46     1.47     0.63       4.5x   ->  2.32x
+fused chain  3.36     1.53     0.98       4.5x   ->  1.55x
+GEMM n=1024  6.32     4.04     1.76       3.5x   ->  2.30x
+loop/step    0.144    0.150    0.174      0.86x  ->  0.90x (bitsy faster)
+```
+All gates green: v2 parity 48/48, op 27/27, gradcheck 25/25, model 10/10,
+API 79/79, CTest 2/2. Core 2,129 lines.
+
+**Still open**: reductions 10–38× (tiny output, fixed download cost dominates);
+single-call elementwise 1.5–2.7× off; GEMM 2.3× (cooperative-matrix blocked on
+this GPU — see FINDINGS_PR15).
+
+---
+
+## 2026-11-22 02:40 — PR #17: parallel reduce (800× → 25×)
+
+`reduce.comp` used one invocation per output line, so a 1D 1M reduce ran on
+**one GPU thread**. Rewrote to one 256-thread workgroup per line with shared-
+memory tree reduction. `sum 42.5ms → 1.6ms` (802× → ~25× gap), gates green.
+
+## 2026-11-22 02:32 — PR #16: activation/loss APIs (79 parity cases)
+Pure-Python `relu6/celu/softsign/tanhshrink/logsigmoid/softshrink/threshold`,
+`hinge/poisson_nll/kl_div`. API parity 69 → 79, all green. Core 2,090 lines.
+
+## 2026-11-22 02:23 — PR #15: fusion correctness fix + classification APIs
+Found a silent bug: fusions with >8 distinct leaf inputs failed `emit()` and
+left `buf` NULL → zeros. Fixed with a 4-attempt child-materialization retry.
+`isnan/isinf/isfinite/nan_to_num/...` → API parity 69/69. Core 2,090 lines.
+
+## 2026-11-22 02:11 — PR #14: GEMM tuning investigation
+Subgroup reductions don't apply to GEMM (shared-memory broadcast/coalescing
+already free). 64×64×8 + FMA remains best. 128×32/32×128 no gain; 64×128
+overflowed `acc[16]` (caught by parity, documented). GEMM ~3× off cuBLAS.
+
+## 2026-11-22 01:59 — PR #13: GEMM forced FMA (4× → 3×)
+`s = fma(A,B,s)` instead of mul+add: n=1024 6.80 → 5.36 ms, gap 4.0× → 3.2×.
+Numeric diff grew to 2.2e-4 at n=1024 (documented 3e-4 tolerance for large K).
+
+## 2026-11-22 01:38 — PR #12: shared-memory tiled GEMM (207× → 4×)
+Rewrote naive GEMM (no data reuse) with cooperative shared-memory tiles.
+Tile/BK sweep: 64×64×8 best. n=1024 304 → 6.8 ms, gap 207× → 4×.
+
+## 2026-11-22 01:24 — PR #11: legacy cutover complete
+Deleted 5,710-line legacy core (78 files); CI flipped to `v2_runner.py`.
+Gates green; core 2,026 lines.
+
+## 2026-11-22 01:06 — PR #10: v2 parity runner (48/48)
+Audited 48 legacy cases against v2; fixed 0-d scalar shape and documented GLSL
+1-ULP div tolerance; built `tests/parity/v2_runner.py` with identical report shape.
+
+## 2026-11-22 00:40 — PR #9: next API batch (29 functions, 44 parity cases)
+Pure-Python activations, reductions, losses. Core unchanged at 2,026 lines.
+
+## 2026-11-22 00:25 — PR #8: async submit + fast readback (speed parity claim)
+Found benchmark methodology flaw (per-step sync on bitsy only); added async
+submit, direct download, reusable readback pool. Loop 0.9× — **but this is only
+the loop metric**, corrected by PR #17's comprehensive verification.
+
+## 2026-11-22 00:10 — PR #7: DEVICE_LOCAL + specialized fused kernel
+Found device buffers in PCIe memory; moved to DEVICE_LOCAL HBM; baked op-codes
+into Vulkan specialization constants. submit-only 0.47 → 0.10 ms. Gap 3.5× → 1.7×.
+
+## 2026-11-22 23:50 (prior day) — PR #6: download bottleneck
+Profiled first: download was 96% of the gap. HOST_CACHED staging + lazy download.
+Gap 194× → 3.5×.
+
+---
+
+## Honest status (updated 2026-11-22 02:57)
+- **Fastest path**: capture/replay with async submit beats PyTorch on the loop
+  (0.86–0.90×). Single-call elementwise is now 1.5–2.7× off (down from 4–5×),
+  fused chain 1.55×. GEMM 2.3×. Reductions 10–38×.
+- **No universal parity claim**: the gap is closed only on the loop workload.
+- Clock not pinned; spread in JSON. GEMM tensor-core path blocked on this GPU
+  (no `VK_KHR_cooperative_matrix`) — needs different hardware or a decision.
