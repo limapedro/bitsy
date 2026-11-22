@@ -58,7 +58,21 @@ this GPU — see FINDINGS_PR15).
 
 ---
 
-## 2026-11-22 03:10 — PR #19 (in progress): two-stage reduce (800× → 8×)
+## 2026-11-22 03:18 — PR #20 (in progress): HOST_CACHED tiny outputs (reduce 8× → 5×)
+
+A/B measured with `BT_HOSTOUT` flag before making it automatic:
+- HOST_CACHED output buffer: kernel writes straight to CPU-visible RAM, no
+  staging fence. Great for tiny outputs, ~1.5 ms penalty for 4 MB outputs.
+- Rule: outputs `<= 4 KB` use HOST_CACHED; larger stay DEVICE_LOCAL + staging.
+
+```
+sum  0.51ms -> 0.26ms (~8x -> ~4.7x gap)
+mean 0.54ms -> 0.29ms (~10x -> ~5.4x)
+max  0.47ms -> 0.33ms (~8x -> ~4.9x)
+```
+All gates green. Core 2,212 lines. GEMM n=1024 3.53 ms / 2.44×, loop 0.9×.
+
+## 2026-11-22 03:10 — PR #19: two-stage reduce (800× → 8×)
 
 **Profile**: single-stage parallel reduce submitted+waited **1.5 ms** — one
 256-thread workgroup = one SM processing all 1M elements (4096 iterations/thread).
@@ -129,7 +143,7 @@ Gap 194× → 3.5×.
 
 ---
 
-## Honest status (updated 2026-11-22 03:10)
+## Honest status (updated 2026-11-22 03:18)
 - **Fastest path**: capture/replay with async submit beats PyTorch on the loop
   (0.81×). Single-call elementwise 1.6–2.3× off (down from 4–5×), fused chain
   1.7×. GEMM 2.3×. Reductions 8–10× (down from ~800×).

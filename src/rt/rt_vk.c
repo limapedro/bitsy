@@ -39,6 +39,7 @@ typedef struct {
 typedef struct {
   VkBuffer buf;
   VkDeviceMemory mem;
+  void* map;                 /* non-NULL for HOST_CACHED output buffers */
   VkDeviceAddress addr;
   VkDeviceSize size;
   int used;
@@ -405,8 +406,15 @@ static RtVkBuf* vkbuf(RT* c, RtBuf* b) {
                       VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT };
   vkCreateBuffer(vk->dev, &bci, NULL, &vb->buf);
   VkMemoryRequirements req; vkGetBufferMemoryRequirements(vk->dev, vb->buf, &req);
-  /* PR #7: DEVICE_LOCAL (fast HBM) instead of HOST_VISIBLE (PCIe ~30 GB/s). */
-  uint32_t mt = mem_type(vk, req, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+  /* PR #20 A/B: write-only outputs can live in HOST_CACHED system RAM, letting
+   * the kernel write straight to CPU-visible memory (no staging copy). */
+  /* A/B measured (2026-11-22 03:15): HOST_CACHED outputs avoid the ~0.4ms
+   * staging fence for tiny results (reduces: 0.36->0.28ms) but the kernel's
+   * PCIe writes cost ~1.5ms for 4MB outputs. Use it only for <=4KB outputs. */
+  int hostout = !b->host_valid && sz <= 4096;
+  uint32_t mt = hostout
+    ? (mem_type(vk,req,VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT|VK_MEMORY_PROPERTY_HOST_CACHED_BIT))
+    : mem_type(vk, req, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
   VkMemoryAllocateFlagsInfo mfi = { .sType=VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_FLAGS_INFO,
     .flags=VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT };
   VkMemoryAllocateInfo ai = { .sType=VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
@@ -416,6 +424,7 @@ static RtVkBuf* vkbuf(RT* c, RtBuf* b) {
   VkBufferDeviceAddressInfo adi = { .sType=VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO, .buffer=vb->buf };
   vb->addr = vkGetBufferDeviceAddress(vk->dev, &adi);
   vb->size = sz;
+  if (hostout) vkMapMemory(vk->dev,vb->mem,0,req.size,0,&vb->map);
   if (b->host_valid && b->host) {  /* only leaf inputs carry data to upload;
    * intermediate/output buffers are written by the kernel — uploading their
    * uninitialized host scratch cost ~1.3 ms per op. */
@@ -511,6 +520,18 @@ static void cap_record(RtVk* vk, RtCaptureSlot* s, VkPipeline pipe,
   vkCmdPipelineBarrier2(vk->replay_cmd,&dep);
 }
 
+/* After an eager kernel: HOST_CACHED outputs are already CPU-visible (just
+ * invalidate + memcpy); DEVICE_LOCAL outputs stay lazy for the staging copy. */
+static void finish_output(RtVk* vk, RtBuf* out) {
+  RtVkBuf* vb = out->vk ? (RtVkBuf*)out->vk : NULL;
+  if (vb && vb->map) {
+    VkMappedMemoryRange r={.sType=VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
+      .memory=vb->mem,.offset=0,.size=vb->size};
+    vkInvalidateMappedMemoryRanges(vk->dev,1,&r);
+    memcpy(out->host,vb->map,vb->size);
+  } else out->dirty = 1;
+}
+
 void rt_vk_fused(RT* c, RtFusion* f, RtBuf* out) {
   RtVk* vk = c->vk; if (!vk->dev) return;
   RtCaptureSlot* slot = vk->capturing ? cap_slot_new(vk, out) : NULL;
@@ -559,7 +580,7 @@ void rt_vk_fused(RT* c, RtFusion* f, RtBuf* out) {
   vkCmdDispatch(vk->cmd, groups, 1, 1);
   vkEndCommandBuffer(vk->cmd);
   submit_wait(vk);
-  out->dirty = 1;   /* lazy: rt_to_host copies staging->user directly */
+  finish_output(vk, out);
 }
 
 /* PR #12: pick a GEMM tile variant by output size. Larger tiles reuse shared
@@ -604,7 +625,7 @@ void rt_vk_gemm(RT* c, RtBuf* a, RtBuf* b, RtBuf* bias,
   vkCmdDispatch(vk->cmd, groups, 1,1);
   vkEndCommandBuffer(vk->cmd);
   submit_wait(vk);
-  out->dirty = 1;   /* lazy: rt_to_host copies staging->user directly */
+  finish_output(vk, out);
 }
 
 /* Record both reduce stages + barrier into one command buffer (one submit). */
@@ -655,7 +676,7 @@ void rt_vk_reduce(RT* c, RtBuf* in, int kind, int axis, RtBuf* out) {
   record_reduce(vk,vk->cmd,vk->set,pc,(uint32_t)total);
   vkEndCommandBuffer(vk->cmd);
   submit_wait(vk);
-  out->dirty = 1;
+  finish_output(vk, out);
 }
 
 void rt_vk_capture_begin(RT* c){
@@ -764,6 +785,7 @@ void rt_vk_download_to(RT* c, RtBuf* b, float* out){
   if (b->vk) {
     RtVkBuf* vb=(RtVkBuf*)b->vk;
     VkDeviceSize sz=sizeof(float)*(size_t)b->n;
+    if (vb->map) { memcpy(out,vb->map,sz); return; }   /* HOST_CACHED */
     staging_ensure(vk,sz);
     copy_buffer(vk,vb->buf,vk->staging,sz);
     staging_invalidate(vk,sz);
