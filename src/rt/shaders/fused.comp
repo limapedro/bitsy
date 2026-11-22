@@ -27,7 +27,8 @@ uint64_t get_addr(int slot) {
 float load_in(int slot, int64_t off) { return F32(get_addr(slot)).v[int(off)]; }
 
 /* RtInstOp: 0 LOAD 1 ADD 2 SUB 3 MUL 4 DIV 5 NEG 6 EXP 7 LOG 8 SQRT
- *           9 TANH 10 SIGM 11 RELU 12 GELU 13 GT0 14 GELUB */
+ *   9 TANH 10 SIGM 11 RELU 12 GELU 13 GT0 14 GELUB
+ *  15 POW 16 MAX 17 MIN 18 ABS 19 SIGN 20 GT 21 GE 22 LT 23 LE 24 EQ 25 NE 26 WHERE */
 float apply1(int op, float x) {
   if (op == 5) return -x;
   if (op == 6) return exp(x);
@@ -45,6 +46,8 @@ float apply1(int op, float x) {
     return x * 0.5 * (1.0 + e);
   }
   if (op == 13) return x > 0.0 ? 1.0 : 0.0;
+  if (op == 18) return abs(x);
+  if (op == 19) return x > 0.0 ? 1.0 : (x < 0.0 ? -1.0 : 0.0);
   return x;
 }
 float apply2(int op, float a, float b) {
@@ -62,6 +65,15 @@ float apply2(int op, float a, float b) {
     float phi = 0.39894228 * exp(-0.5 * b * b);
     return a * (base + b * phi);
   }
+  if (op == 15) return pow(a, b);
+  if (op == 16) return max(a, b);
+  if (op == 17) return min(a, b);
+  if (op == 20) return a > b ? 1.0 : 0.0;
+  if (op == 21) return a >= b ? 1.0 : 0.0;
+  if (op == 22) return a < b ? 1.0 : 0.0;
+  if (op == 23) return a <= b ? 1.0 : 0.0;
+  if (op == 24) return a == b ? 1.0 : 0.0;
+  if (op == 25) return a != b ? 1.0 : 0.0;
   return a;
 }
 void main() {
@@ -80,7 +92,13 @@ void main() {
       int64_t off = 0;
       for (int j = 0; j < nd; ++j) off += int64_t(coord[j]) * int64_t(param[8 + a * 4 + j]);
       stk[sp++] = load_in(a, off);
-    } else if (op == 1 || op == 2 || op == 3 || op == 4 || op == 14) {
+    } else if (op == 26) {
+      /* WHERE: stack has cond, a, b pushed; c-bits hold unused third index */
+      float bv = stk[--sp], av = stk[--sp], cv = stk[--sp];
+      stk[sp++] = cv != 0.0 ? av : bv;
+    } else if (op == 1 || op == 2 || op == 3 || op == 4 || op == 14 ||
+               op == 15 || op == 16 || op == 17 ||
+               op == 20 || op == 21 || op == 22 || op == 23 || op == 24 || op == 25) {
       float y = stk[--sp], x = stk[--sp];
       stk[sp++] = apply2(op, x, y);
     } else {

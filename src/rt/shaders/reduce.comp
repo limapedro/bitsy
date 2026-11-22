@@ -1,26 +1,31 @@
 #version 450
 #extension GL_EXT_buffer_reference2 : require
 #extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
-/* Bitsy 0.2 generic sum reduction along one axis. Each invocation reduces one
- * (outer, inner) line over the reduction axis. */
+/* Bitsy 0.2 generic reduction along one axis. kind: 0=sum 1=mean 2=max 3=min.
+ * Each invocation reduces one (outer, inner) line over the reduction axis. */
 layout(local_size_x = 256) in;
 layout(buffer_reference, std430, buffer_reference_align = 4) readonly buffer F32 {
   float v[];
 };
-/* params: [0]=outer [1]=stride [2]=inner, [4..]=Inaddr,Outaddr (2 words each) */
+/* params: [0]=outer [1]=stride [2]=inner [3]=kind, [4]=Inaddr [6]=Outaddr */
 layout(std430, binding = 0) readonly buffer Params { int param[]; };
 uint64_t paddr(int base) {
   return (uint64_t(uint(param[base])) | (uint64_t(uint(param[base + 1])) << 32));
 }
 void main() {
-  int outer = param[0], stride = param[1], inner = param[2];
+  int outer = param[0], stride = param[1], inner = param[2], kind = param[3];
   F32 In = F32(paddr(4)), Out = F32(paddr(6));
   int idx = int(gl_GlobalInvocationID.x);
   int total = outer * inner;
   if (idx >= total) return;
   int o = idx / inner, t = idx % inner;
-  float s = 0.0;
-  for (int k = 0; k < stride; ++k) s += In.v[(o * stride + k) * inner + t];
+  float s = kind == 2 ? -1.0/0.0 : (kind == 3 ? 1.0/0.0 : 0.0);
+  for (int k = 0; k < stride; ++k) {
+    float v = In.v[(o * stride + k) * inner + t];
+    if (kind == 2) s = max(s, v);
+    else if (kind == 3) s = min(s, v);
+    else s += v;
+  }
+  if (kind == 1) s /= float(stride);
   Out.v[idx] = s;
 }
-

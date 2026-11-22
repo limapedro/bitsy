@@ -12,7 +12,10 @@
 /* Fused-kernel instruction set (also mirrored in fused.comp). */
 typedef enum {
   I_LOAD=0, I_ADD, I_SUB, I_MUL, I_DIV, I_NEG,
-  I_EXP, I_LOG, I_SQRT, I_TANH, I_SIGM, I_RELU, I_GELU, I_GT0, I_GELUB
+  I_EXP, I_LOG, I_SQRT, I_TANH, I_SIGM, I_RELU, I_GELU, I_GT0, I_GELUB,
+  /* PR #2 additions */
+  I_POW, I_MAXIMUM, I_MINIMUM, I_ABS, I_SIGN,
+  I_GT, I_GE, I_LT, I_LE, I_EQ, I_NE, I_WHERE
 } RtInstOp;
 
 typedef struct {
@@ -86,8 +89,9 @@ struct RT {
 void rt_vk_init(RT*);
 void rt_vk_shutdown(RT*);
 void rt_vk_fused(RT*, RtFusion*, RtBuf* out);
-void rt_vk_gemm(RT*, RtBuf* a, RtBuf* b, RtBuf* out);
-void rt_vk_reduce(RT*, RtBuf* in, int axis, RtBuf* out);
+void rt_vk_gemm(RT*, RtBuf* a, RtBuf* b, RtBuf* bias,
+                int trans_a, int trans_b, RtBuf* out);
+void rt_vk_reduce(RT*, RtBuf* in, int kind, int axis, RtBuf* out);
 void rt_vk_capture_begin(RT*);
 void rt_vk_capture_end(RT*);
 void rt_vk_replay(RT*);

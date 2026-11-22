@@ -141,18 +141,71 @@ RTTensor* rt_tanh(RT* c, RTTensor* a) { return unary(c, RT_TANH, a); }
 RTTensor* rt_sigm(RT* c, RTTensor* a) { return unary(c, RT_SIGM, a); }
 RTTensor* rt_relu(RT* c, RTTensor* a) { return unary(c, RT_RELU, a); }
 RTTensor* rt_gelu(RT* c, RTTensor* a) { return unary(c, RT_GELU, a); }
+/* PR #2: additional pointwise primitives */
+RTTensor* rt_pow(RT* c, RTTensor* a, RTTensor* b) { return pointwise(c, RT_POW, a, b); }
+RTTensor* rt_maximum(RT* c, RTTensor* a, RTTensor* b) { return pointwise(c, RT_MAXIMUM, a, b); }
+RTTensor* rt_minimum(RT* c, RTTensor* a, RTTensor* b) { return pointwise(c, RT_MINIMUM, a, b); }
+RTTensor* rt_abs(RT* c, RTTensor* a) { return unary(c, RT_ABS, a); }
+RTTensor* rt_sign(RT* c, RTTensor* a) { return unary(c, RT_SIGN, a); }
+RTTensor* rt_gt(RT* c, RTTensor* a, RTTensor* b) { return pointwise(c, RT_GT, a, b); }
+RTTensor* rt_ge(RT* c, RTTensor* a, RTTensor* b) { return pointwise(c, RT_GE, a, b); }
+RTTensor* rt_lt(RT* c, RTTensor* a, RTTensor* b) { return pointwise(c, RT_LT, a, b); }
+RTTensor* rt_le(RT* c, RTTensor* a, RTTensor* b) { return pointwise(c, RT_LE, a, b); }
+RTTensor* rt_eq(RT* c, RTTensor* a, RTTensor* b) { return pointwise(c, RT_EQ, a, b); }
+RTTensor* rt_ne(RT* c, RTTensor* a, RTTensor* b) { return pointwise(c, RT_NE, a, b); }
+/* Broadcast two shapes without creating a node (pure shape computation). */
+static void broadcast_two(const RTTensor* a, const RTTensor* b,
+                          int64_t* out, int* nd, RT* c) {
+  int n = a->ndim > b->ndim ? a->ndim : b->ndim;
+  *nd = n;
+  for (int i=0;i<n;++i) {
+    int ia=i-(n-a->ndim), ib=i-(n-b->ndim);
+    int64_t da=ia>=0?a->dims[ia]:1, db=ib>=0?b->dims[ib]:1;
+    if (da!=db && da!=1 && db!=1) { rt_errf(c,"where broadcast mismatch"); *nd=0; return; }
+    out[i] = da>db?da:db;
+  }
+}
+RTTensor* rt_where(RT* c, RTTensor* cond, RTTensor* a, RTTensor* b) {
+  /* ternary: broadcast all three operands to a common shape */
+  int64_t d1[RT_MAXDIMS], d2[RT_MAXDIMS]; int n1, n2;
+  broadcast_two(cond, a, d1, &n1, c);
+  if (!n1) return NULL;
+  /* temp tensors only for shape inference of the 3-way broadcast */
+  RTTensor ta = {0};
+  ta.ndim=n1; memcpy(ta.dims,d1,sizeof(int64_t)*n1);
+  broadcast_two(&ta, b, d2, &n2, c);
+  if (!n2) return NULL;
+  return node_new(c, RT_WHERE, n2, d2, 3, cond, a, b);
+}
 /* internal derivative nodes (exposed via backend, fused like pointwise) */
 static RTTensor* rt_gt0(RT* c, RTTensor* a) { return unary(c, RT_GT0, a); }
 static RTTensor* rt_gelub(RT* c, RTTensor* g, RTTensor* x) { return pointwise(c, RT_GELUB, g, x); }
 
-RTTensor* rt_matmul(RT* c, RTTensor* a, RTTensor* b) {
-  if (a->ndim != 2 || b->ndim != 2 || a->dims[1] != b->dims[0]) {
-    rt_errf(c, "matmul expects 2D (M,K)x(K,N)"); return NULL;
-  }
-  int64_t d[2] = { a->dims[0], b->dims[1] };
-  return node_new(c, RT_MATMUL, 2, d, 2, a, b, NULL);
+RTTensor* rt_scalar(RT* c, float value) {
+  int64_t d[1] = {1}; float v[1] = {value};
+  return rt_from_host(c, v, 1, d, 0);
 }
-RTTensor* rt_reduce_sum(RT* c, RTTensor* a, int axis, int keepdim) {
+
+RTTensor* rt_gemm(RT* c, RTTensor* a, RTTensor* b, RTTensor* bias,
+                  int trans_a, int trans_b) {
+  if (a->ndim != 2 || b->ndim != 2) { rt_errf(c, "gemm expects 2D"); return NULL; }
+  int64_t ka = trans_a ? a->dims[0] : a->dims[1];
+  int64_t kb = trans_b ? b->dims[1] : b->dims[0];
+  if (ka != kb) { rt_errf(c, "gemm K mismatch %lld vs %lld", (long long)ka, (long long)kb); return NULL; }
+  int64_t M = trans_a ? a->dims[1] : a->dims[0];
+  int64_t N = trans_b ? b->dims[0] : b->dims[1];
+  if (bias && !(bias->ndim == 1 && bias->dims[0] == N)) {
+    rt_errf(c, "gemm bias must be shape (N,)"); return NULL;
+  }
+  int64_t d[2] = { M, N };
+  RTTensor* t = node_new(c, RT_MATMUL, 2, d, bias ? 3 : 2, a, b, bias);
+  t->axis = trans_a; t->keepdim = trans_b;   /* reuse fields as transpose flags */
+  return t;
+}
+RTTensor* rt_matmul(RT* c, RTTensor* a, RTTensor* b) {
+  return rt_gemm(c, a, b, NULL, 0, 0);
+}
+RTTensor* rt_reduce(RT* c, RTTensor* a, int kind, int axis, int keepdim) {
   if (axis < 0) axis += a->ndim;
   if (axis < 0 || axis >= a->ndim) { rt_errf(c, "reduce axis OOB"); return NULL; }
   int nd = keepdim ? a->ndim : a->ndim - 1;
@@ -161,14 +214,22 @@ RTTensor* rt_reduce_sum(RT* c, RTTensor* a, int axis, int keepdim) {
     if (i == axis && keepdim) d[j++] = 1;
     else if (i != axis) d[j++] = a->dims[i];
   }
-  RTTensor* t = node_new(c, RT_REDUCE_SUM, nd, d, 1, a, NULL, NULL);
-  t->axis = axis; t->keepdim = keepdim;
+  RTTensor* t = node_new(c, RT_REDUCE, nd, d, 1, a, NULL, NULL);
+  t->axis = axis; t->keepdim = keepdim; t->scalar = (float)kind;
   return t;
+}
+RTTensor* rt_reduce_sum(RT* c, RTTensor* a, int axis, int keepdim) {
+  return rt_reduce(c, a, RT_REDUCE_SUM, axis, keepdim);
 }
 RTTensor* rt_transpose(RT* c, RTTensor* a) {
   if (a->ndim != 2) { rt_errf(c, "transpose expects 2D"); return NULL; }
   int64_t d[2] = { a->dims[1], a->dims[0] };
   return node_new(c, RT_TRANSPOSE, 2, d, 1, a, NULL, NULL);
+}
+RTTensor* rt_reshape(RT* c, RTTensor* a, int nd, const int64_t* dims) {
+  int64_t n = rt_numel(a->ndim, a->dims), m = rt_numel(nd, dims);
+  if (n != m) { rt_errf(c, "reshape element count %lld != %lld", (long long)n, (long long)m); return NULL; }
+  return node_new(c, RT_RESHAPE, nd, dims, 1, a, NULL, NULL);
 }
 
 void rt_release(RTTensor* t) { /* arena-owned; no-op in 0.2 */ (void)t; }
@@ -198,19 +259,36 @@ static int emit(RT* c, RTTensor* t, RtFusion* f);
 static int emit_pointwise(RT* c, RTTensor* t, RtFusion* f) {
   RTOp op = t->op;
   RtInstOp io;
-  int binary = (op == RT_ADD || op == RT_SUB || op == RT_MUL || op == RT_DIV);
+  int binary = 0, ternary = 0;
   switch (op) {
-    case RT_ADD: io=I_ADD; break; case RT_SUB: io=I_SUB; break;
-    case RT_MUL: io=I_MUL; break; case RT_DIV: io=I_DIV; break;
+    case RT_ADD: io=I_ADD; binary=1; break; case RT_SUB: io=I_SUB; binary=1; break;
+    case RT_MUL: io=I_MUL; binary=1; break; case RT_DIV: io=I_DIV; binary=1; break;
     case RT_NEG: io=I_NEG; break; case RT_EXP: io=I_EXP; break;
     case RT_LOG: io=I_LOG; break; case RT_SQRT: io=I_SQRT; break;
     case RT_TANH: io=I_TANH; break; case RT_SIGM: io=I_SIGM; break;
     case RT_RELU: io=I_RELU; break; case RT_GELU: io=I_GELU; break;
-    case RT_GT0: io=I_GT0; break; case RT_GELUB: io=I_GELUB; break;
+    case RT_GT0: io=I_GT0; break; case RT_GELUB: io=I_GELUB; binary=1; break;
+    case RT_POW: io=I_POW; binary=1; break;
+    case RT_MAXIMUM: io=I_MAXIMUM; binary=1; break; case RT_MINIMUM: io=I_MINIMUM; binary=1; break;
+    case RT_ABS: io=I_ABS; break; case RT_SIGN: io=I_SIGN; break;
+    case RT_GT: io=I_GT; binary=1; break; case RT_GE: io=I_GE; binary=1; break;
+    case RT_LT: io=I_LT; binary=1; break; case RT_LE: io=I_LE; binary=1; break;
+    case RT_EQ: io=I_EQ; binary=1; break; case RT_NE: io=I_NE; binary=1; break;
+    case RT_WHERE: io=I_WHERE; ternary=1; break;
     default: rt_errf(c, "emit: not pointwise"); return -1;
   }
-  if (op == RT_GELUB) binary = 1;
   if (f->ninst >= RT_MAXINST) { rt_errf(c, "fusion too long"); return -1; }
+  if (ternary) {
+    int cond = emit(c, t->src[0], f);
+    if (cond < 0) return -1;
+    int a = emit(c, t->src[1], f);
+    if (a < 0) return -1;
+    int b = emit(c, t->src[2], f);
+    if (b < 0) return -1;
+    f->inst[f->ninst].op = io; f->inst[f->ninst].a = cond; f->inst[f->ninst].b = a;
+    f->inst[f->ninst].c = *(float*)&b;  /* pack third stack index into float slot */
+    return f->ninst++;
+  }
   int a = emit(c, t->src[0], f);
   if (a < 0) return -1;
   if (binary) {
@@ -225,7 +303,7 @@ static int emit_pointwise(RT* c, RTTensor* t, RtFusion* f) {
 
 static void realize_node(RT* c, RTTensor* t);
 static int is_cut(RTOp op) {
-  return op == RT_MATMUL || op == RT_REDUCE_SUM || op == RT_TRANSPOSE;
+  return op == RT_MATMUL || op == RT_REDUCE || op == RT_TRANSPOSE || op == RT_RESHAPE;
 }
 
 /* Emit expression onto the fused stack; returns the stack slot holding value.
@@ -262,6 +340,8 @@ static float apply1(int op, float a) {
     case I_RELU: return a > 0.f ? a : 0.f;
     case I_GELU: { float e = gelu_erf(a * 0.70710678f); return a * 0.5f * (1.f + e); }
     case I_GT0: return a > 0.f ? 1.f : 0.f;
+    case I_ABS: return fabsf(a);
+    case I_SIGN: return a > 0.f ? 1.f : (a < 0.f ? -1.f : 0.f);
     default: return a;
   }
 }
@@ -273,6 +353,15 @@ static float apply2(int op, float a, float b) {
       float base = 0.5f * (1.f + e);
       float phi = 0.39894228f * expf(-0.5f * b * b);
       return a * (base + b * phi); }  /* a=grad, b=x */
+    case I_POW: return powf(a, b);
+    case I_MAXIMUM: return a > b ? a : b;
+    case I_MINIMUM: return a < b ? a : b;
+    case I_GT: return a > b ? 1.f : 0.f;
+    case I_GE: return a >= b ? 1.f : 0.f;
+    case I_LT: return a < b ? 1.f : 0.f;
+    case I_LE: return a <= b ? 1.f : 0.f;
+    case I_EQ: return a == b ? 1.f : 0.f;
+    case I_NE: return a != b ? 1.f : 0.f;
     default: return a;
   }
 }
@@ -290,7 +379,14 @@ static void fused_cpu(RtFusion* f, RtBuf* out) {
         int64_t off = 0;
         for (int j = 0; j < nd; ++j) off += coord[j] * f->in_stride[in.a][j];
         stack[sp++] = f->in_buf[in.a]->host[off];
-      } else if (in.op == I_ADD || in.op == I_SUB || in.op == I_MUL || in.op == I_DIV || in.op == I_GELUB) {
+      } else if (in.op == I_WHERE) {
+        int cidx; memcpy(&cidx, &in.c, sizeof(int));
+        float b = stack[--sp], a = stack[--sp], cond = stack[--sp];
+        stack[sp++] = cond != 0.f ? a : b;
+      } else if (in.op == I_ADD || in.op == I_SUB || in.op == I_MUL || in.op == I_DIV ||
+                 in.op == I_GELUB || in.op == I_POW || in.op == I_MAXIMUM || in.op == I_MINIMUM ||
+                 in.op == I_GT || in.op == I_GE || in.op == I_LT || in.op == I_LE ||
+                 in.op == I_EQ || in.op == I_NE) {
         float b = stack[--sp], a = stack[--sp];
         stack[sp++] = apply2(in.op, a, b);
       } else {
@@ -302,21 +398,36 @@ static void fused_cpu(RtFusion* f, RtBuf* out) {
   }
 }
 
-static void gemm_cpu(RtBuf* a, RtBuf* b, RtBuf* out) {
-  int M=(int)a->dims[0], K=(int)a->dims[1], N=(int)b->dims[1];
+static void gemm_cpu(RtBuf* a, RtBuf* b, RtBuf* bias,
+                     int ta, int tb, RtBuf* out) {
+  int ar=(int)a->dims[0], ac=(int)a->dims[1];
+  int br=(int)b->dims[0], bc=(int)b->dims[1];
+  int M = ta ? ac : ar, K = ta ? ar : ac;
+  int N = tb ? br : bc;
   for (int i=0;i<M;++i) for (int j=0;j<N;++j) {
     float s=0.f;
-    for (int k=0;k<K;++k) s += a->host[i*K+k]*b->host[k*N+j];
+    for (int k=0;k<K;++k) {
+      float av = ta ? a->host[k*M + i] : a->host[i*K + k];
+      float bv = tb ? b->host[j*K + k] : b->host[k*N + j];
+      s += av*bv;
+    }
+    if (bias) s += bias->host[j];
     out->host[i*N+j]=s;
   }
 }
-static void reduce_cpu(RtBuf* in, int axis, RtBuf* out) {
+static void reduce_cpu(RtBuf* in, int kind, int axis, RtBuf* out) {
   int outer=1, stride=(int)in->dims[axis], inner=1;
   for (int i=0;i<axis;++i) outer*=(int)in->dims[i];
   for (int i=axis+1;i<in->ndim;++i) inner*=(int)in->dims[i];
   for (int o=0;o<outer;++o) for (int t=0;t<inner;++t) {
-    float s=0.f;
-    for (int k=0;k<stride;++k) s+=in->host[(o*stride+k)*inner+t];
+    float s = (kind==RT_REDUCE_MAX) ? -INFINITY : (kind==RT_REDUCE_MIN ? INFINITY : 0.f);
+    for (int k=0;k<stride;++k) {
+      float v = in->host[(o*stride+k)*inner+t];
+      if (kind==RT_REDUCE_MAX) s = fmaxf(s, v);
+      else if (kind==RT_REDUCE_MIN) s = fminf(s, v);
+      else s += v;
+    }
+    if (kind==RT_REDUCE_MEAN) s /= (float)stride;
     out->host[o*inner+t]=s;
   }
 }
@@ -349,14 +460,25 @@ static void realize_node(RT* c, RTTensor* t) {
   for (int i=0;i<t->nsrc;++i) if (t->src[i]) realize_node(c, t->src[i]);
   if (t->op == RT_MATMUL) {
     RtBuf* out = rt_buf_new(c, 2, t->dims, c->device);
-    if (c->device == RT_VULKAN && c->vk) rt_vk_gemm(c, t->src[0]->buf, t->src[1]->buf, out);
-    else gemm_cpu(t->src[0]->buf, t->src[1]->buf, out);
+    RtBuf* bias = t->nsrc > 2 && t->src[2] ? t->src[2]->buf : NULL;
+    int ta = t->axis, tb = t->keepdim;
+    if (c->device == RT_VULKAN && c->vk)
+      rt_vk_gemm(c, t->src[0]->buf, t->src[1]->buf, bias, ta, tb, out);
+    else gemm_cpu(t->src[0]->buf, t->src[1]->buf, bias, ta, tb, out);
     c->dispatch_count++; t->buf = out; return;
   }
-  if (t->op == RT_REDUCE_SUM) {
+  if (t->op == RT_REDUCE) {
     RtBuf* out = rt_buf_new(c, t->ndim, t->dims, c->device);
-    if (c->device == RT_VULKAN && c->vk) rt_vk_reduce(c, t->src[0]->buf, t->axis, out);
-    else reduce_cpu(t->src[0]->buf, t->axis, out);
+    int kind = (int)t->scalar;
+    if (c->device == RT_VULKAN && c->vk)
+      rt_vk_reduce(c, t->src[0]->buf, kind, t->axis, out);
+    else reduce_cpu(t->src[0]->buf, kind, t->axis, out);
+    c->dispatch_count++; t->buf = out; return;
+  }
+  if (t->op == RT_RESHAPE) {
+    RtBuf* in = t->src[0]->buf;
+    RtBuf* out = rt_buf_new(c, t->ndim, t->dims, c->device);
+    memcpy(out->host, in->host, sizeof(float) * (size_t)out->n);
     c->dispatch_count++; t->buf = out; return;
   }
   if (t->op == RT_TRANSPOSE) {
@@ -422,17 +544,43 @@ static RTTensor* grad_wrt(RT* c, RTTensor* t, int s, RTTensor* g) {
       return rt_mul(c, g, rt_mul(c, t, rt_sub(c, one, t))); }
     case RT_RELU: return rt_mul(c, g, rt_gt0(c, a));
     case RT_GELU: return rt_gelub(c, g, a);
+    case RT_ABS: return rt_mul(c, g, rt_sign(c, a));
+    case RT_SIGN: return scalar(c, 0.f);
+    case RT_POW: {  /* d(a^b)/da = b*a^(b-1), d/db = a^b*log(a) */
+      if (s == 0) { RTTensor* b1 = rt_sub(c, b, scalar(c,1.f));
+        return rt_mul(c, g, rt_mul(c, b, rt_pow(c, a, b1))); }
+      return rt_mul(c, g, rt_mul(c, t, rt_log(c, a))); }
+    case RT_MAXIMUM: return rt_mul(c, g, rt_ge(c, a, b));
+    case RT_MINIMUM: return rt_mul(c, g, rt_le(c, a, b));
+    case RT_GT: case RT_GE: case RT_LT: case RT_LE: case RT_EQ: case RT_NE:
+      return scalar(c, 0.f);
+    case RT_WHERE: return s == 1 ? rt_mul(c, g, t->src[0])
+                                 : (s == 2 ? rt_mul(c, g, rt_sub(c, scalar(c,1.f), t->src[0])) : scalar(c,0.f));
     case RT_MATMUL: {
-      if (s == 0) return rt_matmul(c, g, rt_transpose(c, b));
-      return rt_matmul(c, rt_transpose(c, a), g); }
-    case RT_REDUCE_SUM: {  /* broadcast g back to input shape via multiply by ones */
+      /* respect transpose flags: Y = opA(A) @ opB(B) */
+      int ta = t->axis, tb = t->keepdim;
+      if (s == 0) {
+        RTTensor* gbt = tb ? g : rt_transpose(c, g);     /* d/dopA = g @ opB(B)^T */
+        RTTensor* bt = tb ? t->src[1] : rt_transpose(c, t->src[1]);
+        RTTensor* d = rt_matmul(c, gbt, bt);
+        return ta ? rt_transpose(c, d) : d;
+      }
+      if (s == 1) {
+        RTTensor* gat = ta ? g : rt_transpose(c, g);     /* d/dopB = opA(A)^T @ g */
+        RTTensor* at = ta ? t->src[0] : rt_transpose(c, t->src[0]);
+        RTTensor* d = rt_matmul(c, at, gat);
+        return tb ? rt_transpose(c, d) : d;
+      }
+      return g;  /* s==2 is bias: dY/dbias = sum over rows of g */
+    }
+    case RT_REDUCE: {  /* broadcast g back to input shape via multiply by ones */
       int64_t n = rt_numel(a->ndim, a->dims);
       float* ones = (float*)malloc(sizeof(float) * (size_t)n);
       for (int64_t i=0;i<n;++i) ones[i] = 1.f;
       RTTensor* ot = rt_from_host(c, ones, a->ndim, a->dims, 0);
       free(ones);
       return rt_mul(c, g, ot); }
-    case RT_TRANSPOSE: return rt_transpose(c, g);
+    case RT_TRANSPOSE: case RT_RESHAPE: return rt_reshape(c, g, a->ndim, a->dims);
     case RT_GT0: case RT_GELUB: return scalar(c, 0.f);
     default: return scalar(c, 0.f);
   }
