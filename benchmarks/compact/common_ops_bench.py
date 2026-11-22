@@ -82,6 +82,11 @@ def run(cfg=Config()):
   }
 
   clk0 = gpu_clock()
+  # Global warmup: the readback ring and GPU clocks need to settle before any
+  # per-op measurement, otherwise the first op measured looks ~2x slower.
+  for _ in range(cfg.warmup):
+    for bf, tf in cases.values():
+      bf().numpy(); tf().cpu().numpy()
   rows = []
   for name, (bf, tf) in cases.items():
     # correctness first

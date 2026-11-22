@@ -58,7 +58,39 @@ this GPU — see FINDINGS_PR15).
 
 ---
 
-## 2026-11-22 03:35 — PR #21 (in progress): zero-copy readback (loop 0.86× → 0.6×)
+## 2026-11-22 03:55 — PR #22 (in progress): pinned-D2H A/B (negative) — reverted
+
+`VK_EXT_external_memory_host` **is present** on this GPU/driver, so I implemented
+aligned host allocations imported as `VkDeviceMemory` — the kernel writes directly
+into pinned CPU-visible RAM, theoretically eliminating the ~0.4 ms staging copy.
+Enabled the extension with a fallback for CI's software Vulkan, added
+`vkGetMemoryHostPointerPropertiesEXT` (loaded via `vkGetDeviceProcAddr`), and
+A/B-tested with `BT_PINNED=1`.
+
+```
+baseline (DEVICE_LOCAL + DMA staging):  fused chain 1.06ms, mul 1.18ms, loop 0.62x
+pinned direct kernel write:             fused chain 3.16ms, mul 2.65ms, loop 0.76x
+```
+**Result: 3× WORSE.** GPU kernel writes to pinned host memory are scattered and
+much slower than writing to fast local HBM followed by an efficient DMA engine
+copy via `vkCmdCopyBuffer`. The two-step path wins decisively on this hardware.
+The entire pinned path was **reverted**; no dead flag left in the tree. All gates
+green after revert (48/48, 27/27, 25/25, 10/10, 79/79, ctest 2/2).
+
+Also measured: `add` appearing ~2× slower than `mul` in `common_ops_bench` was a
+first-measurement artifact (1.81ms then 1.05ms on the same op) — clock ramp-up,
+not an op-specific regression. **Fixed the harness** with a global warmup pass
+over all 17 ops before per-op timing. Corrected picture (median, clock 1530→1950):
+```
+fused_chain  1.04ms vs 0.93ms -> 1.12x   sqrt 1.04/1.10 -> 0.95x (bitsy faster)
+relu/abs     1.02-1.06ms       -> 1.2-1.3x
+add/mul/exp  1.05-1.15ms       -> 1.26-1.45x
+sum/mean/max 0.28-0.34ms       -> 6-8x (torch fully warm)
+loop         0.125ms/step vs 0.192 -> 0.65x (bitsy 35% faster)
+```
+The earlier 1.7–2.6× elementwise figures were inflated by cold measurement.
+
+## 2026-11-22 03:35 — PR #21: zero-copy readback (loop 0.86× → 0.6×)
 
 **Profile**: after PR #20 the remaining per-call cost was the staging→numpy
 memcpy (~0.3 ms) plus the extra fence submit that produced it.
