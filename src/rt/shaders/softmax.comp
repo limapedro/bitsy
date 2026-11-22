@@ -1,0 +1,61 @@
+#version 450
+#extension GL_EXT_buffer_reference2 : require
+#extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
+/* Bitsy 0.2 fused softmax / log_softmax along the last dimension.
+ * One workgroup per outer row. 256 threads cooperate: load row into shared
+ * memory, tree-reduce max, exp (or x-max for log), tree-reduce sum, normalize.
+ * kind: 0 = softmax, 1 = log_softmax. */
+layout(local_size_x = 256) in;
+layout(constant_id = 0) const int KIND = 0;
+
+layout(buffer_reference, std430, buffer_reference_align = 4) readonly buffer F32 {
+  float v[];
+};
+layout(buffer_reference, std430, buffer_reference_align = 4) writeonly buffer F32W {
+  float v[];
+};
+/* params: [0]=rows [1]=cols [2]=Inaddr [4]=Outaddr */
+layout(std430, binding = 0) readonly buffer Params { int param[]; };
+uint64_t paddr(int b){ return uint64_t(uint(param[b])) | (uint64_t(uint(param[b+1]))<<32); }
+
+shared float smem[256];
+shared float red[256];
+
+void main(){
+  int rows=param[0], cols=param[1];
+  int row=int(gl_WorkGroupID.x);
+  int tid=int(gl_LocalInvocationID.x);
+  if(row>=rows) return;
+  F32 In=F32(paddr(2)); F32W Out=F32W(paddr(4));
+
+  /* cooperative load: each thread handles cols/256 elements (strided) */
+  int nchunks=(cols+255)/256;
+  float local_max=-1.0/0.0;
+  for(int c=0;c<nchunks;++c){ int i=c*256+tid;
+    if(i<cols) smem[i]=In.v[row*cols+i];
+  }
+  barrier();
+  for(int i=tid;i<cols;i+=256) local_max=max(local_max,smem[i]);
+  red[tid]=local_max;
+  barrier();
+  for(int off=128;off>0;off>>=1){ if(tid<off) red[tid]=max(red[tid],red[tid+off]); barrier(); }
+  float mx=red[0];
+
+  float local_sum=0.0;
+  for(int i=tid;i<cols;i+=256){
+    float e=exp(smem[i]-mx);
+    smem[i]=e;
+    local_sum+=e;
+  }
+  red[tid]=local_sum;
+  barrier();
+  for(int off=128;off>0;off>>=1){ if(tid<off) red[tid]+=red[tid+off]; barrier(); }
+  float s=red[0]+1e-20;
+
+  for(int i=tid;i<cols;i+=256){
+    float v;
+    if(KIND==0) v=smem[i]/s;
+    else v=(smem[i]>0.0)?log(smem[i]/s):-1.0/0.0;
+    Out.v[row*cols+i]=v;
+  }
+}

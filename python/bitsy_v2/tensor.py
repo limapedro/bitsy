@@ -292,12 +292,17 @@ class Tensor:
   # ---- fused compositions (zero new C) ----
   def softmax(self, axis=-1) -> "Tensor":
     if axis < 0: axis += len(self.shape)
+    if axis == len(self.shape)-1 and self.shape[axis] <= 256:
+      # PR #24: one fused dispatch (was 4)
+      return Tensor(self.rt, self.rt.softmax(self.h, 0), self.shape, self.requires_grad)
     m = self.max(axis=axis, keepdim=True)
     e = (self - m).exp()
     return e / e.sum(axis=axis, keepdim=True)
 
   def log_softmax(self, axis=-1) -> "Tensor":
     if axis < 0: axis += len(self.shape)
+    if axis == len(self.shape)-1 and self.shape[axis] <= 256:
+      return Tensor(self.rt, self.rt.softmax(self.h, 1), self.shape, self.requires_grad)
     m = self.max(axis=axis, keepdim=True)
     return self - m - (self - m).exp().sum(axis=axis, keepdim=True).log()
 
