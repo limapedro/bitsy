@@ -1,5 +1,28 @@
 /* PR #55: multi-block CUDA reduction for SUM/MEAN via atomicAdd.
  * grid.x = output lines, grid.y = chunks; one warp atomic per chunk. */
+/* PR #65: single-block-per-line max/min, 1024 threads, shared reduction,
+ * NO atomics. One kernel, one output write per line, minimal D2H/sync. */
+extern "C" __global__ void bmax_single(const float* in, float* out,
+    int outer, int stride, int inner, int kind) {
+  __shared__ float sh[1024];
+  int line=blockIdx.x, tid=threadIdx.x;
+  int o=line/inner, t=line%inner;
+  float local=(kind==2)?-3.4028235e38f:3.4028235e38f;
+  for(int k=tid;k<stride;k+=1024){
+    float v=in[(o*stride+k)*inner+t];
+    local=(kind==2)?fmaxf(local,v):fminf(local,v);
+  }
+  sh[tid]=local; __syncthreads();
+  for(int off=512;off>0;off>>=1){
+    if(tid<off){
+      float v=sh[tid+off];
+      sh[tid]=(kind==2)?fmaxf(sh[tid],v):fminf(sh[tid],v);
+    }
+    __syncthreads();
+  }
+  if(tid==0) out[line]=sh[0];
+}
+
 /* PR #61: single-kernel max/min via atomicCAS on float bits. */
 __device__ __forceinline__ float atomicMaxF(float* addr, float v){
   unsigned int* u=(unsigned int*)addr;
