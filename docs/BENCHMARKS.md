@@ -58,7 +58,29 @@ this GPU — see FINDINGS_PR15).
 
 ---
 
-## 2026-11-22 07:05 — PR #33 (in progress): multi-dispatch capture fixed — batched MLP works
+## 2026-11-22 07:25 — PR #34 (doc-only): training-step capture investigation (blocked by backward capture bug)
+
+Proposed next lever: capture whole forward+backward+optimizer steps and replay N
+times in one submit. Implemented a probe (`rt.grad_refresh` to re-read grads
+after replay) and measured:
+```
+elementwise backward (x*w).sum()   capture replay diff = 0.0        (works)
+MLP backward  2 GEMMs + MSE        capture replay diff = 10.33      (WRONG)
+matmul backward (single GEMM)      capture replay diff = 7.4e+34    (WRONG)
+```
+**Conclusion: backward-through-matmul capture is broken** (grad buffers contain
+uninitialised/garbage values on replay), even though forward-only MLP capture
+was fixed in PR #33. Simple pointwise backward captures correctly. Since a
+training step needs matmul backward, whole-step capture cannot be shipped
+without a deeper fix in the autograd/capture interaction (grad nodes created
+during `backward` are not all realised into capture slots).
+
+No code change shipped for the training-loop API — only the `grad_refresh`
+probe helper. Gates remain green. This is recorded so it is not mistaken for a
+working feature; the batched-replay wins (fused 4.2×, MLP 1.75× at N=500) still
+apply to forward-only captured graphs.
+
+## 2026-11-22 07:05 — PR #33: multi-dispatch capture fixed — batched MLP works
 
 Fixed the capture gap documented in PR #32:
 - GEMM capture wrote to the **eager** out buffer address even in capture mode → captured output stayed zeros. Now uses `slot->out` device address.
