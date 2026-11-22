@@ -58,6 +58,31 @@ this GPU — see FINDINGS_PR15).
 
 ---
 
+## 2026-11-22 10:35 — PR #41: transpose-folded GEMM — half the dispatches per linear layer
+
+The GEMM shader already supports `trans_a`/`trans_b`, and `grad_wrt` already
+handles the folded flags, but `X @ W.T()` was building a separate device
+transpose node then a GEMM. `rt_gemm` now folds an **unrealized** transpose
+operand into the GEMM's trans flag (bias/ReLU epilogues and autograd keep
+working; a realized transpose is still used as-is).
+
+A/B on a 2-layer MLP forward (batch 64, 256→128→1), same build, env-gated
+disable flag (removed after measurement), clock 1530:
+```
+no fold:  dispatch 4, wall 0.7653 ms
+folded:   dispatch 2, wall 0.4875 ms   (-36% wall, half the dispatches)
+```
+New `benchmarks/compact/gemm_epilogue_bench.py` records dispatch count and the
+vs-PyTorch sweep (single-call MLP fwd still host-sync dominated: 0.5125 vs
+0.0258 ms PyTorch async). Added `folded_gemm_dispatch` (exactly 1 dispatch),
+`folded_gemm_fwd` and `folded_gemm_grad` gates (API 101 → **104 cases**).
+
+This is the "fewer calls / most fused kernels" lever directly: every linear
+layer in MLPs and transformers drops one kernel dispatch.
+
+Gates: v2 48/48, op 27/27, gradcheck 25/25, model 10/10, API **104/104**, ctest 2/2.
+Core 3,138 lines.
+
 ## 2026-11-22 10:00 — PR #40: compiled-callable API — captured replay as the default path
 
 Added `Engine.compile(fn, shapes)` and `Engine.compile_many(fn, shapes, K,

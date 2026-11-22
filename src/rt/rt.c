@@ -202,6 +202,16 @@ RTTensor* rt_scalar(RT* c, float value) {
 
 RTTensor* rt_gemm(RT* c, RTTensor* a, RTTensor* b, RTTensor* bias,
                   int trans_a, int trans_b) {
+  /* PR #41: fold an unrealized transpose operand into the GEMM's trans flags.
+   * X @ W.T() previously dispatched a transpose kernel then a GEMM; the GEMM
+   * shader already supports trans_a/trans_b, and grad_wrt already handles the
+   * folded flags, so this removes a dispatch with no extra shader work. */
+  if (a && !a->buf && a->op == RT_TRANSPOSE && a->nsrc && a->src[0]) {
+    a = a->src[0]; trans_a = !trans_a;
+  }
+  if (b && !b->buf && b->op == RT_TRANSPOSE && b->nsrc && b->src[0]) {
+    b = b->src[0]; trans_b = !trans_b;
+  }
   if (a->ndim != 2 || b->ndim != 2) { rt_errf(c, "gemm expects 2D"); return NULL; }
   int64_t ka = trans_a ? a->dims[0] : a->dims[1];
   int64_t kb = trans_b ? b->dims[1] : b->dims[0];

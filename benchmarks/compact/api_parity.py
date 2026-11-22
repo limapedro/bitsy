@@ -395,6 +395,21 @@ def run(cfg=CFG):
   rec_grad("compiled_api_w1", md(cga,ct1.detach().numpy()))
   rec_grad("compiled_api_w2", md(cgb,ct2.detach().numpy()))
 
+  # ---- PR #41: transpose fold into GEMM (one dispatch, no separate transpose) ----
+  fx=rng.standard_normal((8,16)).astype(np.float32)
+  fw=rng.standard_normal((4,16)).astype(np.float32)
+  fe=bv.Engine(device=bv.Engine.VULKAN)
+  FX=fe.tensor(fx); FW=fe.tensor(fw,requires_grad=True)
+  fe.rt.lib.rt_reset_dispatch_count(fe.rt.ctx)
+  fy=FX.matmul(FW.T()); fy.realize()
+  nd=int(fe.rt.lib.rt_dispatch_count(fe.rt.ctx))
+  rec(results, "folded_gemm_dispatch", abs(float(nd)-1.0), 0.0)   # exactly 1 dispatch
+  fl=fy.sum(axis=0).sum(axis=0); fl.backward(params=[FW])
+  rec_fwd("folded_gemm_fwd", md(fy.numpy(),fx@fw.T))
+  tfw=torch.from_numpy(fw).requires_grad_(True)
+  tfl=(torch.from_numpy(fx)@tfw.T).sum(); tfl.backward()
+  rec_grad("folded_gemm_grad", md(FW.grad,tfw.grad.numpy()))
+
   passed = sum(r["passed"] for r in results)
   report = {
     "generated_at":datetime.now(timezone.utc).isoformat(),
