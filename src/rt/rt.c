@@ -620,11 +620,11 @@ static void realize_fused(RT* c, RTTensor* t) {
     /* PR #50: CUDA-native pointwise path is only safe when every input already
      * lives in CUDA memory (or is a host leaf) and the program uses supported
      * ops, and this tensor is terminal (no Vulkan consumer of its buffer). */
-    int cn_ok = c->cuda_native && !c->capture && t->nconsumer == 0;
+    int cn_ok = c->cuda_native && !c->capture;
     if (cn_ok) {
       for (int i=0;i<f.ninputs;++i) {
         RtBuf* ib=f.in_buf[i];
-        if (!ib || !ib->host_valid) { cn_ok=0; break; }  /* only host leaves */
+        if (!ib || (!ib->host_valid && !ib->cn_dptr)) { cn_ok=0; break; }
       }
       for (int k=0;k<f.ninst && cn_ok;++k) {
         int op=f.inst[k].op;
