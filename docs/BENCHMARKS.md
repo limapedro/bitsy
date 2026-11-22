@@ -58,6 +58,32 @@ this GPU — see FINDINGS_PR15).
 
 ---
 
+## 2026-11-22 23:00 — PR #63: stable benchmark methodology — single-op ratios are workload-dependent, not noise
+
+Prior single-op sweeps swung between 0.7× and 1.5× for the same code, so I
+built `benchmarks/compact/stable_bench.py` with a reproducible method:
+interleave bitsy and torch *inside* every round, record the live GPU clock
+before/after the round and discard rounds where it changed, global warmup over
+all cases plus a clock-settle loop, then report median-of-round-medians with
+the full ratio spread and a win count (e.g. 7/7).
+
+Two consecutive runs give a consistent picture (not random noise):
+```
+sub 0.78x (7/7 wins)   div 0.79x (6-7/7)   relu 0.80x (7/7)
+exp 0.65x (7/7)        fused 0.80x (7/7)
+add 1.37x (0/7)        mul 1.22-1.35x     max 1.34-1.58x (0-1/7)
+sum ~1.0x              mean ~1.0x
+```
+So the pointwise reduction kernel is genuinely faster than PyTorch for
+sub/div/relu/exp and fused chains, while add/mul/max remain slower. The earlier
+"all pointwise ops beat PyTorch" claim from PR #54 was based on a noisier
+harness and is now corrected: that result is op-dependent and clock-sensitive
+(bitsy is D2H/copy-bound, torch is launch-bound, so the ratio moves with clock).
+
+No runtime change this turn — this establishes the measurement standard the
+remaining single-op work will be judged against. All gates green: v2 48/48,
+op 27/27, gradcheck 25/25, model 10/10, API 113/113, CTest 2/2. Core 3,602 lines.
+
 ## 2026-11-22 22:30 — PR #62: block-level atomic max/min + inference at parity
 
 Reduced atomic contention in the single-kernel max/min: warp-shuffle reduce
