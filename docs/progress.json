@@ -1,0 +1,57 @@
+{
+  "title": "Bitsy — progress toward PyTorch parity (v0.2 skeleton)",
+  "subtitle": "Oracle: PyTorch CUDA fp32 on GTX 1660 Super. Baseline numbers from the pre-skeleton history; this branch is documentation only.",
+  "footer": "Numeric parity is achieved on the implemented subset; speed parity (ratio >= 1.00) is the open goal. Green = pass/done, amber = numeric-only, grey = pending.",
+  "groups": [
+    {
+      "name": "Op numerics vs PyTorch (48-case gate)",
+      "total": 48,
+      "passed": 48,
+      "color": "#2ea043"
+    },
+    {
+      "name": "Model numerics vs PyTorch (MLP, CNN, RNN, LSTM, GPT-2)",
+      "total": 5,
+      "passed": 5,
+      "color": "#2ea043"
+    },
+    {
+      "name": "Ops at >= 1.0x PyTorch speed (baseline: 0 of 12: elementwise x5, matmul, sqrt, gelu, softmax, reduce, CE, sgd)",
+      "total": 12,
+      "passed": 0,
+      "color": "#d29922"
+    },
+    {
+      "name": "Models at >= 1.0x PyTorch speed (baseline ratios: MLP ~0.46, CNN n/a, RNN 0.15, LSTM 0.04, GPT-2 0.58)",
+      "total": 5,
+      "passed": 0,
+      "color": "#d29922"
+    },
+    {
+      "name": "Core line budget used (target 4096; baseline legacy 5710, v0.2 plan 2850)",
+      "total": 41,
+      "passed": 29,
+      "color": "#2ea043"
+    },
+    {
+      "name": "Roadmap phases complete (0 research; 1 skeleton; 2 lazy+parity; 3 speed; 4 release)",
+      "total": 5,
+      "passed": 1,
+      "color": "#2ea043"
+    }
+  ],
+  "notes": {
+    "numeric_pass_rule": "max_abs_diff within documented tolerance (EXACT for simple elementwise, 1e-5 matmul/transcendental, 1e-3 model loss)",
+    "speed_pass_rule": "torch_ms / bitsy_ms >= 1.00 on this GPU, warmup + median + spread + clock logged",
+    "baseline_source": "Published tables in main:docs/PROGRESS.md and main:BENCHMARKS.md (numeric diffs and speed ratios). Live JSON reports in benchmarks/results/*.json are regenerated per run and their timing spreads drift, so the published tables are treated as canonical.",
+    "numeric_source": "tests/parity/reports/latest.json (48/48 gate), exp_037-039 FINDINGS (PR #90)",
+    "speed_ratios": {
+      "elementwise_eager": "0.41-0.53",
+      "gemm_1024": "0.71",
+      "captured_step": "~0.46",
+      "rnn": "0.15",
+      "lstm": "0.04",
+      "gpt2": "0.58"
+    }
+  }
+}
