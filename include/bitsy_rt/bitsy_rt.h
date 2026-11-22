@@ -96,7 +96,7 @@ RT_API RTTensor* rt_matmul(RT*, RTTensor*, RTTensor*);
 /* Generic reduce: kind = RT_REDUCE_SUM/MEAN/MAX/MIN */
 RT_API RTTensor* rt_reduce(RT*, RTTensor*, int kind, int axis, int keepdim);
 RT_API RTTensor* rt_softmax(RT*, RTTensor* x, RTTensor* bias, int kind);  /* bias may be NULL */
-RT_API RTTensor* rt_layernorm(RT*, RTTensor* x, RTTensor* w, RTTensor* b, float eps);
+RT_API RTTensor* rt_layernorm(RT*, RTTensor* x, RTTensor* w, RTTensor* b, RTTensor* res, float eps);
 RT_API RTTensor* rt_reduce_sum(RT*, RTTensor*, int axis, int keepdim);
 RT_API RTTensor* rt_transpose(RT*, RTTensor*);
 RT_API RTTensor* rt_reshape(RT*, RTTensor*, int ndim, const int64_t* dims);

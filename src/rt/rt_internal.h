@@ -46,7 +46,7 @@ struct RTTensor {
   int ndim;
   int64_t dims[RT_MAXDIMS];
   int64_t stride[RT_MAXDIMS];   /* view stride; computed for leaves */
-  RTTensor* src[3];
+  RTTensor* src[4];   /* 4th used by fused residual epilogues (PR #29) */
   int nsrc;
   float scalar;
   int axis;
@@ -102,7 +102,7 @@ void rt_vk_gemm(RT*, RtBuf* a, RtBuf* b, RtBuf* bias,
                 int trans_a, int trans_b, int relu, RtBuf* out);
 void rt_vk_reduce(RT*, RtBuf* in, int kind, int axis, RtBuf* out);
 void rt_vk_softmax(RT*, RtBuf* in, RtBuf* bias, RtBuf* out, int kind);
-void rt_vk_layernorm(RT*, RtBuf* x, RtBuf* w, RtBuf* b, RtBuf* out, float eps);
+void rt_vk_layernorm(RT*, RtBuf* x, RtBuf* w, RtBuf* b, RtBuf* res, RtBuf* out, float eps);
 void rt_vk_capture_begin(RT*);
 void rt_vk_capture_end(RT*);
 void rt_vk_replay(RT*);

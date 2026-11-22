@@ -244,9 +244,10 @@ RTTensor* rt_softmax(RT* c, RTTensor* a, RTTensor* bias, int kind) {
   t->scalar=(float)kind;
   return t;
 }
-RTTensor* rt_layernorm(RT* c, RTTensor* x, RTTensor* w, RTTensor* b, float eps) {
+RTTensor* rt_layernorm(RT* c, RTTensor* x, RTTensor* w, RTTensor* b, RTTensor* res, float eps) {
   if (!x || x->ndim<1 || x->dims[x->ndim-1]>256) return NULL;
   RTTensor* t=node_new(c,RT_LAYERNORM,x->ndim,x->dims,3,x,w,b);
+  if(res){ t->src[3]=res; t->nsrc=4; res->nconsumer++; }
   t->scalar=eps;
   return t;
 }
@@ -608,14 +609,15 @@ static void realize_node(RT* c, RTTensor* t) {
   }
   if (t->op == RT_LAYERNORM) {
     RtBuf* x=t->src[0]->buf, *w=t->src[1]->buf, *b=t->src[2]->buf;
+    RtBuf* res=t->nsrc>3?t->src[3]->buf:NULL;
     RtBuf* out=rt_buf_new(c,t->ndim,t->dims,c->device);
-    if (c->device==RT_VULKAN && c->vk) rt_vk_layernorm(c,x,w,b,out,t->scalar);
+    if (c->device==RT_VULKAN && c->vk) rt_vk_layernorm(c,x,w,b,res,out,t->scalar);
     else { int cols=(int)x->dims[x->ndim-1], rows=x->n/cols; float eps=t->scalar;
       for(int r=0;r<rows;++r){ float m=0,vv=0;
-        for(int j=0;j<cols;++j) m+=x->host[r*cols+j]; m/=cols;
-        for(int j=0;j<cols;++j){ float d=x->host[r*cols+j]-m; vv+=d*d; } vv/=cols;
+        for(int j=0;j<cols;++j) m+=x->host[r*cols+j]+(res?res->host[r*cols+j]:0.f); m/=cols;
+        for(int j=0;j<cols;++j){ float d=x->host[r*cols+j]+(res?res->host[r*cols+j]:0.f)-m; vv+=d*d; } vv/=cols;
         float sc=1.0f/sqrtf(vv+eps);
-        for(int j=0;j<cols;++j) out->host[r*cols+j]=(x->host[r*cols+j]-m)*sc*w->host[j]+b->host[j];
+        for(int j=0;j<cols;++j) out->host[r*cols+j]=(x->host[r*cols+j]+(res?res->host[r*cols+j]:0.f)-m)*sc*w->host[j]+b->host[j];
       }
     }
     c->dispatch_count++; t->buf=out; return;
@@ -735,18 +737,30 @@ static RTTensor* grad_wrt(RT* c, RTTensor* t, int s, RTTensor* g) {
        * dx = (1/n)*s*(n*g*w - sum(g*w) - xhat*sum(g*w*xhat))
        * gw = sum_rows(g*xhat), gb = sum_rows(g) */
       RTTensor* x=t->src[0], *w=t->src[1];
-      int ax=t->ndim-1, cols=(int)x->dims[ax];
-      RTTensor* mean=rt_reduce(c,x,RT_REDUCE_MEAN,ax,1);
+      if(t->nsrc>3 && t->src[3]) x=rt_add(c,x,t->src[3]);  /* u = x + residual */
+      /* w may carry a leading 1 dim ((1,cols)); the normalised axis is always
+       * the last axis of the widest operand, not of x (fixes 1-D LN inputs). */
+      int wnd = w->ndim > x->ndim ? w->ndim : x->ndim;
+      int ax=wnd-1, cols=(int)x->dims[x->ndim-1];
+      RTTensor* mean=rt_reduce(c,x,RT_REDUCE_MEAN,x->ndim-1,1);
       RTTensor* d=rt_sub(c,x,mean);
-      RTTensor* var=rt_reduce(c,rt_mul(c,d,d),RT_REDUCE_MEAN,ax,1);
+      RTTensor* var=rt_reduce(c,rt_mul(c,d,d),RT_REDUCE_MEAN,x->ndim-1,1);
       RTTensor* inv=rt_pow(c,rt_add(c,var,scalar(c,t->scalar)),scalar(c,-0.5f));
       RTTensor* xhat=rt_mul(c,d,inv);
-      if(s==1) return rt_reduce(c,rt_mul(c,g,xhat),RT_REDUCE_SUM,0,1);
-      if(s==2) return rt_reduce(c,g,RT_REDUCE_SUM,0,1);
+      /* dw/db: sum over all leading axes, keep the last (feature) axis.
+       * A 1-D input has no leading axes -> no reduction needed. */
+      if(s==1){ RTTensor* gw=rt_mul(c,g,xhat);
+        for(int d=x->ndim-2;d>=0;--d) gw=rt_reduce(c,gw,RT_REDUCE_SUM,d,1);
+        return rt_reshape(c,gw,w->ndim,w->dims); }
+      if(s==2){ RTTensor* gb=g; RTTensor* bias=t->src[2];
+        for(int d=x->ndim-2;d>=0;--d) gb=rt_reduce(c,gb,RT_REDUCE_SUM,d,1);
+        return rt_reshape(c,gb,bias->ndim,bias->dims); }
       RTTensor* dxh=rt_mul(c,g,w);
       RTTensor* s1=rt_reduce(c,dxh,RT_REDUCE_SUM,ax,1);
       RTTensor* s2=rt_reduce(c,rt_mul(c,dxh,xhat),RT_REDUCE_SUM,ax,1);
-      RTTensor* core=rt_sub(c,rt_sub(c,dxh,s1),rt_mul(c,xhat,s2));
+      /* dx = (n*dxhat - sum(dxhat) - xhat*sum(dxhat*xhat)) * inv / n */
+      RTTensor* core=rt_sub(c,rt_sub(c,rt_mul(c,dxh,scalar(c,(float)cols)),s1),
+                            rt_mul(c,xhat,s2));
       return rt_mul(c,rt_mul(c,core,inv),scalar(c,1.0f/(float)cols));
     }
     case RT_SOFTMAX: {

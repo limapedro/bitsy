@@ -69,7 +69,7 @@ struct RtVk {
   int gemm_bm[3], gemm_bn[3];
   VkPipeline reduce, reduce_s1;
   VkPipeline softmax[4];   /* 0/1 = softmax/logsoftmax, 2/3 = +bias */
-  VkPipeline layernorm;
+  VkPipeline layernorm[2];   /* 0=plain, 1=with residual */
   VkBuffer reduce_part; VkDeviceMemory reduce_part_mem;   /* two-stage partials */
   VkPipelineCache pcache;
   RtVkBuf bufs[RT_NBUF];
@@ -333,7 +333,8 @@ void rt_vk_init(RT* c) {
   vk->softmax[1] = make_pipeline(vk, ss, 1, 1,0,0);
   vk->softmax[2] = make_pipeline(vk, ss, 1, 0,1,0);  /* kind=0, has_bias=1 */
   vk->softmax[3] = make_pipeline(vk, ss, 1, 1,1,0);  /* kind=1, has_bias=1 */
-  vk->layernorm = make_pipeline(vk, sl, 0, 0,0,0);
+  vk->layernorm[0] = make_pipeline(vk, sl, 1, 0,0,0);
+  vk->layernorm[1] = make_pipeline(vk, sl, 1, 1,0,0);  /* HAS_RES=1 */
 
   /* params + output staging buffers (host visible) */
   VkBufferCreateInfo bci = { .sType=VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
@@ -400,7 +401,7 @@ void rt_vk_shutdown(RT* c) {
     vkUnmapMemory(vk->dev,vk->rb_mem[i]);
     vkDestroyBuffer(vk->dev,vk->rb_buf[i],NULL); vkFreeMemory(vk->dev,vk->rb_mem[i],NULL);
   }
-  if (vk->layernorm) vkDestroyPipeline(vk->dev,vk->layernorm,NULL);
+  for(int i=0;i<2;++i) if(vk->layernorm[i]) vkDestroyPipeline(vk->dev,vk->layernorm[i],NULL);
   for(int i=0;i<4;++i) if(vk->softmax[i]) vkDestroyPipeline(vk->dev,vk->softmax[i],NULL);
   if (vk->reduce_s1) vkDestroyPipeline(vk->dev,vk->reduce_s1,NULL);
   if (vk->reduce_part) { vkDestroyBuffer(vk->dev,vk->reduce_part,NULL); vkFreeMemory(vk->dev,vk->reduce_part_mem,NULL); }
@@ -650,7 +651,7 @@ void rt_vk_gemm(RT* c, RtBuf* a, RtBuf* b, RtBuf* bias,
   finish_output(vk, out);
 }
 
-void rt_vk_layernorm(RT* c, RtBuf* x, RtBuf* w, RtBuf* b, RtBuf* out, float eps) {
+void rt_vk_layernorm(RT* c, RtBuf* x, RtBuf* w, RtBuf* b, RtBuf* res, RtBuf* out, float eps) {
   RtVk* vk=c->vk; if(!vk->dev) return;
   if (x->ndim<1 || x->dims[x->ndim-1]>256) return;
   int cols=(int)x->dims[x->ndim-1], rows=1;
@@ -664,16 +665,17 @@ void rt_vk_layernorm(RT* c, RtBuf* x, RtBuf* w, RtBuf* b, RtBuf* out, float eps)
     outaddr=vkGetBufferDeviceAddress(vk->dev,&ao); }
   else outaddr=vkbuf(c,out)->addr;
   pack_addr(p,10,outaddr);
+  if(res) pack_addr(p,12,vkbuf(c,res)->addr);
   int pc[4]={rows,cols,0,0};
   VkCommandBuffer cmd = slot?vk->replay_cmd:vk->cmd;
   VkDescriptorSet set = slot?slot->set:vk->set;
   if(!slot){ VkCommandBufferBeginInfo bi={.sType=VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
     vkBeginCommandBuffer(cmd,&bi); }
-  vkCmdBindPipeline(cmd,VK_PIPELINE_BIND_POINT_COMPUTE,vk->layernorm);
+  vkCmdBindPipeline(cmd,VK_PIPELINE_BIND_POINT_COMPUTE,vk->layernorm[res?1:0]);
   vkCmdBindDescriptorSets(cmd,VK_PIPELINE_BIND_POINT_COMPUTE,vk->playout,0,1,&set,0,NULL);
   vkCmdPushConstants(cmd,vk->playout,VK_SHADER_STAGE_COMPUTE_BIT,0,sizeof(pc),pc);
   vkCmdDispatch(cmd,rows,1,1);
-  if(slot){ if(slot->pipeline==VK_NULL_HANDLE){slot->pipeline=vk->layernorm;memcpy(slot->pc,pc,sizeof(int)*4);slot->groups=1;} return; }
+  if(slot){ if(slot->pipeline==VK_NULL_HANDLE){slot->pipeline=vk->layernorm[res?1:0];memcpy(slot->pc,pc,sizeof(int)*4);slot->groups=1;} return; }
   vkEndCommandBuffer(cmd); submit_wait(vk); finish_output(vk,out);
 }
 
@@ -955,7 +957,7 @@ void rt_vk_gemm(RT* c, RtBuf* a, RtBuf* b, RtBuf* bias, int ta, int tb, int relu
   (void)c;(void)a;(void)b;(void)bias;(void)ta;(void)tb;(void)relu;(void)o; }
 void rt_vk_reduce(RT* c, RtBuf* i, int kind, int ax, RtBuf* o){ (void)c;(void)i;(void)kind;(void)ax;(void)o; }
 void rt_vk_softmax(RT* c, RtBuf* i, RtBuf* bi, RtBuf* o, int k){ (void)c;(void)i;(void)bi;(void)o;(void)k; }
-void rt_vk_layernorm(RT* c, RtBuf* x, RtBuf* w, RtBuf* b, RtBuf* o, float e){ (void)c;(void)x;(void)w;(void)b;(void)o;(void)e; }
+void rt_vk_layernorm(RT* c, RtBuf* x, RtBuf* w, RtBuf* b, RtBuf* r, RtBuf* o, float e){ (void)c;(void)x;(void)w;(void)b;(void)r;(void)o;(void)e; }
 void rt_vk_capture_begin(RT* c){ (void)c; }
 void rt_vk_capture_end(RT* c){ (void)c; }
 void rt_vk_replay(RT* c){ (void)c; }

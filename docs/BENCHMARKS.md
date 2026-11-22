@@ -58,7 +58,26 @@ this GPU — see FINDINGS_PR15).
 
 ---
 
-## 2026-11-22 05:20 — PR #28 (in progress): fused softmax+bias + more APIs; clock-pin attempt
+## 2026-11-22 05:45 — PR #29 (in progress): residual+LayerNorm fusion + LN backward bug fix
+
+`LayerNorm(x + residual)` previously took 2 dispatches (add + layernorm).
+Extended `layernorm.comp` with a `HAS_RES` spec constant and 2 pipeline variants;
+`RT_LAYERNORM` carries an optional 4th source (residual), requiring
+`RTTensor.src[4]`. `nn.LayerNorm.forward(x, residual=None)` uses it.
+```
+residual+LN 4096x128: 1 dispatch (was 2), diff 2.4e-07, end-to-end 1.14ms vs torch 0.43ms (~2.6x)
+```
+
+**Correctness fix found while testing**: LayerNorm backward (shipped in PR #25,
+never gated) was missing the `n·dxhat` term and returned dw/db with the wrong
+shape. Verified against PyTorch: 1-D LN backward diff 1.2e-07 after fix (was
+0.66). Added 4 backward parity cases (x, residual, weight, bias) so this is
+gated now. Note `pow` on negative bases yields NaN in the GLSL kernel
+(pre-existing) — the new gate uses `mse_loss`, not `(y**2)`.
+
+Gates: v2 48/48, op 27/27, gradcheck 25/25, model 10/10, API 88/88, ctest 2/2.
+
+## 2026-11-22 05:20 — PR #28: fused softmax+bias + more APIs; clock-pin attempt
 
 **Clock pinning attempt**: `nvidia-smi -lgc 1530,1530` → "current user does not
 have permission to change clocks" (needs admin). Clocks cannot be pinned from

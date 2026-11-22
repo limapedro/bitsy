@@ -66,12 +66,14 @@ class LayerNorm(Module):
     self.b = Parameter(rt, np.zeros((1, dim)), "lnb")
     self.eps, self.dim = eps, dim
 
-  def forward(self, x):
+  def forward(self, x, residual=None):
     if len(x.shape) >= 1 and x.shape[-1] <= 256:
-      # PR #25: one fused dispatch (was 4)
-      h = x.rt.layernorm(x.h, self.W.h, self.b.h, self.eps)
-      return type(x)(x.rt, h, x.shape,
-                     x.requires_grad or self.W.requires_grad or self.b.requires_grad)
+      # PR #25: 1 dispatch (was 4); PR #29: residual add fused too
+      rh = residual.h if residual is not None else None
+      rg = (x.requires_grad or self.W.requires_grad or self.b.requires_grad or
+            (residual.requires_grad if residual is not None else False))
+      h = x.rt.layernorm(x.h, self.W.h, self.b.h, rh, self.eps)
+      return type(x)(x.rt, h, x.shape, rg)
     mean = x.mean(axis=-1, keepdim=True)
     d = x - mean
     var = (d * d).mean(axis=-1, keepdim=True)

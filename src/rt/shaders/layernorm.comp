@@ -4,8 +4,9 @@
 /* Bitsy 0.2 fused LayerNorm over the last dimension (<=256 cols).
  * One workgroup per row: load row, tree-reduce mean, tree-reduce variance,
  * then y = (x-mean)*rsqrt(var+eps)*weight + bias. All in one dispatch.
- * params: [0]=rows [1]=cols [2]=eps-bits [4]=In [6]=Weight [8]=Bias [10]=Out */
+ * params: [0]=rows [1]=cols [2]=eps-bits [4]=In [6]=Weight [8]=Bias [10]=Out [12]=Residual */
 layout(local_size_x = 256) in;
+layout(constant_id = 0) const int HAS_RES = 0;
 layout(buffer_reference, std430, buffer_reference_align = 4) readonly buffer F32 {
   float v[];
 };
@@ -24,9 +25,10 @@ void main(){
   int row=int(gl_WorkGroupID.x), tid=int(gl_LocalInvocationID.x);
   if(row>=rows) return;
   F32 In=F32(paddr(4)), W=F32(paddr(6)), B=F32(paddr(8));
+  F32 Res=F32(paddr(12));
   F32W Out=F32W(paddr(10));
 
-  for(int i=tid;i<cols;i+=256) smem[i]=In.v[row*cols+i];
+  for(int i=tid;i<cols;i+=256) smem[i]=In.v[row*cols+i]+(HAS_RES==1?Res.v[row*cols+i]:0.0);
   barrier();
   /* mean */
   float s=0.0; for(int i=tid;i<cols;i+=256) s+=smem[i];
