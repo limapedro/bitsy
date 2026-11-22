@@ -607,14 +607,14 @@ static int gemm_variant(int M, int N) {
 }
 
 void rt_vk_gemm(RT* c, RtBuf* a, RtBuf* b, RtBuf* bias,
-                int trans_a, int trans_b, RtBuf* out) {
+                int trans_a, int trans_b, int relu, RtBuf* out) {
   RtVk* vk=c->vk; if(!vk->dev) return;
   int ar=(int)a->dims[0], ac=(int)a->dims[1];
   int br=(int)b->dims[0], bc=(int)b->dims[1];
   int M = trans_a?ac:ar, K = trans_a?ar:ac, N = trans_b?br:bc;
   RtCaptureSlot* slot = vk->capturing ? cap_slot_new(vk, out) : NULL;
   int* p=(int*)(slot ? slot->params_map : vk->params_map);
-  p[0]=M;p[1]=N;p[2]=K; p[3]=trans_a | (trans_b<<1) | (bias?4:0);
+  p[0]=M;p[1]=N;p[2]=K; p[3]=trans_a | (trans_b<<1) | (bias?4:0) | (relu?8:0);
   p[4]=ar; p[5]=ac; p[6]=br; p[7]=bc;
   pack_addr(p,8,vkbuf(c,a)->addr); pack_addr(p,10,vkbuf(c,b)->addr);
   pack_addr(p,12,vkbuf(c,out)->addr);
@@ -878,8 +878,8 @@ static void download_device(RtVk* vk, RtBuf* b) {
 void rt_vk_init(RT* c){ (void)c; }
 void rt_vk_shutdown(RT* c){ (void)c; }
 void rt_vk_fused(RT* c, RtFusion* f, RtBuf* o){ (void)c;(void)f;(void)o; }
-void rt_vk_gemm(RT* c, RtBuf* a, RtBuf* b, RtBuf* bias, int ta, int tb, RtBuf* o){
-  (void)c;(void)a;(void)b;(void)bias;(void)ta;(void)tb;(void)o; }
+void rt_vk_gemm(RT* c, RtBuf* a, RtBuf* b, RtBuf* bias, int ta, int tb, int relu, RtBuf* o){
+  (void)c;(void)a;(void)b;(void)bias;(void)ta;(void)tb;(void)relu;(void)o; }
 void rt_vk_reduce(RT* c, RtBuf* i, int kind, int ax, RtBuf* o){ (void)c;(void)i;(void)kind;(void)ax;(void)o; }
 void rt_vk_capture_begin(RT* c){ (void)c; }
 void rt_vk_capture_end(RT* c){ (void)c; }

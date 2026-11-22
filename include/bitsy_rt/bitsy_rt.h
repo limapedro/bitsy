@@ -36,7 +36,8 @@ typedef enum {
   RT_GT, RT_GE, RT_LT, RT_LE, RT_EQ, RT_NE, RT_WHERE,
   RT_MATMUL, RT_REDUCE, RT_TRANSPOSE, RT_RESHAPE,
   /* internal derivative primitives (fuse like pointwise) */
-  RT_GT0, RT_GELUB
+  RT_GT0, RT_GELUB,
+  RT_GEMM_RELU   /* PR #23: GEMM + bias + ReLU in one dispatch */
 } RTOp;
 
 /* Reduce kind (rt_reduce). */

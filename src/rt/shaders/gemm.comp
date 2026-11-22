@@ -30,6 +30,7 @@ shared float Bs[BK * BN];
 void main() {
   int M = param[0], N = param[1], K = param[2], flags = param[3];
   bool ta = (flags & 1) != 0, tb = (flags & 2) != 0, hb = (flags & 4) != 0;
+  bool do_relu = (flags & 8) != 0;   /* PR #23: fused epilogue */
   F32 A = F32(paddr(8)), B = F32(paddr(10)), C = F32(paddr(12)), bias = F32(paddr(14));
 
   int tile = int(gl_WorkGroupID.x);
@@ -72,6 +73,8 @@ void main() {
   for (int e = 0; e < NE; ++e) {
     int ei = e * 256 + tid;
     int r = row0 + ei / BN, c = col0 + ei % BN;
-    if (r < M && c < N) C.v[r * N + c] = acc[e] + (hb ? bias.v[c] : 0.0);
+    float v = acc[e] + (hb ? bias.v[c] : 0.0);
+    if (do_relu && v < 0.0) v = 0.0;
+    if (r < M && c < N) C.v[r * N + c] = v;
   }
 }

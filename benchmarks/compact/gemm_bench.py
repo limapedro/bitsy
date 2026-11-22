@@ -73,6 +73,19 @@ def run(cfg=Config()):
                  "torch_vs_bitsy":bt["median_ms"]/tt["median_ms"]})
     print(f"n={n:5d} diff={diff:.2e} bitsy {bt['median_ms']:.3f} ms "
           f"torch {tt['median_ms']:.3f} ms  gap {rows[-1]['torch_vs_bitsy']:.2f}x")
+    # PR #23: GEMM + ReLU fused epilogue (one dispatch instead of two)
+    eng.reset_dispatch()
+    got2 = A.matmul(B).relu().numpy().copy()
+    dispatches = eng.dispatch()
+    want2 = torch.relu(ta @ tb).cpu().numpy()
+    diff2 = float(np.abs(got2 - want2).max())
+    bt2 = bench(lambda: A.matmul(B).relu().numpy(), cfg.warmup, cfg.iters)
+    tt2 = bench(lambda: torch.relu(ta @ tb).cpu().numpy(), cfg.warmup, cfg.iters)
+    rows.append({"n":n, "op":"gemm_relu", "diff":diff2, "dispatches":dispatches,
+                 "bitsy":bt2, "torch":tt2,
+                 "torch_vs_bitsy":bt2["median_ms"]/tt2["median_ms"]})
+    print(f"n={n:5d} gemm+relu ({dispatches} dispatch) bitsy {bt2['median_ms']:.3f} ms "
+          f"torch {tt2['median_ms']:.3f} ms  gap {rows[-1]['torch_vs_bitsy']:.2f}x diff {diff2:.1e}")
   clk1 = gpu_clock_mhz()
   rep = {"generated_at":datetime.now(timezone.utc).isoformat(),
     "environment":{"torch":torch.__version__,"gpu":torch.cuda.get_device_name(0),
