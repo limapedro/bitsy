@@ -448,10 +448,9 @@ static void realize_fused(RT* c, RTTensor* t) {
   if (f.ninst == 0) { rt_errf(c, "empty fusion"); return; }
   RtBuf* out = rt_buf_new(c, t->ndim, t->dims, c->device);
   if (!out) return;
-  if (c->capture) {
-    if (c->capture_n < RT_MAXBUF) c->capture_fusion[c->capture_n++] = f;
-  } else if (c->device == RT_VULKAN && c->vk) rt_vk_fused(c, &f, out);
+  if (c->device == RT_VULKAN && c->vk) rt_vk_fused(c, &f, out);  /* records if capturing */
   else fused_cpu(&f, out);
+  if (c->capture && c->capture_nout < RT_MAXBUF) c->capture_outputs[c->capture_nout++] = out;
   c->dispatch_count++;
   t->buf = out;
 }
@@ -467,6 +466,7 @@ static void realize_node(RT* c, RTTensor* t) {
     if (c->device == RT_VULKAN && c->vk)
       rt_vk_gemm(c, t->src[0]->buf, t->src[1]->buf, bias, ta, tb, out);
     else gemm_cpu(t->src[0]->buf, t->src[1]->buf, bias, ta, tb, out);
+    if (c->capture && c->capture_nout < RT_MAXBUF) c->capture_outputs[c->capture_nout++] = out;
     c->dispatch_count++; t->buf = out; return;
   }
   if (t->op == RT_REDUCE) {
@@ -475,6 +475,7 @@ static void realize_node(RT* c, RTTensor* t) {
     if (c->device == RT_VULKAN && c->vk)
       rt_vk_reduce(c, t->src[0]->buf, kind, t->axis, out);
     else reduce_cpu(t->src[0]->buf, kind, t->axis, out);
+    if (c->capture && c->capture_nout < RT_MAXBUF) c->capture_outputs[c->capture_nout++] = out;
     c->dispatch_count++; t->buf = out; return;
   }
   if (t->op == RT_RESHAPE) {
@@ -648,12 +649,21 @@ RTTensor* rt_grad(const RTTensor* t) { return t->grad; }
 
 /* ---------- capture / replay ---------- */
 
+void rt_upload(RT* c, RTTensor* t, const float* data) {
+  (void)c;
+  if (!t->buf) rt_realize(t->ctx, t);
+  if (!t->buf) return;
+  if (t->buf->device == RT_VULKAN && t->ctx->vk) { rt_vk_upload(t->ctx, t->buf, data); return; }
+  memcpy(t->buf->host, data, sizeof(float) * (size_t)t->buf->n);
+}
+
 void rt_capture_begin(RT* c) { c->capture = 1; c->capture_n = 0; c->capture_nsrc = 0;
+  c->capture_nout = 0;
   if (c->vk) rt_vk_capture_begin(c); }
 void rt_capture_end(RT* c) { c->capture = 0;
   if (c->vk) rt_vk_capture_end(c); }
 void rt_replay(RT* c) {
-  if (c->vk) { rt_vk_replay(c); return; }
+  if (c->vk) { rt_vk_replay(c); return; }  /* outputs copied back by rt_vk_replay */
   /* CPU replay: re-run captured fused programs against current src bufs */
   for (int i=0;i<c->capture_n;++i) {
     RtFusion* f = &c->capture_fusion[i];
