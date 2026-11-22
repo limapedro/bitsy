@@ -58,6 +58,31 @@ this GPU — see FINDINGS_PR15).
 
 ---
 
+## 2026-11-22 16:30 — PR #51: CUDA-native GEMM/reduction — implemented, measured, reverted
+
+Extended the dynamically-loaded CUDA path with native GEMM (`bgemm`) and two-stage
+reduction (`breduce1`/`breduce2`) kernels, CUDA-resident inputs, and dispatch
+hooks, so mixed graphs could stay on one backend. Correctness passed (GEMM diff
+5.3e-05, sum diff 0.0), after fixing the 12-argument kernel param packing and
+the transposed-B indexing.
+
+Measurements (CUDA path vs PyTorch, warmup/median, torch on CUDA):
+```
+GEMM 64x256 @ 256x128:  bitsy 0.107-0.120 ms vs torch 0.058-0.065  (1.8x SLOWER)
+sum over axis 0:        bitsy 0.333 ms       vs torch 0.031-0.064   (5-11x SLOWER)
+```
+The D2H+stream-sync fixed cost (~0.3 ms) dominates small-output reductions, and
+the naive GEMM cannot beat PyTorch's tuned kernel. Worse, a CUDA GEMM output has
+no Vulkan buffer, so a backward pointwise fusion cannot safely consume it —
+mixed CUDA/Vulkan graphs would produce wrong gradients. Making this the default
+is therefore unsafe as well as slower.
+
+Fully reverted (kernels/hooks removed); PR #50's pointwise path and all gates
+remain intact: 9/9 pointwise ops still beat PyTorch (gaps 0.77-0.90x).
+
+Gates: v2 48/48, op 27/27, gradcheck 25/25, model 10/10, API 112/112, ctest 2/2.
+Core 3,368 lines.
+
 ## 2026-11-22 15:55 — PR #50: CUDA-native pointwise execution — single ops beat PyTorch
 
 Broke the single-call barrier with a genuinely new path: a CUDA-native fused
