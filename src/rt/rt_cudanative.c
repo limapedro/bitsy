@@ -26,6 +26,7 @@ struct CN {
   int dbg;
   CUres (*cuInit)(unsigned); CUres (*cuCtxGetCurrent)(CUctx*);
   CUres (*cuCtxCreate)(CUctx*,unsigned,int); CUres (*cuDeviceGet)(int*,int);
+  CUres (*cuPrimaryRetain)(CUctx*,int);
   CUres (*cuModuleLoadData)(CUmod*,const void*);
   CUres (*cuModuleGetFunction)(CUfunc*,CUmod,const char*);
   CUres (*cuMemAlloc)(CUdptr*,size_t); CUres (*cuMemAllocHost)(void**,size_t);
@@ -46,6 +47,7 @@ static struct CN* cn_init(void){
   s->lib=lib; s->dbg=getenv("BT_CN_DBG")!=NULL;
   L(cuInit,"cuInit"); L(cuCtxGetCurrent,"cuCtxGetCurrent");
   L(cuCtxCreate,"cuCtxCreate_v2"); L(cuDeviceGet,"cuDeviceGet");
+  L(cuPrimaryRetain,"cuDevicePrimaryCtxRetain");
   L(cuModuleLoadData,"cuModuleLoadData"); L(cuModuleGetFunction,"cuModuleGetFunction");
   L(cuMemAlloc,"cuMemAlloc_v2"); L(cuMemAllocHost,"cuMemAllocHost_v2");
   L(cuMemcpyHtoDAsync,"cuMemcpyHtoDAsync_v2"); L(cuMemcpyDtoHAsync,"cuMemcpyDtoHAsync_v2");
@@ -53,7 +55,10 @@ static struct CN* cn_init(void){
   L(cuStreamSynchronize,"cuStreamSynchronize");
   if(s->cuInit(0)!=0){ DBG("init failed"); goto fail; }
   if(s->cuCtxGetCurrent(&s->ctx)!=0||!s->ctx){
-    int d=0; if(s->cuDeviceGet(&d,0)!=0||s->cuCtxCreate(&s->ctx,0,d)!=0){ DBG("ctx failed"); goto fail; }
+    int d=0; if(s->cuDeviceGet(&d,0)!=0){ DBG("device failed"); goto fail; }
+    /* Use the PRIMARY context (shared with PyTorch/CUDA runtime) so creating
+     * a context here does not cost ~0.4ms/call later. */
+    if(s->cuPrimaryRetain(&s->ctx,d)!=0){ DBG("primary ctx failed"); goto fail; }
   }
   if(s->cuStreamCreate(&s->stream,1)!=0){ DBG("stream failed"); goto fail; }
   if(s->cuModuleLoadData(&s->mod,rt_fused_cuda_ptx)!=0){ DBG("module failed"); goto fail; }
