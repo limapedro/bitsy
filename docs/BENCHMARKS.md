@@ -58,6 +58,36 @@ this GPU — see FINDINGS_PR15).
 
 ---
 
+## 2026-11-22 11:45 — PR #43: single-op gap study (two structural experiments rejected) + timestamp robustness
+
+Attacked the remaining pointwise/reduction gaps directly with two structural
+experiments, both reverted because they measured worse:
+
+1. **HOST_CACHED for large outputs** (remove the D2H copy and its fence wait by
+   having the kernel write straight to CPU-visible memory). `BT_HOSTOUT_KB`
+   sweep: 4 MB output regressed **1.543 → 2.263 ms** — GPU PCIe writes cost
+   ~0.32 ms vs 0.066 ms to DEVICE_LOCAL, and host overhead rose. The existing
+   4 KB cutoff is correct.
+2. **Larger reduction `NPART`** (more workgroups, fewer sequential loads/thread).
+   After fixing a hardcoded `vkCmdDispatch(...,64,...)` so the sweep was valid,
+   NPART=64 was fastest (0.2165 ms realize) vs 128 (0.2393), 256 (0.2896),
+   512 (0.2762), 1024 (0.3448). Reverted.
+
+Re-benchmarked every single eager op (`common_ops_bench.py`, warmup/median/
+spread, clock 1530→1950): pointwise 1.38–1.46×, reductions 4.2–4.9×, fused
+chain 1.22×; async 10-step loop 0.65× (1.5× faster). The pointwise/reduction
+gap is dominated by the ~0.4 ms driver fence wait (PyTorch add+sync 0.038 ms),
+which earlier attempts (fence polling, timeline semaphore, GPU-written mapped
+counter, ring) already showed is irreducible on this driver.
+
+Fixed a real profiling bug found during the study: `vkGetQueryPoolResults` may
+return `VK_NOT_READY` and leave the timestamp array uninitialized; the getter
+now zero-initializes both arrays, checks `VK_SUCCESS`, and rejects non-positive
+deltas. This keeps `timestamp_profile.py` trustworthy.
+
+Gates: v2 48/48, op 27/27, gradcheck 25/25, model 10/10, API 108/108, ctest 2/2.
+Core 3,159 lines.
+
 ## 2026-11-22 11:10 — PR #42: GEMM+bias epilogue — nn.Linear in one dispatch
 
 `rt_add` now folds `matmul(...) + bias` into the GEMM's existing bias epilogue
