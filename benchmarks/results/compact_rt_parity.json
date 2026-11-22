@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-22T04:58:44.407686+00:00",
+  "generated_at": "2026-11-22T05:05:27.636866+00:00",
   "environment": {
     "torch": "2.11.0+cu126",
     "gpu": "NVIDIA GeForce GTX 1660 SUPER",
@@ -141,13 +141,13 @@
     },
     {
       "name": "gemm_bias",
-      "max_abs_diff": 9.5367431640625e-07,
+      "max_abs_diff": 1.9073486328125e-06,
       "tol": 0.0001,
       "passed": true
     },
     {
       "name": "gemm_transA",
-      "max_abs_diff": 9.5367431640625e-07,
+      "max_abs_diff": 0.0,
       "tol": 0.0001,
       "passed": true
     },

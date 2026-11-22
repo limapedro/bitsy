@@ -40,12 +40,12 @@ Per-function numeric and performance evidence lives in [PROGRESS.md](PROGRESS.md
 |---|---|
 | `add`, `sub`, `mul`, `div` | done (cpu_ref + Vulkan, broadcast) |
 | `relu`, `sigmoid`, `tanh`, `exp`, `log` | done (cpu_ref + Vulkan) |
-| `true_divide`, `floor_divide`, `mod`, `remainder`, `fmod`, `pow`, `rpow`, `neg`, `abs`, `sign` | partial (PR #2: `pow`/`neg`/`abs`/`sign` done; division variants, mod/fmod missing) |
+| `true_divide`, `floor_divide`, `mod`, `remainder`, `fmod`, `pow`, `rpow`, `neg`, `abs`, `sign` | partial (PR #2 C primitives; PR #13 Python `Tensor.sign`; division variants/mod/fmod missing) |
 | `sqrt` | done (exp_037: cpu_ref + Vulkan, backward `1/(2*sqrt(x))`; clamps negatives at 0, PyTorch returns NaN — documented in exp_037 FINDINGS) |
 | `rsqrt`, `square`, `reciprocal`, `exp2`, `expm1`, `log2`, `log10`, `log1p`, `logaddexp` | partial (PR #9: `rsqrt`/`square`/`reciprocal`/`exp2`/`log2` done; `expm1`/`log10`/`log1p`/`logaddexp` missing) |
 | `sin`, `cos`, `tan`, `asin`, `acos`, `atan`, `atan2`, `sinh`, `cosh`, `asinh`, `acosh`, `atanh` | missing |
 | `erf`, `erfc`, `erfinv`, `lgamma`, `gamma`, `digamma` | missing |
-| `clamp`, `clip`, `round`, `floor`, `ceil`, `trunc`, `frac`, `nan_to_num`, `nan_to_num_` | partial (PR #9: `clamp`/`clip` done; rounding family missing) |
+| `clamp`, `clip`, `round`, `floor`, `ceil`, `trunc`, `frac`, `nan_to_num`, `nan_to_num_` | partial (PR #9: `clamp`/`clip`; PR #13: `clamp_min`/`clamp_max`; rounding family missing) |
 | `hypot`, `copysign`, `nextafter`, `lerp`, `addcmul`, `addcdiv` | partial (PR #9: `lerp` done; rest missing) |
 
 ## 4. Comparisons, logical, bitwise
@@ -71,7 +71,7 @@ Per-function numeric and performance evidence lives in [PROGRESS.md](PROGRESS.md
 | Representative API | Status |
 |---|---|
 | `matmul`, `mm`, `transpose` | done (2D, fp32; naive + tiled Vulkan GEMM) |
-| `bmm`, `addmm`, `dot`, `vdot`, `outer`, `inner`, `einsum`, `tensordot` | missing |
+| `bmm`, `addmm`, `dot`, `vdot`, `outer`, `inner`, `einsum`, `tensordot` | partial (PR #13: 1-D `dot`/`outer` done; rest missing) |
 | `solve`, `inv`, `pinv`, `lstsq`, `det`, `slogdet`, `matrix_rank`, `matrix_power` | missing |
 | `norm`, `matrix_norm`, `vector_norm`, `lu`, `qr`, `svd`, `cholesky`, `eigh`, `eig` | missing |
 | `cross`, `trace`, `kron`, `triangular_solve`, `householder` | missing |
