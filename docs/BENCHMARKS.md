@@ -58,7 +58,29 @@ this GPU — see FINDINGS_PR15).
 
 ---
 
-## 2026-11-22 04:35 — PR #25 (in progress): fused LayerNorm (4 → 1 dispatch)
+## 2026-11-22 04:50 — PR #26 (doc-only): combined kernel+D2H submit A/B (negative)
+
+Searched for Vulkan D2H techniques (web search returned no usable results), then
+A/B-tested recording the staging copy **in the same command buffer** as the
+kernel (`BT_COMBINED=1`), with a C-assigned readback slot per output, to reduce
+two submits/fences to one.
+
+```
+baseline (2 submits): fused_chain 0.91ms, relu 0.90ms, loop 0.62x
+combined (1 submit):  fused_chain 0.86ms, relu 0.89ms, loop 0.67x  (marginal)
+```
+**Correctness regression**: `training_scale_gradients` failed deterministically
+(grad_w2 check false; sometimes diff 1.9e-08, sometimes 6.3e-02) — the C-assigned
+ring slot and Python-side slot rotation can desynchronise when several gradients
+are read, aliasing results. Reverted the entire experiment; all gates green
+again (48/48, 25/25, 10/10). No code change shipped — this entry records the
+negative result so it is not retried blindly.
+
+The two-submit path is retained: for a single 4 MB output the fence/DMA cost is
+~0.4 ms and is driver-bound; the alternatives tried (pinned host import PR #22,
+combined submit this PR) were either much slower or incorrect.
+
+## 2026-11-22 04:35 — PR #25: fused LayerNorm (4 → 1 dispatch)
 
 `LayerNorm` previously took **4 dispatches** (mean, var, inv-sqrt+scale, affine).
 Added `src/rt/shaders/layernorm.comp`: one 256-thread workgroup per row,
