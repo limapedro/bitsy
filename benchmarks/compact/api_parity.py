@@ -288,6 +288,46 @@ def run(cfg=CFG):
   rec_fwd("capture_mlp_backward_w1", md(be2.rt.grad_refresh(BA.h,(12,16)),br1))
   rec_fwd("capture_mlp_backward_w2", md(be2.rt.grad_refresh(BB.h,(4,12)),br2))
 
+  # ---- PR #36: device-side SGD + whole-update-loop capture ----
+  sw=rng.standard_normal(128).astype(np.float32)
+  sg=rng.standard_normal(128).astype(np.float32)
+  se=bv.Engine(device=bv.Engine.VULKAN)
+  SW=se.tensor(sw); SG=se.tensor(sg)
+  se.sgd_update(SW.h,SG.h,0.1,0.0)
+  rec_fwd("sgd_device_update", md(SW.numpy(),sw-0.1*sg))
+  se2=bv.Engine(device=bv.Engine.VULKAN)
+  TW=se2.tensor(sw); TG=se2.tensor(sg)
+  se2.sgd_update(TW.h,TG.h,0.1,0.01)
+  rec_fwd("sgd_device_weight_decay", md(TW.numpy(),sw-0.1*(sg+0.01*sw)))
+
+  # full forward+backward+SGD captured, N steps in one submit == torch SGD steps
+  sx=rng.standard_normal((8,16)).astype(np.float32)
+  sw1=rng.standard_normal((12,16)).astype(np.float32)
+  sw2=rng.standard_normal((1,12)).astype(np.float32)
+  st=rng.standard_normal((8,1)).astype(np.float32)
+  lr=0.01
+  ue=bv.Engine(device=bv.Engine.VULKAN)
+  UX=ue.tensor(sx); UA=ue.tensor(sw1,requires_grad=True)
+  UB=ue.tensor(sw2,requires_grad=True); UT=ue.tensor(st)
+  def ufwd():
+    return bv.functional.mse_loss(UX.matmul(UA.T()).relu().matmul(UB.T()),UT)
+  ue.capture_begin()
+  uy=ufwd(); uy.backward(params=[UA,UB])
+  ue.sgd_update(UA.h,ue.grad_tensor(UA),lr,0.0)
+  ue.sgd_update(UB.h,ue.grad_tensor(UB),lr,0.0)
+  ue.capture_end()
+  ue.upload(UA,sw1); ue.upload(UB,sw2); ue.replay_n(4)
+  ga=ue.get(UA.h,(12,16)); gb=ue.get(UB.h,(1,12))
+  tsx=torch.from_numpy(sx); tw1=torch.from_numpy(sw1).requires_grad_(True)
+  tw2=torch.from_numpy(sw2).requires_grad_(True); tst=torch.from_numpy(st)
+  uopt=torch.optim.SGD([tw1,tw2],lr=lr)
+  for _ in range(4):
+    uopt.zero_grad()
+    ul=torch.nn.functional.mse_loss(torch.relu(tsx@tw1.T)@tw2.T,tst)
+    ul.backward(); uopt.step()
+  rec_grad("capture_full_update_w1", md(ga,tw1.detach().numpy()))
+  rec_grad("capture_full_update_w2", md(gb,tw2.detach().numpy()))
+
   passed = sum(r["passed"] for r in results)
   report = {
     "generated_at":datetime.now(timezone.utc).isoformat(),

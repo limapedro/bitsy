@@ -123,6 +123,8 @@ RT_API void rt_replay_submit_async(RT*); /* submit without wait; read waits auto
 /* PR #32: submit the captured graph N times in ONE vkQueueSubmit2 (single
  * timeline signal+wait), then one final read. Amortises host submit overhead. */
 RT_API void rt_replay_n(RT*, int n);
+/* PR #36: device-side in-place SGD (capturable): w -= lr*(g + wd*w). */
+RT_API void rt_sgd_update(RT*, RTTensor* w, RTTensor* grad, float lr, float wd);
 
 /* Zero-copy readback: returns a pointer to a persistent HOST_CACHED buffer
  * holding t's data (downloads if dirty). Valid for N_READBACK_SLOT consecutive

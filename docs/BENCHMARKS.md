@@ -58,6 +58,37 @@ this GPU — see FINDINGS_PR15).
 
 ---
 
+## 2026-11-22 08:15 — PR #36 (in progress): device-side SGD — ENTIRE update loop in one submit, beats PyTorch at every N
+
+PR #35 replayed fwd+bwd but optimizers were still host-side numpy. Added a
+device-side fused SGD kernel `sgd.comp` (`w -= lr*(g + wd*w)`, one invocation
+per element, in-place on the leaf weight buffer with a compute→compute memory
+barrier so the next replayed iteration sees updated weights). Exposed
+`rt_sgd_update` / `Engine.sgd_update` / `Engine.grad_tensor`, and captured the
+SGD dispatches INSIDE the graph. Now forward+backward+weight-update is a single
+command buffer replayed N times in ONE submit.
+
+Correctness (full update, captured replay vs torch.optim.SGD over N steps):
+- standalone N=5 (8×16→12×16→1): w1 diff 1.19e-07, w2 diff 5.96e-08
+- parity gate `capture_full_update_w1/w2` over N=4 passes (API 92 → **96 cases**)
+
+New `benchmarks/compact/train_loop_replay_bench.py` (batch 64 / 256→128→1,
+lr 0.01, warmup/median/spread, clock 1530, weights reset before each replay):
+```
+N= 10   batch 0.2281 | torch 0.2951 ms/step | gap 0.77x  (1.3x FASTER)
+N=100   batch 0.1320 | torch 0.2751 ms/step | gap 0.48x  (2.1x FASTER)
+N=500   batch 0.0661 | torch 0.2791 ms/step | gap 0.24x  (4.2x FASTER)
+```
+**First end-to-end training loop that beats PyTorch at every measured N** —
+even N=10, because torch's zero_grad/backward/optimizer host cost is counted
+while ours is amortized into one submit. Scope is honest: fixed-shape,
+fixed-hyperparameter steps replayed on the SAME inputs (no new data per step);
+this is the amortized/captured regime, not a claim of universal single-call
+parity (single eager calls remain 1.2–1.45× off PyTorch).
+
+Gates: v2 48/48, op 27/27, gradcheck 25/25, model 10/10, API **96/96**, ctest 2/2.
+Core 2,893 lines.
+
 ## 2026-11-22 07:50 — PR #35: backward capture FIXED — full training-step replay 8.3× faster than PyTorch
 
 **Root cause of the backward-capture bug**: `RT_TRANSPOSE`/`RT_RESHAPE` were realised

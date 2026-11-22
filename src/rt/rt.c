@@ -861,6 +861,14 @@ const float* rt_read_ptr(RT* c, RTTensor* t, int slot) {
   return (const float*)t->buf->host;
 }
 
+void rt_sgd_update(RT* c, RTTensor* w, RTTensor* grad, float lr, float wd) {
+  if (!c || !w || !grad) return;
+  if (!w->buf) rt_realize(c,w);
+  if (!grad->buf) rt_realize(c,grad);
+  if (c->vk) rt_vk_sgd_update(c,w->buf,grad->buf,lr,wd);
+  else { for(int i=0;i<w->buf->n;++i) w->buf->host[i]-=lr*(grad->buf->host[i]+wd*w->buf->host[i]); }
+}
+
 double rt_device_time_ms(const RT* c) { return c ? c->last_gpu_ms : 0.0; }
 double rt_copy_time_ms(const RT* c) { return c ? c->copy_gpu_ms : 0.0; }
 
