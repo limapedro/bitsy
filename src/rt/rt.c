@@ -498,21 +498,36 @@ static void reduce_cpu(RtBuf* in, int kind, int axis, RtBuf* out) {
 static void realize_node(RT* c, RTTensor* t);
 
 static void realize_fused(RT* c, RTTensor* t) {
-  RtFusion f; memset(&f, 0, sizeof(f));
-  f.ndim = t->ndim;
-  for (int i=0;i<t->ndim;++i) f.dims[i]=t->dims[i];
-  /* realize any cut-point descendants that the fusion will read */
-  int slot = emit(c, t, &f);
-  if (slot < 0) return;
-  if (f.ninst == 0) { rt_errf(c, "empty fusion"); return; }
-  f.sp_ok = fusion_to_spec(&f);
-  RtBuf* out = rt_buf_new(c, t->ndim, t->dims, c->device);
-  if (!out) return;
-  if (c->device == RT_VULKAN && c->vk) rt_vk_fused(c, &f, out);  /* records if capturing */
-  else fused_cpu(&f, out);
-  if (c->capture && c->capture_nout < RT_MAXBUF) c->capture_outputs[c->capture_nout++] = out;
-  c->dispatch_count++;
-  t->buf = out;
+  /* A single fusion can hold at most RT_MAXIN distinct leaf inputs. Deep
+   * composition trees (e.g. isnan/isinf built from several scalar constants)
+   * can exceed that. If emit fails, materialize the direct children into
+   * buffers and retry: each child then becomes a single leaf input. Never
+   * leave t->buf NULL — that silently read as zeros (fixed here). */
+  for (int attempt=0; attempt<4; ++attempt) {
+    RtFusion f; memset(&f, 0, sizeof(f));
+    f.ndim = t->ndim;
+    for (int i=0;i<t->ndim;++i) f.dims[i]=t->dims[i];
+    int slot = emit(c, t, &f);
+    if (slot < 0) {
+      if (attempt == 3) { /* give up: materialize an explicit zero buffer */
+        RtBuf* z = rt_buf_new(c, t->ndim, t->dims, c->device);
+        if (z) { memset(z->host, 0, sizeof(float)*(size_t)(z->n?z->n:1)); t->buf = z; }
+        return;
+      }
+      for (int i=0;i<t->nsrc;++i) if (t->src[i]) realize_node(c, t->src[i]);
+      continue;
+    }
+    if (f.ninst == 0) { rt_errf(c, "empty fusion"); return; }
+    f.sp_ok = fusion_to_spec(&f);
+    RtBuf* out = rt_buf_new(c, t->ndim, t->dims, c->device);
+    if (!out) return;
+    if (c->device == RT_VULKAN && c->vk) rt_vk_fused(c, &f, out);  /* records if capturing */
+    else fused_cpu(&f, out);
+    if (c->capture && c->capture_nout < RT_MAXBUF) c->capture_outputs[c->capture_nout++] = out;
+    c->dispatch_count++;
+    t->buf = out;
+    return;
+  }
 }
 
 static void realize_node(RT* c, RTTensor* t) {

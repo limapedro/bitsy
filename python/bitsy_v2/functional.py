@@ -87,3 +87,54 @@ def isclose(a: Tensor, b: Tensor, rtol: float = 1e-5, atol: float = 1e-8) -> Ten
 
 def allclose(a: Tensor, b: Tensor, rtol: float = 1e-5, atol: float = 1e-8) -> Tensor:
   return isclose(a, b, rtol, atol).all()
+
+
+# ---- PR #15: float classification + alias/hypot helpers ----
+def _scalar(x: Tensor, v: float) -> Tensor:
+  return Tensor.scalar(x.rt, v)
+
+
+def isnan(x: Tensor) -> Tensor:
+  """NaN != NaN is the standard IEEE NaN test."""
+  return x.ne(x).where(_scalar(x, 1.0), _scalar(x, 0.0))
+
+
+def isinf(x: Tensor) -> Tensor:
+  inf = Tensor.from_numpy(x.rt, np.array([np.inf], dtype=np.float32))
+  return x.abs().eq(inf).where(_scalar(x, 1.0), _scalar(x, 0.0))
+
+
+def isfinite(x: Tensor) -> Tensor:
+  return logical_not(logical_or(isnan(x), isinf(x)))
+
+
+def nan_to_num(x: Tensor, nan: float = 0.0, posinf: float = 3.4028235e38,
+               neginf: float = -3.4028235e38) -> Tensor:
+  z = _scalar(x, 0.0)
+  out = isnan(x).where(_scalar(x, nan), x)
+  pinf = Tensor.from_numpy(x.rt, np.array([np.inf], dtype=np.float32))
+  ninf = Tensor.from_numpy(x.rt, np.array([-np.inf], dtype=np.float32))
+  out = out.eq(pinf).where(_scalar(x, posinf), out)
+  out = out.eq(ninf).where(_scalar(x, neginf), out)
+  return out
+
+
+def greater(a: Tensor, b: Tensor) -> Tensor:
+  return a.gt(b).where(_scalar(a, 1.0), _scalar(a, 0.0))
+
+
+def less(a: Tensor, b: Tensor) -> Tensor:
+  return a.lt(b).where(_scalar(a, 1.0), _scalar(a, 0.0))
+
+
+def equal(a: Tensor, b: Tensor) -> Tensor:
+  return a.eq(b).where(_scalar(a, 1.0), _scalar(a, 0.0))
+
+
+def hypot(a: Tensor, b: Tensor) -> Tensor:
+  return ((a * a + b * b).sqrt())
+
+
+def copysign(a: Tensor, b: Tensor) -> Tensor:
+  z = _scalar(a, 0.0)
+  return b.lt(z).where(-a.abs(), a.abs())

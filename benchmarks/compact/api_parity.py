@@ -181,9 +181,27 @@ def run(cfg=CFG):
     ("allclose",     lambda a,b: F.allclose(a,b),     lambda a,b: torch.tensor([float(torch.allclose(a,b))], device=a.device)),
     ("dot",          lambda a,b: a.dot(b),            lambda a,b: torch.dot(a,b).reshape(1)),
     ("outer",        lambda a,b: a.outer(b),          lambda a,b: torch.outer(a,b)),
+    ("greater",      lambda a,b: F.greater(a,b),      lambda a,b: (a>b).float()),
+    ("less",         lambda a,b: F.less(a,b),         lambda a,b: (a<b).float()),
+    ("equal",        lambda a,b: F.equal(a,b),        lambda a,b: (a==b).float()),
+    ("hypot",        lambda a,b: F.hypot(a,b),        lambda a,b: torch.hypot(a,b)),
+    ("copysign",     lambda a,b: F.copysign(a,b),     lambda a,b: torch.copysign(a,b)),
   ]
   for nm, bf, tf in logical:
     rec_fwd(nm, md(bf(b1,b2).numpy(), tf(t1,t2).detach().cpu().numpy()))
+
+  # ---- float classification on special values ----
+  special = np.array([np.nan, np.inf, -np.inf, 0.0, -0.0, 1.0, -2.5] * 4, np.float32)
+  bs = bv.Tensor.from_numpy(eng.rt, special.copy())
+  ts = torch.tensor(special, device="cuda")
+  special_cases = [
+    ("isnan",      lambda t: F.isnan(t),          lambda t: torch.isnan(t).float()),
+    ("isinf",      lambda t: F.isinf(t),          lambda t: torch.isinf(t).float()),
+    ("isfinite",   lambda t: F.isfinite(t),       lambda t: torch.isfinite(t).float()),
+    ("nan_to_num", lambda t: F.nan_to_num(t),     lambda t: torch.nan_to_num(t)),
+  ]
+  for nm, bf, tf in special_cases:
+    rec_fwd(nm, md(bf(bs).numpy(), tf(ts).detach().cpu().numpy()))
 
   passed = sum(r["passed"] for r in results)
   report = {
