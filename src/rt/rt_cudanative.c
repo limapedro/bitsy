@@ -208,7 +208,7 @@ int rt_cn_reduce_max(void* in,void* part,void* out,int outer,int stride,int inne
   CUdptr i=(CUdptr)(size_t)in,p=(CUdptr)(size_t)part,o=(CUdptr)(size_t)out;
   void* a1[7]={(void*)&i,(void*)&p,(void*)&outer,(void*)&stride,(void*)&inner,(void*)&kind,(void*)&np};
   if(s->cuLaunchKernel(s->f_max1,(unsigned)lines,(unsigned)np,1,256,1,1,0,s->stream,a1,NULL)!=0) return -2;
-  void* a2[4]={(void*)&p,(void*)&o,(void*)&lines,(void*)&np};
+  void* a2[5]={(void*)&p,(void*)&o,(void*)&lines,(void*)&np,(void*)&kind};
   if(s->cuLaunchKernel(s->f_max2,(unsigned)((lines+255)/256),1,1,256,1,1,0,s->stream,a2,NULL)!=0) return -3;
   return 0;
 }

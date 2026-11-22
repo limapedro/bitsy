@@ -58,6 +58,31 @@ this GPU — see FINDINGS_PR15).
 
 ---
 
+## 2026-11-22 00:25 — PR #66: two-level max/min reaches parity — final-kernel arg bug fixed
+
+Re-enabled the atomic-free two-level max/min reduction (block-level partials
+into persistent scratch, then one final kernel) now that scratch is persistent
+and the output ring is large. First run showed a correctness diff of 1.5 in the
+harness — root cause: the final kernel `bmax2` has **5** parameters but the
+launch passed only **4** (missing `kind`), so it used garbage for the sentinel
+and reduced with the wrong comparison. Fixed the argument array.
+
+After the fix, rotated `stable_bench` (two runs):
+```
+max 0.99x (4/6 wins) then 0.97x (4/7 wins)  <- PARITY, was 1.23-1.55x
+add 0.88x (7/7), fused 0.92x (7/7), sum ~1.1x, mean ~1.07x
+```
+End-to-end 4-layer MLP 0.3349 vs 0.4335 ms/step (0.77×, 1.29× faster).
+Inference 0.0442 vs 0.0455 ms/step (0.97×, faster).
+
+All gates green twice: v2 48/48, op 27/27, gradcheck 25/25, model 10/10,
+API 113/113, CTest 2/2. Core 3,615 lines.
+
+With this, every measured single op meets or beats PyTorch under the
+rotation-unbiased harness except sum/mean (~1.1×, small-output D2H bound).
+The strict "surpass overall" bar is still not claimed, but the last large
+single-op gap (max/min) is closed.
+
 ## 2026-11-22 23:55 — PR #65: max/min single-block variant measured, atomic path retained
 
 Tested a single-block-per-line max/min kernel (1024 threads, shared-memory
