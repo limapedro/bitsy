@@ -29,14 +29,25 @@ come only from running real PyTorch comparison scripts.
 - [x] Line-budget plan → `LINE_BUDGET.md`
 - [x] Benchmark & parity methodology → `BENCHMARK_METHODOLOGY.md`
 - [x] Progress dashboard (HTML template + native SVG export, one JSON source) → `assets/`, `tools/`, `docs/progress.json`
-- [x] **Complete function map, low-level C+Vulkan core** → `docs/roadmap/C_VULKAN_CORE.md`
-- [x] **Complete function map, Python library** → `docs/roadmap/PYTHON_LIBRARY.md`
-- [x] **Vulkan→CUDA performance techniques + benchmarks (research-backed)** → `docs/roadmap/VULKAN_PERFORMANCE.md`
+- [x] **Frozen primitive set — why the core never grows** → `docs/roadmap/PRIMITIVE_SET.md`
+- [x] **Exhaustive map: 133 tensor functions** → `docs/roadmap/MAP_TENSOR.md`
+- [x] **Exhaustive map: 98 nn functions/layers** → `docs/roadmap/MAP_NN.md`
+- [x] **Exhaustive map: 54 training + 12 out-of-scope** → `docs/roadmap/MAP_TRAINING.md`
+- [x] Low-level C+Vulkan core function map → `docs/roadmap/C_VULKAN_CORE.md`
+- [x] Python library function map → `docs/roadmap/PYTHON_LIBRARY.md`
+- [x] Vulkan→CUDA performance techniques + benchmarks → `docs/roadmap/VULKAN_PERFORMANCE.md`
 
-The three `docs/roadmap/*` files are the detailed "what to build" companion to
-this phased roadmap: every C function, every Python API, the kernel vocabulary
-they lower to, the backward rules, and the measured techniques (with sources)
-to close the speed gap on this GPU.
+### The key architectural decision
+
+The C+Vulkan core is a **frozen set of ~45 primitives across 6 shaders**
+(`PRIMITIVE_SET.md`) — it does **not** grow when new functionality is added. All
+**285 mapped functions/layers/ops** are Python compositions of those primitives,
+so adding a new activation, layer, or loss is a Python-only change with **zero new
+C lines**. This keeps the core at ~2500 lines (cap 4096) while the Python library
+stays lean and fast (the scheduler fuses each composition into few dispatches).
+The four `MAP_*.md` / `PRIMITIVE_SET.md` files are the auditable, counted proof:
+every PyTorch function is listed with its exact primitive composition, dispatch
+count, backward rule, and parity test — or explicitly scoped out.
 
 ## Phase 1 — Skeleton & build (next branch)
 

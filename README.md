@@ -34,6 +34,10 @@ for a breakdown of the reference image and how each element maps here.
 |---|---|
 | [ROADMAP.md](ROADMAP.md) | Phased plan for the v0.2 skeleton (C+Vulkan, Python, benchmarks) |
 | [SKELETON.md](SKELETON.md) | Directory/module layout for the implementation |
+| [docs/roadmap/PRIMITIVE_SET.md](docs/roadmap/PRIMITIVE_SET.md) | The frozen ~45-primitive C+Vulkan vocabulary — why the core never grows |
+| [docs/roadmap/MAP_TENSOR.md](docs/roadmap/MAP_TENSOR.md) | 224 tensor functions → primitive compositions |
+| [docs/roadmap/MAP_NN.md](docs/roadmap/MAP_NN.md) | 126 nn functions/layers → primitive compositions |
+| [docs/roadmap/MAP_TRAINING.md](docs/roadmap/MAP_TRAINING.md) | 52 training + 16 out-of-scope functions |
 | [docs/roadmap/C_VULKAN_CORE.md](docs/roadmap/C_VULKAN_CORE.md) | Every low-level C+Vulkan function, kernel, and its parity case |
 | [docs/roadmap/PYTHON_LIBRARY.md](docs/roadmap/PYTHON_LIBRARY.md) | Every Python API, its kernel lowering, and backward rules |
 | [docs/roadmap/VULKAN_PERFORMANCE.md](docs/roadmap/VULKAN_PERFORMANCE.md) | Research-backed Vulkan→CUDA speed techniques + benchmark plan |
