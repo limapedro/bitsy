@@ -34,7 +34,10 @@ class Config:
   sizes:tuple = (256, 512, 1024)
   warmup:int = 5
   iters:int = 20
-  tol:float = 1e-4
+  # FMA changes the fp32 accumulation rounding vs cuBLAS; absolute error grows
+  # with K. The numeric parity gate uses small matrices at 1e-4; this benchmark
+  # sweeps up to K=1024, so allow 3e-4 and report the actual max diff per size.
+  tol:float = 3e-4
   result_path:Path = ROOT / "benchmarks" / "results" / "compact_gemm.json"
 
 

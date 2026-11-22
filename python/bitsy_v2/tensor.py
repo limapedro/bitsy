@@ -146,8 +146,14 @@ class Tensor:
       self.ge(Tensor.scalar(self.rt, 3.0)).where(
         self, self * (self + Tensor.scalar(self.rt, 3.0)) * Tensor.scalar(self.rt, 1.0/6.0)))
 
+  def sign(self) -> "Tensor": return self._unary("sign")
   def square(self) -> "Tensor": return self * self
   def reciprocal(self) -> "Tensor": return Tensor.scalar(self.rt, 1.0) / self
+  def clamp_min(self, lo: float) -> "Tensor": return self.maximum(Tensor.scalar(self.rt, lo))
+  def clamp_max(self, hi: float) -> "Tensor": return self.minimum(Tensor.scalar(self.rt, hi))
+  def dot(self, other: "Tensor") -> "Tensor": return (self * other).sum(axis=0)
+  def outer(self, other: "Tensor") -> "Tensor":
+    return self.reshape(self.numel(), 1) * other.reshape(1, other.numel())
   def rsqrt(self) -> "Tensor": return self.sqrt().reciprocal()
   def exp2(self) -> "Tensor": return (self * Tensor.scalar(self.rt, np.log(2.0))).exp()
   def log2(self) -> "Tensor": return self.log() * Tensor.scalar(self.rt, 1.0/np.log(2.0))
@@ -159,6 +165,10 @@ class Tensor:
 
   # ---- reductions / movement ----
   def sum(self, axis=0, keepdim=False) -> "Tensor":
+    if axis is None:
+      t = self
+      for _ in range(len(self.shape)): t = t.sum(axis=0)
+      return t
     h = self.rt.reduce(self.h, SUM, axis, 1 if keepdim else 0)
     shape = list(self.shape)
     if keepdim: shape[axis] = 1
@@ -166,6 +176,10 @@ class Tensor:
     return Tensor(self.rt, h, tuple(shape) or (1,), self.requires_grad)
 
   def mean(self, axis=0, keepdim=False) -> "Tensor":
+    if axis is None:
+      t = self
+      for _ in range(len(self.shape)): t = t.mean(axis=0)
+      return t
     h = self.rt.reduce(self.h, MEAN, axis, 1 if keepdim else 0)
     shape = list(self.shape)
     if keepdim: shape[axis] = 1

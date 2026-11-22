@@ -60,9 +60,9 @@ void main() {
     for (int e = 0; e < NE; ++e) {
       int ei = e * 256 + tid;
       int r = ei / BN, c = ei % BN;
-      float s = 0.0;
-      for (int kk = 0; kk < BK; ++kk) s += As[r * BK + kk] * Bs[kk * BN + c];
-      acc[e] += s;
+      float s = acc[e];
+      for (int kk = 0; kk < BK; ++kk) s = fma(As[r * BK + kk], Bs[kk * BN + c], s);
+      acc[e] = s;
     }
     barrier();
   }

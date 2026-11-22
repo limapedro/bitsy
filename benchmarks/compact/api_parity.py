@@ -94,6 +94,11 @@ def run(cfg=CFG):
     ("exp2",   lambda t: t.exp2(),         lambda t: torch.exp2(t)),
     ("log2",   lambda t: t.log2(),         lambda t: torch.log2(t)),
     ("clamp",  lambda t: t.clamp(-0.5, 0.5), lambda t: torch.clamp(t, -0.5, 0.5)),
+    ("sign",   lambda t: t.sign(),         lambda t: torch.sign(t)),
+    ("clamp_min", lambda t: t.clamp_min(-0.2), lambda t: torch.clamp_min(t, -0.2)),
+    ("clamp_max", lambda t: t.clamp_max(0.2),  lambda t: torch.clamp_max(t, 0.2)),
+    ("sum_all", lambda t: t.sum(axis=None), lambda t: t.sum()),
+    ("mean_all", lambda t: t.mean(axis=None), lambda t: t.mean()),
   ]
   # positive inputs: C sqrt clamps negatives at 0 (documented exp_037 deviation),
   # while PyTorch rsqrt/log2 return NaN — compare on the overlapping domain.
@@ -161,6 +166,8 @@ def run(cfg=CFG):
                                                       lambda a,b: (a>0).any().float()),
     ("isclose",      lambda a,b: F.isclose(a,b),      lambda a,b: torch.isclose(a,b).float()),
     ("allclose",     lambda a,b: F.allclose(a,b),     lambda a,b: torch.tensor([float(torch.allclose(a,b))], device=a.device)),
+    ("dot",          lambda a,b: a.dot(b),            lambda a,b: torch.dot(a,b).reshape(1)),
+    ("outer",        lambda a,b: a.outer(b),          lambda a,b: torch.outer(a,b)),
   ]
   for nm, bf, tf in logical:
     rec_fwd(nm, md(bf(b1,b2).numpy(), tf(t1,t2).detach().cpu().numpy()))
