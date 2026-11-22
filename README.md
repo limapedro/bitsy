@@ -34,6 +34,9 @@ for a breakdown of the reference image and how each element maps here.
 |---|---|
 | [ROADMAP.md](ROADMAP.md) | Phased plan for the v0.2 skeleton (C+Vulkan, Python, benchmarks) |
 | [SKELETON.md](SKELETON.md) | Directory/module layout for the implementation |
+| [docs/roadmap/C_VULKAN_CORE.md](docs/roadmap/C_VULKAN_CORE.md) | Every low-level C+Vulkan function, kernel, and its parity case |
+| [docs/roadmap/PYTHON_LIBRARY.md](docs/roadmap/PYTHON_LIBRARY.md) | Every Python API, its kernel lowering, and backward rules |
+| [docs/roadmap/VULKAN_PERFORMANCE.md](docs/roadmap/VULKAN_PERFORMANCE.md) | Research-backed Vulkan→CUDA speed techniques + benchmark plan |
 | [FEATURE_PARITY_MATRIX.md](FEATURE_PARITY_MATRIX.md) | Per-op / per-model numeric + speed status vs PyTorch |
 | [LINE_BUDGET.md](LINE_BUDGET.md) | ≤ 4096-line C core rule and allocation (stretch 2048) |
 | [BENCHMARK_METHODOLOGY.md](BENCHMARK_METHODOLOGY.md) | How numerics and speed are measured against PyTorch |

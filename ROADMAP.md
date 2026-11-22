@@ -21,14 +21,22 @@ come only from running real PyTorch comparison scripts.
 - No argparse in tools/benchmarks (dataclass configs), consistent with the
   established project convention.
 
-## Phase 0 — Research (this branch) — done when merged
+## Phase 0 — Research & detailed roadmap (this branch)
 
 - [x] Study tinygrad, PyTorch 2.15, JAX at high level → `docs/research/FRAMEWORKS.md`
 - [x] Feature parity matrix → `FEATURE_PARITY_MATRIX.md`
 - [x] Project skeleton spec (C+Vulkan + Python + benchmarks) → `SKELETON.md`
 - [x] Line-budget plan → `LINE_BUDGET.md`
 - [x] Benchmark & parity methodology → `BENCHMARK_METHODOLOGY.md`
-- [x] Progress image generator + data + README embed → `tools/`, `docs/progress.json`
+- [x] Progress dashboard (HTML template + native SVG export, one JSON source) → `assets/`, `tools/`, `docs/progress.json`
+- [x] **Complete function map, low-level C+Vulkan core** → `docs/roadmap/C_VULKAN_CORE.md`
+- [x] **Complete function map, Python library** → `docs/roadmap/PYTHON_LIBRARY.md`
+- [x] **Vulkan→CUDA performance techniques + benchmarks (research-backed)** → `docs/roadmap/VULKAN_PERFORMANCE.md`
+
+The three `docs/roadmap/*` files are the detailed "what to build" companion to
+this phased roadmap: every C function, every Python API, the kernel vocabulary
+they lower to, the backward rules, and the measured techniques (with sources)
+to close the speed gap on this GPU.
 
 ## Phase 1 — Skeleton & build (next branch)
 
