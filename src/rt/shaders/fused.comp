@@ -2,15 +2,13 @@
 #extension GL_EXT_buffer_reference2 : require
 #extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
 /* Bitsy 0.2 fused pointwise kernel. One dispatch evaluates an entire elementwise
- * chain per element via a small stack interpreter. Inputs are bindless device
- * addresses; shapes/strides/program live in a std430 params buffer.
- * Opcode numbers match RtInstOp in rt_internal.h exactly. */
+ * chain per element via a small stack interpreter. Inputs/outputs are bindless
+ * device addresses; shapes/strides/program live in a std430 params buffer. */
 layout(local_size_x = 256) in;
 
 layout(buffer_reference, std430, buffer_reference_align = 4) readonly buffer F32 {
   float v[];
 };
-
 /* params layout (int32 words):
  * [0]=n [1]=ninst [2]=ninputs [3]=ndim
  * [4..7]=out dims
@@ -36,7 +34,7 @@ float apply1(int op, float x) {
   if (op == 9) return tanh(x);
   if (op == 10) return 1.0 / (1.0 + exp(-x));
   if (op == 11) return x > 0.0 ? x : 0.0;
-  if (op == 12 || op == 14) {                 /* GELU / GELUB uses erf below */
+  if (op == 12 || op == 14) {
     float s = x < 0.0 ? -1.0 : 1.0, ax = abs(x) * 0.70710678;
     float t = 1.0 / (1.0 + 0.3275911 * ax);
     float p = ((((1.061405429 * t - 1.453152027) * t + 1.421413741) * t
@@ -54,7 +52,7 @@ float apply2(int op, float a, float b) {
   if (op == 2) return a - b;
   if (op == 3) return a * b;
   if (op == 4) return b != 0.0 ? a / b : 0.0;
-  if (op == 14) {                             /* GELUB: a=grad, b=x */
+  if (op == 14) {
     float s = b < 0.0 ? -1.0 : 1.0, ax = abs(b) * 0.70710678;
     float t = 1.0 / (1.0 + 0.3275911 * ax);
     float p = ((((1.061405429 * t - 1.453152027) * t + 1.421413741) * t
@@ -82,7 +80,7 @@ void main() {
   int coord[4];
   int rem = int(i);
   for (int j = nd - 1; j >= 0; --j) { coord[j] = rem % param[4 + j]; rem /= param[4 + j]; }
-  float stk[256];
+  float stk[16];   /* small fixed stack -> registers, not local memory */
   int sp = 0;
   for (int k = 0; k < param[1]; ++k) {
     int base = 58 + k * 4;
@@ -92,7 +90,6 @@ void main() {
       for (int j = 0; j < nd; ++j) off += int64_t(coord[j]) * int64_t(param[8 + a * 4 + j]);
       stk[sp++] = load_in(a, off);
     } else if (op == 26) {
-      /* WHERE: stack has cond, a, b pushed; c-bits hold unused third index */
       float bv = stk[--sp], av = stk[--sp], cv = stk[--sp];
       stk[sp++] = cv != 0.0 ? av : bv;
     } else if (op == 1 || op == 2 || op == 3 || op == 4 || op == 14 ||
@@ -107,4 +104,3 @@ void main() {
   }
   F32(get_addr(40)).v[i] = stk[sp - 1];
 }
-

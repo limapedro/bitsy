@@ -34,4 +34,5 @@ def load(build_dir: Path) -> C.CDLL:
   lib.rt_capture_begin.argtypes=[C.c_void_p]
   lib.rt_capture_end.argtypes=[C.c_void_p]
   lib.rt_replay.argtypes=[C.c_void_p]
+  lib.rt_replay_submit_only.argtypes=[C.c_void_p]
   return lib

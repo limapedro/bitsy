@@ -22,7 +22,8 @@ numeric reference. See `experiments/exp_040/` and `docs/study/`.
 | R2 | Fuse | Scheduler collapses pointwise chains into one kernel | **done** (PR #1: 1-dispatch proof on CPU+Vulkan) |
 | R2b | Autograd | Full backward rules on compact core | **done** (PR #3: 25/25 gradcheck vs PyTorch CUDA) |
 | R2c | Python nn/optim | Lean Python compositions over C primitives | **done** (PR #4: MLP/LN/RNN/SGD/AdamW, 10/10 vs PyTorch CUDA, ~0 new C lines) |
-| R4 | Exec | Vulkan device + capture/replay (driver bypass) | **done** (PR #5: replay 1.48x vs eager; 194x slower than PyTorch — speed parity NOT met) |
+| R4 | Exec | Vulkan device + capture/replay (driver bypass) | **done** (PR #5: replay 1.48x vs eager) |
+| R6 | Perf | Attack the PyTorch speed gap (evidence-driven) | **done** (PR #6: profiled download=96% of gap; HOST_CACHED+lazy download cut 194x -> 3.5x per-step; speed parity still NOT met) |
 | R3 | Kernels | One parameterized GEMM + reduce + fused elementwise; drop 10 GEMM variants | **done** (PR #2: gemm+bias/transpose, reduce sum/mean/max/min, 27/27 vs PyTorch CUDA) |
 | R4 | Exec | Vulkan device/allocator + command-buffer capture/replay (JIT) | planned |
 | R5 | Verify | Parity gate green, ≤4096 lines, benchmarks, tag 0.2, push main | planned |

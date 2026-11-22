@@ -303,6 +303,7 @@ static RtCaptureSlot* cap_slot_new(RtVk* vk, RtBuf* out) {
   if (vk->capture_slot_count >= RT_CAPTURE_SLOTS) return NULL;
   RtCaptureSlot* s = &vk->cap_slots[vk->capture_slot_count++];
   memset(s, 0, sizeof(*s)); s->used = 1; s->out_buf = out;
+  if (out) out->cap_slot = s;   /* back-reference for lazy download */
   s->output_in_slot = 1;  /* fused output goes to this slot's out buffer */
   VkPhysicalDeviceMemoryProperties mp; vkGetPhysicalDeviceMemoryProperties(vk->phys,&mp);
   uint32_t mt=0;
@@ -325,11 +326,16 @@ static RtCaptureSlot* cap_slot_new(RtVk* vk, RtBuf* out) {
   vkAllocateMemory(vk->dev,&ai,NULL,&s->params_mem);
   vkBindBufferMemory(vk->dev,s->params,s->params_mem,0);
   vkMapMemory(vk->dev,s->params_mem,0,req.size,0,&s->params_map);
-  /* out (sized to the dispatch's output) */
+  /* out (sized to the dispatch's output). Prefer HOST_CACHED so the CPU readback
+   * of large outputs is cached rather than streaming uncached over PCIe. */
   bci.size = out_bytes;
   vkCreateBuffer(vk->dev,&bci,NULL,&s->out);
   vkGetBufferMemoryRequirements(vk->dev,s->out,&req);
-  ai.allocationSize=req.size;
+  uint32_t omt=mt;
+  for(uint32_t i=0;i<mp.memoryTypeCount;++i) if((req.memoryTypeBits&(1u<<i)) &&
+    (mp.memoryTypes[i].propertyFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) &&
+    (mp.memoryTypes[i].propertyFlags & VK_MEMORY_PROPERTY_HOST_CACHED_BIT)){omt=i;break;}
+  ai.allocationSize=req.size; ai.memoryTypeIndex=omt;
   vkAllocateMemory(vk->dev,&ai,NULL,&s->out_mem);
   vkBindBufferMemory(vk->dev,s->out,s->out_mem,0);
   vkMapMemory(vk->dev,s->out_mem,0,req.size,0,&s->out_map);
@@ -468,7 +474,7 @@ void rt_vk_capture_end(RT* c){
   vkEndCommandBuffer(vk->replay_cmd);
   vk->capturing=0; vk->replay_count=vk->capture_slot_count;
 }
-void rt_vk_replay(RT* c){
+void rt_vk_submit_only(RT* c){
   RtVk* vk=c->vk; if(!vk||!vk->dev||!vk->replay_count)return;
   vk->tick++;
   VkSemaphoreSubmitInfo w={.sType=VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,.semaphore=vk->timeline,.value=vk->tick-1,.stageMask=VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT};
@@ -478,19 +484,24 @@ void rt_vk_replay(RT* c){
   vkQueueSubmit2(vk->queue,1,&si,VK_NULL_HANDLE);
   VkSemaphoreWaitInfo wi={.sType=VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,.semaphoreCount=1,.pSemaphores=&vk->timeline,.pValues=&vk->tick};
   vkWaitSemaphores(vk->dev,&wi,UINT64_MAX);
+}
+void rt_vk_download_outputs(RT* c){
+  RtVk* vk=c->vk; if(!vk||!vk->dev)return;
   /* copy each dispatch's result into its output buffer's host view */
   for (int i=0;i<vk->capture_slot_count;++i) {
-    RtCaptureSlot* s=&vk->cap_slots[i];
-    if (!s->out_buf) continue;
-    if (s->output_in_slot) {
-      memcpy(s->out_buf->host, s->out_map, sizeof(float)*(size_t)s->out_buf->n);
+    RtCaptureSlot* sl=&vk->cap_slots[i];
+    if (!sl->out_buf) continue;
+    sl->out_buf->dirty = 0;
+    if (sl->output_in_slot) {
+      memcpy(sl->out_buf->host, sl->out_map, sizeof(float)*(size_t)sl->out_buf->n);
     } else {
-      RtVkBuf* vb=(RtVkBuf*)s->out_buf->vk;
+      RtVkBuf* vb=(RtVkBuf*)sl->out_buf->vk;
       if (vb) { void* m; vkMapMemory(vk->dev,vb->mem,0,vb->size,0,&m);
-        memcpy(s->out_buf->host,m,vb->size); vkUnmapMemory(vk->dev,vb->mem); }
+        memcpy(sl->out_buf->host,m,vb->size); vkUnmapMemory(vk->dev,vb->mem); }
     }
   }
 }
+void rt_vk_replay(RT* c){ rt_vk_submit_only(c); rt_vk_download_outputs(c); }
 void rt_vk_upload(RT* c, RtBuf* b, const float* data){
   RtVk* vk=c->vk; if(!vk||!vk->dev) return;
   RtVkBuf* vb=vkbuf(c,b);
@@ -499,11 +510,18 @@ void rt_vk_upload(RT* c, RtBuf* b, const float* data){
   memcpy(b->host,data,vb->size);
 }
 void rt_vk_download(RT* c, RtBuf* b){
-  RtVk* vk=c->vk; if(!vk||!vk->dev||!b->vk) return;
+  RtVk* vk=c->vk; if(!vk||!vk->dev) return;
+  if (b->cap_slot) {
+    RtCaptureSlot* sl=(RtCaptureSlot*)b->cap_slot;
+    if (sl->output_in_slot) { memcpy(b->host, sl->out_map, sizeof(float)*(size_t)b->n); b->dirty=0; return; }
+  }
+  if (!b->vk) return;
   RtVkBuf* vb=(RtVkBuf*)b->vk;
   void* m; vkMapMemory(vk->dev,vb->mem,0,vb->size,0,&m);
   memcpy(b->host,m,vb->size); vkUnmapMemory(vk->dev,vb->mem);
+  b->dirty=0;
 }
+void rt_vk_download_lazy(RT* c, RtBuf* b){ if (b && b->dirty) rt_vk_download(c,b); }
 #else
 /* CPU-only build: no Vulkan device. */
 void rt_vk_init(RT* c){ (void)c; }
@@ -515,6 +533,9 @@ void rt_vk_reduce(RT* c, RtBuf* i, int kind, int ax, RtBuf* o){ (void)c;(void)i;
 void rt_vk_capture_begin(RT* c){ (void)c; }
 void rt_vk_capture_end(RT* c){ (void)c; }
 void rt_vk_replay(RT* c){ (void)c; }
+void rt_vk_submit_only(RT* c){ (void)c; }
+void rt_vk_download_outputs(RT* c){ (void)c; }
 void rt_vk_upload(RT* c, RtBuf* b, const float* d){ (void)c;(void)b;(void)d; }
 void rt_vk_download(RT* c, RtBuf* b){ (void)c;(void)b; }
+void rt_vk_download_lazy(RT* c, RtBuf* b){ (void)c;(void)b; }
 #endif
