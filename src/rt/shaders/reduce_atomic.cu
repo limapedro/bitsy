@@ -29,13 +29,21 @@ extern "C" __global__ void bmax_atomic(const float* in, float* out,
     float v=in[(o*stride+k)*inner+t];
     local=(kind==2)?fmaxf(local,v):fminf(local,v);
   }
-  /* warp reduce to one value per warp, then one atomic per warp */
+  /* warp reduce, then block reduce in shared: ONE atomic per block (not warp) */
   for(int off=16;off>0;off>>=1){
     float v=__shfl_down_sync(0xffffffff,local,off);
     local=(kind==2)?fmaxf(local,v):fminf(local,v);
   }
-  if((tid&31)==0){
-    if(kind==2) atomicMaxF(&out[line],local); else atomicMinF(&out[line],local);
+  __shared__ float warp[8];
+  if((tid&31)==0) warp[tid>>5]=local;
+  __syncthreads();
+  if(tid<32){
+    float v=(tid<8)?warp[tid]:((kind==2)?-3.4028235e38f:3.4028235e38f);
+    for(int off=16;off>0;off>>=1){
+      float w=__shfl_down_sync(0xffffffff,v,off);
+      v=(kind==2)?fmaxf(v,w):fminf(v,w);
+    }
+    if(tid==0){ if(kind==2) atomicMaxF(&out[line],v); else atomicMinF(&out[line],v); }
   }
 }
 
