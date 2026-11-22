@@ -179,6 +179,13 @@ class Tensor:
     else: shape.pop(axis)
     return Tensor(self.rt, h, tuple(shape) or (1,), self.requires_grad)
 
+  def min(self, axis=0, keepdim=False) -> "Tensor":
+    h = self.rt.reduce(self.h, MIN, axis, 1 if keepdim else 0)
+    shape = list(self.shape)
+    if keepdim: shape[axis] = 1
+    else: shape.pop(axis)
+    return Tensor(self.rt, h, tuple(shape) or (1,), self.requires_grad)
+
   # ---- more reductions (PR #9) ----
   def var(self, axis=0, unbiased: bool = True) -> "Tensor":
     d = self - self.mean(axis=axis, keepdim=True)
@@ -197,6 +204,17 @@ class Tensor:
   def norm(self, p: float = 2.0, axis=0) -> "Tensor":
     return ((self.abs() ** Tensor.scalar(self.rt, p)).sum(axis=axis)
             ** Tensor.scalar(self.rt, 1.0 / p))
+
+  def all(self, axis=0) -> "Tensor":
+    return self.ne(Tensor.scalar(self.rt, 0.0)).min(axis=axis)
+
+  def any(self, axis=0) -> "Tensor":
+    return self.ne(Tensor.scalar(self.rt, 0.0)).max(axis=axis)
+
+  def numel(self) -> int:
+    n = 1
+    for d in self.shape: n *= d
+    return n
 
   def trans(self) -> "Tensor":
     return Tensor(self.rt, self.rt.transpose(self.h), self.shape[::-1], self.requires_grad)

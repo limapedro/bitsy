@@ -21,7 +21,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "python"))
 import bitsy_v2 as bv
-from bitsy_v2 import functional as F
+from bitsy_v2 import functional as F, Tensor
 
 @dataclass(frozen=True, slots=True)
 class Config:
@@ -155,6 +155,12 @@ def run(cfg=CFG):
     ("cmp_gt",       lambda a,b: a.gt(b),            lambda a,b: (a>b).float()),
     ("cmp_le",       lambda a,b: a.le(b),            lambda a,b: (a<=b).float()),
     ("lerp",         lambda a,b: a.lerp(b, 0.25),    lambda a,b: torch.lerp(a,b,0.25)),
+    ("all",          lambda a,b: a.gt(Tensor.scalar(a.rt,0.0)).all(),
+                                                      lambda a,b: (a>0).all().float()),
+    ("any",          lambda a,b: a.gt(Tensor.scalar(a.rt,0.0)).any(),
+                                                      lambda a,b: (a>0).any().float()),
+    ("isclose",      lambda a,b: F.isclose(a,b),      lambda a,b: torch.isclose(a,b).float()),
+    ("allclose",     lambda a,b: F.allclose(a,b),     lambda a,b: torch.tensor([float(torch.allclose(a,b))], device=a.device)),
   ]
   for nm, bf, tf in logical:
     rec_fwd(nm, md(bf(b1,b2).numpy(), tf(t1,t2).detach().cpu().numpy()))

@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-22T04:47:58.026452+00:00",
+  "generated_at": "2026-11-22T04:58:57.288897+00:00",
   "environment": {
     "torch": "2.11.0+cu126",
     "gpu": "NVIDIA GeForce GTX 1660 SUPER"
@@ -14,8 +14,8 @@
     "result_path": "E:\\__PROJECTS__\\Hagane\\benchmarks\\results\\bitsy_v2_api_parity.json"
   },
   "summary": {
-    "total": 44,
-    "passed": 44,
+    "total": 48,
+    "passed": 48,
     "failed": 0
   },
   "cases": [
@@ -279,6 +279,30 @@
     },
     {
       "name": "lerp",
+      "max_abs_diff": 0.0,
+      "tol": 0.0001,
+      "passed": true
+    },
+    {
+      "name": "all",
+      "max_abs_diff": 0.0,
+      "tol": 0.0001,
+      "passed": true
+    },
+    {
+      "name": "any",
+      "max_abs_diff": 0.0,
+      "tol": 0.0001,
+      "passed": true
+    },
+    {
+      "name": "isclose",
+      "max_abs_diff": 0.0,
+      "tol": 0.0001,
+      "passed": true
+    },
+    {
+      "name": "allclose",
       "max_abs_diff": 0.0,
       "tol": 0.0001,
       "passed": true

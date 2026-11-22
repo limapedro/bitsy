@@ -53,15 +53,15 @@ Per-function numeric and performance evidence lives in [PROGRESS.md](PROGRESS.md
 | Representative API | Status |
 |---|---|
 | `eq`, `ne`, `gt`, `ge`, `lt`, `le`, `equal`, `greater`, `less` | done (PR #2 C primitives; PR #9 Python `Tensor` methods, 44-case parity) |
-| `isclose`, `allclose`, `isnan`, `isinf`, `isfinite` | missing (only used inside the parity harness) |
-| `logical_and`, `logical_or`, `logical_not`, `logical_xor`, `all`, `any` | partial (PR #9: four logical helpers done; `all`/`any` missing) |
+| `isclose`, `allclose`, `isnan`, `isinf`, `isfinite` | partial (PR #12: `isclose`/`allclose` done; `isnan`/`isinf`/`isfinite` missing) |
+| `logical_and`, `logical_or`, `logical_not`, `logical_xor`, `all`, `any` | done (PR #9: four logical helpers; PR #12: `all`/`any` via min/max reductions) |
 | `bitwise_and`, `bitwise_or`, `bitwise_xor`, `bitwise_not`, `left_shift`, `right_shift` | missing |
 
 ## 5. Reductions
 
 | Representative API | Status |
 |---|---|
-| `sum`, `argmax` | partial (Python helper via matmul; NumPy argmax in eval) |
+| `sum`, `argmax` | partial (Sum done; `argmax` via NumPy in eval; PR #12: `numel()`, `min()` added) |
 | `mean`, `median`, `prod`, `min`, `max`, `argmin`, `std`, `var`, `norm`, `logsumexp` | partial (PR #9: `std`/`var`/`norm`/`logsumexp` done; `median`/`prod`/`argmin` missing) |
 | `topk`, `kthvalue`, `sort`, `argsort`, `cumsum`, `cumprod`, `cummax`, `cummin`, `diff` | missing |
 | `unique`, `bincount`, `histc`, `bucketize`, `nonzero`, `count_nonzero` | missing |
