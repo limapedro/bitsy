@@ -1,0 +1,86 @@
+{
+  "generated_at": "2026-11-22T02:54:35.651840+00:00",
+  "environment": {
+    "torch": "2.11.0+cu126",
+    "gpu": "NVIDIA GeForce GTX 1660 SUPER"
+  },
+  "config": {
+    "build_dir": "E:\\__PROJECTS__\\Hagane\\build-rtvk",
+    "device": 1,
+    "in_f": 8,
+    "hidden": 16,
+    "out_f": 5,
+    "batch": 4,
+    "seed": 0,
+    "tol_fwd": 0.0001,
+    "tol_grad": 0.001,
+    "result_path": "E:\\__PROJECTS__\\Hagane\\benchmarks\\results\\bitsy_v2_model_parity.json"
+  },
+  "summary": {
+    "total": 10,
+    "passed": 10,
+    "failed": 0
+  },
+  "cases": [
+    {
+      "name": "forward_logits",
+      "max_abs_diff": 2.8870999813079834e-07,
+      "tol": 0.0001,
+      "passed": true
+    },
+    {
+      "name": "loss",
+      "max_abs_diff": 0.0,
+      "tol": 0.0001,
+      "passed": true
+    },
+    {
+      "name": "grad_l1W",
+      "max_abs_diff": 4.470348358154297e-08,
+      "tol": 0.001,
+      "passed": true
+    },
+    {
+      "name": "grad_l1b",
+      "max_abs_diff": 2.2351741790771484e-08,
+      "tol": 0.001,
+      "passed": true
+    },
+    {
+      "name": "grad_l2W",
+      "max_abs_diff": 1.1920928955078125e-07,
+      "tol": 0.001,
+      "passed": true
+    },
+    {
+      "name": "grad_l2b",
+      "max_abs_diff": 3.259629011154175e-08,
+      "tol": 0.001,
+      "passed": true
+    },
+    {
+      "name": "layernorm",
+      "max_abs_diff": 2.384185791015625e-07,
+      "tol": 0.0001,
+      "passed": true
+    },
+    {
+      "name": "sgd_step",
+      "max_abs_diff": 0.0,
+      "tol": 0.001,
+      "passed": true
+    },
+    {
+      "name": "adamw_step",
+      "max_abs_diff": 5.960464477539063e-08,
+      "tol": 0.001,
+      "passed": true
+    },
+    {
+      "name": "rnn_cell_fwd",
+      "max_abs_diff": 7.450580596923828e-09,
+      "tol": 0.0001,
+      "passed": true
+    }
+  ]
+}
