@@ -27,7 +27,7 @@ class _RT:
     return h
   tensor = _raw_tensor
   def get(self, h, shape):
-    out = np.zeros(shape, dtype=np.float32)
+    out = np.empty(shape, dtype=np.float32)  # rt_to_host overwrites every element
     self.lib.rt_to_host(h, out.ctypes.data_as(C.POINTER(C.c_float)))
     return out
   def binary(self, name, a, b): return getattr(self.lib, f"rt_{name}")(self.ctx, a, b)

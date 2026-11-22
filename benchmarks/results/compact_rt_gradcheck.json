@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-22T02:40:37.712654+00:00",
+  "generated_at": "2026-11-22T04:05:26.277603+00:00",
   "environment": {
     "torch": "2.11.0+cu126",
     "gpu": "NVIDIA GeForce GTX 1660 SUPER",
@@ -42,7 +42,7 @@
     },
     {
       "name": "grad_tanh",
-      "max_diff": 5.960464477539063e-08,
+      "max_diff": 0.0,
       "tol": 0.001,
       "passed": true
     },
