@@ -67,6 +67,9 @@ typedef struct {
   int64_t in_stride[RT_MAXIN][RT_MAXDIMS];
   int ndim;
   int64_t dims[RT_MAXDIMS];
+  /* PR #7: specialized-program spec constants; sp_ok=1 if translatable */
+  int sp_ok;
+  int sp[25];
 } RtFusion;
 
 /* Vulkan backend state (defined in rt_vk.c). */

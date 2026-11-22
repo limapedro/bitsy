@@ -322,6 +322,65 @@ static int emit(RT* c, RTTensor* t, RtFusion* f) {
   return emit_pointwise(c, t, f);
 }
 
+static int RtInstIsBinary(int op) {
+  return op==I_ADD||op==I_SUB||op==I_MUL||op==I_DIV||op==I_GELUB||
+         op==I_POW||op==I_MAXIMUM||op==I_MINIMUM||
+         op==I_GT||op==I_GE||op==I_LT||op==I_LE||op==I_EQ||op==I_NE||op==I_WHERE;
+}
+
+/* Translate a fusion's op-program into 25 specialization constants for the
+ * specialized straight-line kernel (PR #7). Returns 1 on success, 0 if the
+ * program is too complex (caller falls back to the generic interpreter).
+ *
+ * Generic program: instruction k (index = stack slot it produces). I_LOAD's
+ * operand a is the input slot. Other ops reference earlier stack slots.
+ * Specialized program: LOADs are stripped; each non-LOAD generic instruction
+ * becomes one specialized step s. Operand encoding: 0..7 = input slot,
+ * 8..15 = specialized step result. */
+static int fusion_to_spec(RtFusion* f) {
+  int n = f->ninst;
+  if (n < 1 || f->ninputs > 8) return 0;
+  /* slot_kind[k]: -1 = I_LOAD, else specialized step index */
+  int slot_map[RT_MAXINST];
+  for (int k=0;k<n;++k) slot_map[k] = -1;
+  int s = 0;
+  int spec[25]; for (int i=0;i<25;++i) spec[i]=0;
+  for (int k=0;k<n;++k) {
+    RtInst in = f->inst[k];
+    if (in.op == I_WHERE) return 0;   /* ternary: not supported by specialized path */
+    if (in.op == I_LOAD) {
+      if (in.a < 0 || in.a >= 8) return 0;
+      slot_map[k] = -2 - in.a;   /* encode input slot as -2-slot */
+      continue;
+    }
+    if (s >= 8) return 0;
+    /* map operand a (operands are earlier generic slots) */
+    if (in.a < 0 || in.a >= n) return 0;
+    if (RtInstIsBinary(in.op) && (in.b < 0 || in.b >= n)) return 0;
+    int ma = slot_map[in.a];
+    int oa;
+    if (ma <= -2) oa = -2 - ma;          /* input slot 0..7 */
+    else if (ma >= 0) oa = 8 + ma;       /* earlier specialized result */
+    else return 0;                        /* forward ref / unmapped */
+    if (oa < 0 || oa > 15) return 0;
+    int ob = 0;
+    if (RtInstIsBinary(in.op)) {
+      int mb = slot_map[in.b];
+      if (mb <= -2) ob = -2 - mb;
+      else if (mb >= 0) ob = 8 + mb;
+      else return 0;
+      if (ob < 0 || ob > 15) return 0;
+    }
+    spec[1+s] = in.op; spec[9+s] = oa; spec[17+s] = ob;
+    slot_map[k] = s;
+    s++;
+  }
+  if (s == 0) return 0;
+  spec[0] = s;
+  for (int i=0;i<25;++i) f->sp[i] = spec[i];
+  return 1;
+}
+
 /* ---------- executors ---------- */
 
 static float gelu_erf(float x) {
@@ -446,6 +505,7 @@ static void realize_fused(RT* c, RTTensor* t) {
   int slot = emit(c, t, &f);
   if (slot < 0) return;
   if (f.ninst == 0) { rt_errf(c, "empty fusion"); return; }
+  f.sp_ok = fusion_to_spec(&f);
   RtBuf* out = rt_buf_new(c, t->ndim, t->dims, c->device);
   if (!out) return;
   if (c->device == RT_VULKAN && c->vk) rt_vk_fused(c, &f, out);  /* records if capturing */

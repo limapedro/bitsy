@@ -1,11 +1,11 @@
 {
-  "generated_at": "2026-11-22T03:21:15.523767+00:00",
+  "generated_at": "2026-11-22T04:05:58.985272+00:00",
   "environment": {
     "torch": "2.11.0+cu126",
     "gpu": "NVIDIA GeForce GTX 1660 SUPER",
-    "clock_mhz": [
+    "clock": [
       1530.0,
-      1530.0
+      1935.0
     ]
   },
   "config": {
@@ -14,38 +14,59 @@
     "n": 1048576,
     "warmup": 5,
     "iters": 30,
+    "steps": 10,
     "tol": 0.0001,
     "result_path": "E:\\__PROJECTS__\\Hagane\\benchmarks\\results\\compact_replay.json"
   },
   "correctness": {
-    "replay_diff": 0.0,
-    "replay_new_data_diff": 0.0,
+    "replay": 1.9073486328125e-06,
+    "new_data": 1.9073486328125e-06,
+    "submit_lazy_read": 1.9073486328125e-06,
     "passed": true
   },
-  "eager": {
-    "median_ms": 16.04185000178404,
-    "spread_ms": [
-      14.31679999222979,
-      18.67990000755526
-    ]
+  "single_step_forced_download": {
+    "bitsy_eager": {
+      "median_ms": 3.019100011442788,
+      "spread_ms": [
+        2.8331000066827983,
+        4.1754999838303775
+      ]
+    },
+    "bitsy_replay": {
+      "median_ms": 0.8128499903250486,
+      "spread_ms": [
+        0.738300004741177,
+        0.9649000130593777
+      ]
+    },
+    "torch": {
+      "median_ms": 0.5903499841224402,
+      "spread_ms": [
+        0.5775000026915222,
+        0.8357000187970698
+      ]
+    },
+    "replay_vs_eager": 3.7142154731840344,
+    "torch_vs_replay": 1.3768950828945246
   },
-  "replay": {
-    "median_ms": 10.847800003830343,
-    "spread_ms": [
-      10.422399995150045,
-      12.538600014522672
-    ]
+  "loop_gpu_only_plus_final_read": {
+    "bitsy": {
+      "median_ms": 2.7053499943576753,
+      "spread_ms": [
+        2.5027999945450574,
+        3.817199991317466
+      ]
+    },
+    "torch": {
+      "median_ms": 1.8139499879907817,
+      "spread_ms": [
+        1.5435999957844615,
+        2.4759999942034483
+      ]
+    },
+    "bitsy_per_step_ms": 0.27053499943576753,
+    "torch_per_step_ms": 0.18139499879907817,
+    "torch_vs_bitsy_per_step": 1.4914137723026484
   },
-  "torch": {
-    "median_ms": 0.05574998795054853,
-    "spread_ms": [
-      0.02269999822601676,
-      0.18450000789016485
-    ]
-  },
-  "speedup": {
-    "replay_vs_eager": 1.4788113715333695,
-    "torch_vs_replay": 194.57941432117585
-  },
-  "note": "ratio>1 means first is faster. torch_vs_replay>1 => Bitsy replay faster than PyTorch."
+  "note": "ratios >1 mean first arg faster. Per-step loop is the fair framework comparison."
 }
