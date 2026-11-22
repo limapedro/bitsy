@@ -24,7 +24,7 @@ class Tensor:
   # ---- construction ----
   @staticmethod
   def from_numpy(rt, arr, requires_grad=False) -> "Tensor":
-    a = np.ascontiguousarray(arr, dtype=np.float32)
+    a = np.ascontiguousarray(arr, dtype=np.float32).reshape(arr.shape)
     return Tensor(rt, rt._raw_tensor(a, requires_grad), a.shape, requires_grad)
 
   @staticmethod

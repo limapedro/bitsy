@@ -1,0 +1,1193 @@
+{
+  "generated_at": "2026-11-22T04:41:39.527536+00:00",
+  "environment": {
+    "platform": "Windows-10-10.0.26300-SP0",
+    "python": "3.10.11",
+    "torch": "2.11.0+cu126",
+    "bitsy": "v0.2 (bitsy_v2)",
+    "cuda_available": true,
+    "cuda_version": "12.6",
+    "gpu": "NVIDIA GeForce GTX 1660 SUPER"
+  },
+  "config": {
+    "ops": [
+      "add",
+      "add_relu",
+      "sub",
+      "mul",
+      "div",
+      "relu",
+      "sigmoid",
+      "tanh",
+      "exp",
+      "log",
+      "sqrt",
+      "gelu",
+      "matmul"
+    ],
+    "backends": [
+      "cpu_ref"
+    ],
+    "include_cuda": true,
+    "seed": 1234
+  },
+  "summary": {
+    "total": 48,
+    "passed": 48,
+    "failed": 0,
+    "skipped": []
+  },
+  "cases": [
+    {
+      "name": "add_scalar_scalar",
+      "op": "add",
+      "device": "cpu",
+      "shape": [],
+      "dtype": "float32",
+      "value_set": "normal",
+      "bitsy_vs_torch": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 1,
+        "mismatches": 0
+      },
+      "torch_cuda_vs_torch_cpu": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 1,
+        "mismatches": 0
+      },
+      "bitsy_vs_torch_cuda": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 1,
+        "mismatches": 0
+      },
+      "passed": true
+    },
+    {
+      "name": "add_vector",
+      "op": "add",
+      "device": "cpu",
+      "shape": [
+        3
+      ],
+      "dtype": "float32",
+      "value_set": "normal",
+      "bitsy_vs_torch": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 3,
+        "mismatches": 0
+      },
+      "torch_cuda_vs_torch_cpu": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 3,
+        "mismatches": 0
+      },
+      "bitsy_vs_torch_cuda": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 3,
+        "mismatches": 0
+      },
+      "passed": true
+    },
+    {
+      "name": "add_vector_special",
+      "op": "add",
+      "device": "cpu",
+      "shape": [
+        8
+      ],
+      "dtype": "float32",
+      "value_set": "special",
+      "bitsy_vs_torch": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 8,
+        "mismatches": 0
+      },
+      "torch_cuda_vs_torch_cpu": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 8,
+        "mismatches": 0
+      },
+      "bitsy_vs_torch_cuda": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 8,
+        "mismatches": 0
+      },
+      "passed": true
+    },
+    {
+      "name": "add_vector_extremes",
+      "op": "add",
+      "device": "cpu",
+      "shape": [
+        8
+      ],
+      "dtype": "float32",
+      "value_set": "large_small",
+      "bitsy_vs_torch": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 8,
+        "mismatches": 0
+      },
+      "torch_cuda_vs_torch_cpu": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 8,
+        "mismatches": 0
+      },
+      "bitsy_vs_torch_cuda": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 8,
+        "mismatches": 0
+      },
+      "passed": true
+    },
+    {
+      "name": "add_broadcast_row",
+      "op": "add",
+      "device": "cpu",
+      "shape": [
+        2,
+        3
+      ],
+      "dtype": "float32",
+      "value_set": "normal",
+      "bitsy_vs_torch": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 6,
+        "mismatches": 0
+      },
+      "torch_cuda_vs_torch_cpu": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 6,
+        "mismatches": 0
+      },
+      "bitsy_vs_torch_cuda": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 6,
+        "mismatches": 0
+      },
+      "passed": true
+    },
+    {
+      "name": "add_broadcast_axes",
+      "op": "add",
+      "device": "cpu",
+      "shape": [
+        2,
+        3,
+        4
+      ],
+      "dtype": "float32",
+      "value_set": "normal",
+      "bitsy_vs_torch": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 24,
+        "mismatches": 0
+      },
+      "torch_cuda_vs_torch_cpu": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 24,
+        "mismatches": 0
+      },
+      "bitsy_vs_torch_cuda": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 24,
+        "mismatches": 0
+      },
+      "passed": true
+    },
+    {
+      "name": "add_scalar_rhs",
+      "op": "add",
+      "device": "cpu",
+      "shape": [
+        2,
+        2
+      ],
+      "dtype": "float32",
+      "value_set": "normal",
+      "bitsy_vs_torch": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 4,
+        "mismatches": 0
+      },
+      "torch_cuda_vs_torch_cpu": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 4,
+        "mismatches": 0
+      },
+      "bitsy_vs_torch_cuda": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 4,
+        "mismatches": 0
+      },
+      "passed": true
+    },
+    {
+      "name": "add_size_one",
+      "op": "add",
+      "device": "cpu",
+      "shape": [
+        5
+      ],
+      "dtype": "float32",
+      "value_set": "normal",
+      "bitsy_vs_torch": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 5,
+        "mismatches": 0
+      },
+      "torch_cuda_vs_torch_cpu": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 5,
+        "mismatches": 0
+      },
+      "bitsy_vs_torch_cuda": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 5,
+        "mismatches": 0
+      },
+      "passed": true
+    },
+    {
+      "name": "add_empty",
+      "op": "add",
+      "device": "cpu",
+      "shape": [
+        0,
+        2
+      ],
+      "dtype": "float32",
+      "value_set": "normal",
+      "bitsy_vs_torch": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 0,
+        "mismatches": 0
+      },
+      "torch_cuda_vs_torch_cpu": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 0,
+        "mismatches": 0
+      },
+      "bitsy_vs_torch_cuda": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 0,
+        "mismatches": 0
+      },
+      "passed": true
+    },
+    {
+      "name": "add_non_power_of_two",
+      "op": "add",
+      "device": "cpu",
+      "shape": [
+        7,
+        13
+      ],
+      "dtype": "float32",
+      "value_set": "normal",
+      "bitsy_vs_torch": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 91,
+        "mismatches": 0
+      },
+      "torch_cuda_vs_torch_cpu": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 91,
+        "mismatches": 0
+      },
+      "bitsy_vs_torch_cuda": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 91,
+        "mismatches": 0
+      },
+      "passed": true
+    },
+    {
+      "name": "add_large",
+      "op": "add",
+      "device": "cpu",
+      "shape": [
+        4096
+      ],
+      "dtype": "float32",
+      "value_set": "normal",
+      "bitsy_vs_torch": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 4096,
+        "mismatches": 0
+      },
+      "torch_cuda_vs_torch_cpu": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 4096,
+        "mismatches": 0
+      },
+      "bitsy_vs_torch_cuda": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 4096,
+        "mismatches": 0
+      },
+      "passed": true
+    },
+    {
+      "name": "add_broadcast_special",
+      "op": "add",
+      "device": "cpu",
+      "shape": [
+        2,
+        8
+      ],
+      "dtype": "float32",
+      "value_set": "special",
+      "bitsy_vs_torch": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 16,
+        "mismatches": 0
+      },
+      "torch_cuda_vs_torch_cpu": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 16,
+        "mismatches": 0
+      },
+      "bitsy_vs_torch_cuda": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 16,
+        "mismatches": 0
+      },
+      "passed": true
+    },
+    {
+      "name": "add_shape_error",
+      "op": "add",
+      "dtype": "float32",
+      "expect_error": true,
+      "torch_raised": true,
+      "bitsy_raised": true,
+      "bitsy_message": "ValueError: shape mismatch: objects cannot be broadcast to a single shape.  Mismatch is between arg 0 with shape (2, 3) and arg 1 with shape (4,).",
+      "passed": true
+    },
+    {
+      "name": "add_broadcast_vulkan",
+      "op": "add",
+      "device": "vulkan",
+      "shape": [
+        2,
+        3
+      ],
+      "dtype": "float32",
+      "value_set": "normal",
+      "bitsy_vs_torch": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 6,
+        "mismatches": 0
+      },
+      "passed": true
+    },
+    {
+      "name": "add_special_vulkan",
+      "op": "add",
+      "device": "vulkan",
+      "shape": [
+        8
+      ],
+      "dtype": "float32",
+      "value_set": "special",
+      "bitsy_vs_torch": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 8,
+        "mismatches": 0
+      },
+      "passed": true
+    },
+    {
+      "name": "add_large_vulkan",
+      "op": "add",
+      "device": "vulkan",
+      "shape": [
+        4096
+      ],
+      "dtype": "float32",
+      "value_set": "normal",
+      "bitsy_vs_torch": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 4096,
+        "mismatches": 0
+      },
+      "passed": true
+    },
+    {
+      "name": "add_empty_vulkan",
+      "op": "add",
+      "device": "vulkan",
+      "shape": [
+        0,
+        2
+      ],
+      "dtype": "float32",
+      "value_set": "normal",
+      "bitsy_vs_torch": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 0,
+        "mismatches": 0
+      },
+      "passed": true
+    },
+    {
+      "name": "log_cpu",
+      "op": "log",
+      "device": "cpu",
+      "shape": [
+        7,
+        13
+      ],
+      "dtype": "float32",
+      "value_set": "positive",
+      "bitsy_vs_torch": {
+        "passed": true,
+        "mode": "rtol_atol",
+        "elements": 91,
+        "mismatches": 0
+      },
+      "torch_cuda_vs_torch_cpu": {
+        "passed": true,
+        "mode": "rtol_atol",
+        "elements": 91,
+        "mismatches": 0
+      },
+      "bitsy_vs_torch_cuda": {
+        "passed": true,
+        "mode": "rtol_atol",
+        "elements": 91,
+        "mismatches": 0
+      },
+      "passed": true
+    },
+    {
+      "name": "log_vulkan",
+      "op": "log",
+      "device": "vulkan",
+      "shape": [
+        7,
+        13
+      ],
+      "dtype": "float32",
+      "value_set": "positive",
+      "bitsy_vs_torch": {
+        "passed": true,
+        "mode": "rtol_atol",
+        "elements": 91,
+        "mismatches": 0
+      },
+      "passed": true
+    },
+    {
+      "name": "sqrt_cpu",
+      "op": "sqrt",
+      "device": "cpu",
+      "shape": [
+        7,
+        13
+      ],
+      "dtype": "float32",
+      "value_set": "positive",
+      "bitsy_vs_torch": {
+        "passed": true,
+        "mode": "rtol_atol",
+        "elements": 91,
+        "mismatches": 0
+      },
+      "torch_cuda_vs_torch_cpu": {
+        "passed": true,
+        "mode": "rtol_atol",
+        "elements": 91,
+        "mismatches": 0
+      },
+      "bitsy_vs_torch_cuda": {
+        "passed": true,
+        "mode": "rtol_atol",
+        "elements": 91,
+        "mismatches": 0
+      },
+      "passed": true
+    },
+    {
+      "name": "sqrt_vulkan",
+      "op": "sqrt",
+      "device": "vulkan",
+      "shape": [
+        7,
+        13
+      ],
+      "dtype": "float32",
+      "value_set": "positive",
+      "bitsy_vs_torch": {
+        "passed": true,
+        "mode": "rtol_atol",
+        "elements": 91,
+        "mismatches": 0
+      },
+      "passed": true
+    },
+    {
+      "name": "gelu_cpu",
+      "op": "gelu",
+      "device": "cpu",
+      "shape": [
+        7,
+        13
+      ],
+      "dtype": "float32",
+      "value_set": "normal",
+      "bitsy_vs_torch": {
+        "passed": true,
+        "mode": "rtol_atol",
+        "elements": 91,
+        "mismatches": 0
+      },
+      "torch_cuda_vs_torch_cpu": {
+        "passed": true,
+        "mode": "rtol_atol",
+        "elements": 91,
+        "mismatches": 0
+      },
+      "bitsy_vs_torch_cuda": {
+        "passed": true,
+        "mode": "rtol_atol",
+        "elements": 91,
+        "mismatches": 0
+      },
+      "passed": true
+    },
+    {
+      "name": "gelu_vulkan",
+      "op": "gelu",
+      "device": "vulkan",
+      "shape": [
+        7,
+        13
+      ],
+      "dtype": "float32",
+      "value_set": "normal",
+      "bitsy_vs_torch": {
+        "passed": true,
+        "mode": "rtol_atol",
+        "elements": 91,
+        "mismatches": 0
+      },
+      "passed": true
+    },
+    {
+      "name": "matmul_cpu",
+      "op": "matmul",
+      "device": "cpu",
+      "shape": [
+        4,
+        6
+      ],
+      "dtype": "float32",
+      "value_set": "normal",
+      "bitsy_vs_torch": {
+        "passed": true,
+        "mode": "rtol_atol",
+        "elements": 24,
+        "mismatches": 0
+      },
+      "torch_cuda_vs_torch_cpu": {
+        "passed": true,
+        "mode": "rtol_atol",
+        "elements": 24,
+        "mismatches": 0
+      },
+      "bitsy_vs_torch_cuda": {
+        "passed": true,
+        "mode": "rtol_atol",
+        "elements": 24,
+        "mismatches": 0
+      },
+      "passed": true
+    },
+    {
+      "name": "matmul_vulkan",
+      "op": "matmul",
+      "device": "vulkan",
+      "shape": [
+        4,
+        6
+      ],
+      "dtype": "float32",
+      "value_set": "normal",
+      "bitsy_vs_torch": {
+        "passed": true,
+        "mode": "rtol_atol",
+        "elements": 24,
+        "mismatches": 0
+      },
+      "passed": true
+    },
+    {
+      "name": "matmul_large_vulkan",
+      "op": "matmul",
+      "device": "vulkan",
+      "shape": [
+        32,
+        32
+      ],
+      "dtype": "float32",
+      "value_set": "normal",
+      "bitsy_vs_torch": {
+        "passed": true,
+        "mode": "rtol_atol",
+        "elements": 1024,
+        "mismatches": 0
+      },
+      "passed": true
+    },
+    {
+      "name": "add_cpu",
+      "op": "add",
+      "device": "cpu",
+      "shape": [
+        7,
+        13
+      ],
+      "dtype": "float32",
+      "value_set": "normal",
+      "bitsy_vs_torch": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 91,
+        "mismatches": 0
+      },
+      "torch_cuda_vs_torch_cpu": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 91,
+        "mismatches": 0
+      },
+      "bitsy_vs_torch_cuda": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 91,
+        "mismatches": 0
+      },
+      "passed": true
+    },
+    {
+      "name": "add_relu_cpu",
+      "op": "add_relu",
+      "device": "cpu",
+      "shape": [
+        7,
+        13
+      ],
+      "dtype": "float32",
+      "value_set": "normal",
+      "bitsy_vs_torch": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 91,
+        "mismatches": 0
+      },
+      "torch_cuda_vs_torch_cpu": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 91,
+        "mismatches": 0
+      },
+      "bitsy_vs_torch_cuda": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 91,
+        "mismatches": 0
+      },
+      "passed": true
+    },
+    {
+      "name": "sub_cpu",
+      "op": "sub",
+      "device": "cpu",
+      "shape": [
+        7,
+        13
+      ],
+      "dtype": "float32",
+      "value_set": "normal",
+      "bitsy_vs_torch": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 91,
+        "mismatches": 0
+      },
+      "torch_cuda_vs_torch_cpu": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 91,
+        "mismatches": 0
+      },
+      "bitsy_vs_torch_cuda": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 91,
+        "mismatches": 0
+      },
+      "passed": true
+    },
+    {
+      "name": "mul_cpu",
+      "op": "mul",
+      "device": "cpu",
+      "shape": [
+        7,
+        13
+      ],
+      "dtype": "float32",
+      "value_set": "normal",
+      "bitsy_vs_torch": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 91,
+        "mismatches": 0
+      },
+      "torch_cuda_vs_torch_cpu": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 91,
+        "mismatches": 0
+      },
+      "bitsy_vs_torch_cuda": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 91,
+        "mismatches": 0
+      },
+      "passed": true
+    },
+    {
+      "name": "div_cpu",
+      "op": "div",
+      "device": "cpu",
+      "shape": [
+        7,
+        13
+      ],
+      "dtype": "float32",
+      "value_set": "normal",
+      "bitsy_vs_torch": {
+        "passed": true,
+        "mode": "rtol_atol",
+        "elements": 91,
+        "mismatches": 0
+      },
+      "torch_cuda_vs_torch_cpu": {
+        "passed": true,
+        "mode": "rtol_atol",
+        "elements": 91,
+        "mismatches": 0
+      },
+      "bitsy_vs_torch_cuda": {
+        "passed": true,
+        "mode": "rtol_atol",
+        "elements": 91,
+        "mismatches": 0
+      },
+      "passed": true
+    },
+    {
+      "name": "relu_cpu",
+      "op": "relu",
+      "device": "cpu",
+      "shape": [
+        7,
+        13
+      ],
+      "dtype": "float32",
+      "value_set": "normal",
+      "bitsy_vs_torch": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 91,
+        "mismatches": 0
+      },
+      "torch_cuda_vs_torch_cpu": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 91,
+        "mismatches": 0
+      },
+      "bitsy_vs_torch_cuda": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 91,
+        "mismatches": 0
+      },
+      "passed": true
+    },
+    {
+      "name": "sigmoid_cpu",
+      "op": "sigmoid",
+      "device": "cpu",
+      "shape": [
+        7,
+        13
+      ],
+      "dtype": "float32",
+      "value_set": "normal",
+      "bitsy_vs_torch": {
+        "passed": true,
+        "mode": "rtol_atol",
+        "elements": 91,
+        "mismatches": 0
+      },
+      "torch_cuda_vs_torch_cpu": {
+        "passed": true,
+        "mode": "rtol_atol",
+        "elements": 91,
+        "mismatches": 0
+      },
+      "bitsy_vs_torch_cuda": {
+        "passed": true,
+        "mode": "rtol_atol",
+        "elements": 91,
+        "mismatches": 0
+      },
+      "passed": true
+    },
+    {
+      "name": "tanh_cpu",
+      "op": "tanh",
+      "device": "cpu",
+      "shape": [
+        7,
+        13
+      ],
+      "dtype": "float32",
+      "value_set": "normal",
+      "bitsy_vs_torch": {
+        "passed": true,
+        "mode": "rtol_atol",
+        "elements": 91,
+        "mismatches": 0
+      },
+      "torch_cuda_vs_torch_cpu": {
+        "passed": true,
+        "mode": "rtol_atol",
+        "elements": 91,
+        "mismatches": 0
+      },
+      "bitsy_vs_torch_cuda": {
+        "passed": true,
+        "mode": "rtol_atol",
+        "elements": 91,
+        "mismatches": 0
+      },
+      "passed": true
+    },
+    {
+      "name": "exp_cpu",
+      "op": "exp",
+      "device": "cpu",
+      "shape": [
+        7,
+        13
+      ],
+      "dtype": "float32",
+      "value_set": "normal",
+      "bitsy_vs_torch": {
+        "passed": true,
+        "mode": "rtol_atol",
+        "elements": 91,
+        "mismatches": 0
+      },
+      "torch_cuda_vs_torch_cpu": {
+        "passed": true,
+        "mode": "rtol_atol",
+        "elements": 91,
+        "mismatches": 0
+      },
+      "bitsy_vs_torch_cuda": {
+        "passed": true,
+        "mode": "rtol_atol",
+        "elements": 91,
+        "mismatches": 0
+      },
+      "passed": true
+    },
+    {
+      "name": "log_cpu",
+      "op": "log",
+      "device": "cpu",
+      "shape": [
+        7,
+        13
+      ],
+      "dtype": "float32",
+      "value_set": "normal",
+      "bitsy_vs_torch": {
+        "passed": true,
+        "mode": "rtol_atol",
+        "elements": 91,
+        "mismatches": 0
+      },
+      "torch_cuda_vs_torch_cpu": {
+        "passed": true,
+        "mode": "rtol_atol",
+        "elements": 91,
+        "mismatches": 0
+      },
+      "bitsy_vs_torch_cuda": {
+        "passed": true,
+        "mode": "rtol_atol",
+        "elements": 91,
+        "mismatches": 0
+      },
+      "passed": true
+    },
+    {
+      "name": "add_vulkan",
+      "op": "add",
+      "device": "vulkan",
+      "shape": [
+        7,
+        13
+      ],
+      "dtype": "float32",
+      "value_set": "normal",
+      "bitsy_vs_torch": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 91,
+        "mismatches": 0
+      },
+      "passed": true
+    },
+    {
+      "name": "add_relu_vulkan",
+      "op": "add_relu",
+      "device": "vulkan",
+      "shape": [
+        7,
+        13
+      ],
+      "dtype": "float32",
+      "value_set": "normal",
+      "bitsy_vs_torch": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 91,
+        "mismatches": 0
+      },
+      "passed": true
+    },
+    {
+      "name": "sub_vulkan",
+      "op": "sub",
+      "device": "vulkan",
+      "shape": [
+        7,
+        13
+      ],
+      "dtype": "float32",
+      "value_set": "normal",
+      "bitsy_vs_torch": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 91,
+        "mismatches": 0
+      },
+      "passed": true
+    },
+    {
+      "name": "mul_vulkan",
+      "op": "mul",
+      "device": "vulkan",
+      "shape": [
+        7,
+        13
+      ],
+      "dtype": "float32",
+      "value_set": "normal",
+      "bitsy_vs_torch": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 91,
+        "mismatches": 0
+      },
+      "passed": true
+    },
+    {
+      "name": "div_vulkan",
+      "op": "div",
+      "device": "vulkan",
+      "shape": [
+        7,
+        13
+      ],
+      "dtype": "float32",
+      "value_set": "normal",
+      "bitsy_vs_torch": {
+        "passed": true,
+        "mode": "rtol_atol",
+        "elements": 91,
+        "mismatches": 0
+      },
+      "passed": true
+    },
+    {
+      "name": "relu_vulkan",
+      "op": "relu",
+      "device": "vulkan",
+      "shape": [
+        7,
+        13
+      ],
+      "dtype": "float32",
+      "value_set": "normal",
+      "bitsy_vs_torch": {
+        "passed": true,
+        "mode": "exact",
+        "elements": 91,
+        "mismatches": 0
+      },
+      "passed": true
+    },
+    {
+      "name": "sigmoid_vulkan",
+      "op": "sigmoid",
+      "device": "vulkan",
+      "shape": [
+        7,
+        13
+      ],
+      "dtype": "float32",
+      "value_set": "normal",
+      "bitsy_vs_torch": {
+        "passed": true,
+        "mode": "rtol_atol",
+        "elements": 91,
+        "mismatches": 0
+      },
+      "passed": true
+    },
+    {
+      "name": "tanh_vulkan",
+      "op": "tanh",
+      "device": "vulkan",
+      "shape": [
+        7,
+        13
+      ],
+      "dtype": "float32",
+      "value_set": "normal",
+      "bitsy_vs_torch": {
+        "passed": true,
+        "mode": "rtol_atol",
+        "elements": 91,
+        "mismatches": 0
+      },
+      "passed": true
+    },
+    {
+      "name": "exp_vulkan",
+      "op": "exp",
+      "device": "vulkan",
+      "shape": [
+        7,
+        13
+      ],
+      "dtype": "float32",
+      "value_set": "normal",
+      "bitsy_vs_torch": {
+        "passed": true,
+        "mode": "rtol_atol",
+        "elements": 91,
+        "mismatches": 0
+      },
+      "passed": true
+    },
+    {
+      "name": "log_vulkan",
+      "op": "log",
+      "device": "vulkan",
+      "shape": [
+        7,
+        13
+      ],
+      "dtype": "float32",
+      "value_set": "normal",
+      "bitsy_vs_torch": {
+        "passed": true,
+        "mode": "rtol_atol",
+        "elements": 91,
+        "mismatches": 0
+      },
+      "passed": true
+    },
+    {
+      "name": "end_to_end_gradient_flow",
+      "checks": {
+        "loss": true,
+        "grad_w1": true,
+        "grad_b1": true,
+        "grad_w2": true,
+        "grad_b2": true
+      },
+      "bitsy_loss": 2.1106979846954346,
+      "torch_loss": 2.1106982231140137,
+      "max_abs_diff": 3.725290298461914e-08,
+      "passed": true
+    },
+    {
+      "name": "training_scale_gradients",
+      "checks": {
+        "loss": true,
+        "grad_w1": true,
+        "grad_b1": true,
+        "grad_w2": true,
+        "grad_b2": true
+      },
+      "bitsy_loss": 2.3800125122070312,
+      "torch_loss": 2.3800125122070312,
+      "max_abs_diff": 1.862645149230957e-08,
+      "passed": true
+    }
+  ]
+}

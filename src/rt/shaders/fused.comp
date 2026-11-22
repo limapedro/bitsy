@@ -51,7 +51,7 @@ float apply2(int op, float a, float b) {
   if (op == 1) return a + b;
   if (op == 2) return a - b;
   if (op == 3) return a * b;
-  if (op == 4) return b != 0.0 ? a / b : 0.0;
+  if (op == 4) { precise float q = a / b; return b != 0.0 ? q : 0.0; }
   if (op == 14) {
     float s = b < 0.0 ? -1.0 : 1.0, ax = abs(b) * 0.70710678;
     float t = 1.0 / (1.0 + 0.3275911 * ax);
