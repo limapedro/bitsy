@@ -861,6 +861,22 @@ const float* rt_read_ptr(RT* c, RTTensor* t, int slot) {
   return (const float*)t->buf->host;
 }
 
+void rt_zero_grad(RTTensor* t) { if (t) t->grad=NULL; }
+void rt_stream_begin(RT* c, int idx) { if (c && c->vk) rt_vk_stream_begin(c,idx); }
+void rt_stream_end(RT* c, int idx) { if (c && c->vk) rt_vk_stream_end(c,idx); }
+void rt_stream_submit(RT* c, int n) { if (c && c->vk) rt_vk_stream_submit(c,n); }
+
+float* rt_tensor_map(RT* c, RTTensor* t) {
+  if (!c || !t) return NULL;
+  if (!t->buf) rt_realize(c,t);
+  if (!t->buf) return NULL;
+  if (c->vk) return rt_vk_map_input(c,t->buf);
+  return (float*)t->buf->host;
+}
+void rt_tensor_flush(RT* c, RTTensor* t) {
+  if (c && t && t->buf && c->vk) rt_vk_flush_input(c,t->buf);
+}
+
 void rt_sgd_update(RT* c, RTTensor* w, RTTensor* grad, float lr, float wd) {
   if (!c || !w || !grad) return;
   if (!w->buf) rt_realize(c,w);

@@ -58,7 +58,50 @@ this GPU — see FINDINGS_PR15).
 
 ---
 
-## 2026-11-22 08:15 — PR #36 (in progress): device-side SGD — ENTIRE update loop in one submit, beats PyTorch at every N
+## 2026-11-22 08:50 — PR #38: true streaming update loop (fresh data per step) beats PyTorch + single-call overhead investigation
+
+PR #36's win replayed fixed-shape steps on the SAME inputs. This turn removes
+that caveat and separately profiles why single eager calls lag.
+
+### Single-call host overhead — measured root cause (no fix shipped)
+C-level timing split of the ~0.44 ms compute-submit path:
+```
+vkQueueSubmit        ~0.025 ms (CPU time)
+vkWaitForFences      ~0.44 ms  (blocking driver round trip)
+```
+PyTorch does `add+sync` in **0.038 ms**, `add+cpu` in **0.627 ms**; ours were
+realize 0.44 ms / to_host 1.26 ms. A non-blocking eager submit (fence ring,
+timeline semaphore, deferred query waits) cut realize to **0.082 ms** and
+to_host to **0.334 ms**, but was **incorrect**: the shared command/params
+buffers must be idle before recording, and re-waiting costs the same ~0.4 ms.
+`vkDeviceWaitIdle` restored correctness but erased the speedup. Conclusion:
+the 74% host overhead is driver-bound and cannot be removed without a full
+per-op command/params ring redesign — **reverted, nothing broken shipped**.
+
+### True streaming loop — fresh data per step (shipped)
+Added CPU-mapped HOST_CACHED input buffers (`rt_tensor_map`/`rt_tensor_flush`)
+so fresh batches are written with a memcpy (no H2D submit), plus multi-graph
+capture (`rt_stream_begin/end/submit`): K captured fwd+bwd+SGD graphs, each
+reading a DISTINCT mapped input, submitted in ONE `vkQueueSubmit2` per batch.
+Also added `rt_zero_grad` (C-level `p->grad=NULL`) so backward doesn't accumulate
+across captured graphs, and raised capture slots 64→256 (K=6 needs >64).
+
+New `benchmarks/compact/stream_replay_bench.py` (batch 64, 256→128→1, lr 1e-4,
+K=6, N=600 fresh batches, warmup/median/spread, clock 1530→1950):
+```
+N=600 K=6  bitsy 0.2595 | torch 0.3110 ms/step | gap 0.83x  (1.2x FASTER)
+correctness over 12 fresh steps: w1 diff 2.38e-07, w2 diff 2.38e-07
+```
+**First win with genuinely fresh per-step data** — the amortization applies to
+a real streaming update loop, not just repeated identical steps. Gains are
+modest (1.2×) because per-batch CPU memcpys + flushes add host cost; the
+single-submit amortization of PR #32–36 remains the larger lever.
+
+Added `stream_fresh_w1/w2` parity gates (API 96 → **98 cases**).
+Gates: v2 48/48, op 27/27, gradcheck 25/25, model 10/10, API 98/98, ctest 2/2.
+Core 3,021 lines.
+
+## 2026-11-22 08:15 — PR #36: device-side SGD — ENTIRE update loop in one submit, beats PyTorch at every N
 
 PR #35 replayed fwd+bwd but optimizers were still host-side numpy. Added a
 device-side fused SGD kernel `sgd.comp` (`w -= lr*(g + wd*w)`, one invocation

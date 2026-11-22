@@ -25,7 +25,10 @@
 
 /* One captured dispatch: its own params + output buffers + descriptor set so
  * replayed dispatches don't clobber each other's arguments. */
-#define RT_CAPTURE_SLOTS 64
+#define RT_CAPTURE_SLOTS 256
+/* PR #38: several captured graphs, each reading a distinct input buffer, can
+ * be submitted in ONE vkQueueSubmit2 so fresh per-step data is amortized. */
+#define RT_MAX_GRAPHS 6
 typedef struct {
   VkBuffer params, out;
   VkDeviceMemory params_mem, out_mem;
@@ -103,6 +106,9 @@ struct RtVk {
   uint64_t tick;
   int pending;                 /* async submits issued but not yet waited */
   VkCommandBuffer replay_cmd;
+  VkCommandBuffer cap_cmd;             /* command buffer currently being captured */
+  VkCommandBuffer graph_cmds[RT_MAX_GRAPHS];  /* PR #38 stream graphs */
+  int graph_n;                                 /* number captured */
   int replay_count;
   int capturing;
   int capture_slot_count;
@@ -303,6 +309,8 @@ void rt_vk_init(RT* c) {
     .commandPool=vk->pool, .level=VK_COMMAND_BUFFER_LEVEL_PRIMARY, .commandBufferCount=1 };
   vkAllocateCommandBuffers(vk->dev, &ai, &vk->cmd);
   vkAllocateCommandBuffers(vk->dev, &ai, &vk->replay_cmd);  /* prebuilt replay graph */
+  ai.commandBufferCount=RT_MAX_GRAPHS;
+  vkAllocateCommandBuffers(vk->dev, &ai, vk->graph_cmds);   /* PR #38 stream graphs */
 
   VkFenceCreateInfo fci = { .sType=VK_STRUCTURE_TYPE_FENCE_CREATE_INFO };
   vkCreateFence(vk->dev, &fci, NULL, &vk->fence);
@@ -577,15 +585,15 @@ static uint64_t buf_addr(RT* c, RtBuf* b) {
 static void cap_record(RtVk* vk, RtCaptureSlot* s, VkPipeline pipe,
                        const int pc[4], uint32_t groups) {
   s->pipeline=pipe; memcpy(s->pc,pc,sizeof(int)*4); s->groups=groups;
-  vkCmdBindPipeline(vk->replay_cmd,VK_PIPELINE_BIND_POINT_COMPUTE,pipe);
-  vkCmdBindDescriptorSets(vk->replay_cmd,VK_PIPELINE_BIND_POINT_COMPUTE,vk->playout,0,1,&s->set,0,NULL);
-  vkCmdPushConstants(vk->replay_cmd,vk->playout,VK_SHADER_STAGE_COMPUTE_BIT,0,sizeof(int)*4,s->pc);
-  vkCmdDispatch(vk->replay_cmd,groups,1,1);
+  vkCmdBindPipeline(vk->cap_cmd,VK_PIPELINE_BIND_POINT_COMPUTE,pipe);
+  vkCmdBindDescriptorSets(vk->cap_cmd,VK_PIPELINE_BIND_POINT_COMPUTE,vk->playout,0,1,&s->set,0,NULL);
+  vkCmdPushConstants(vk->cap_cmd,vk->playout,VK_SHADER_STAGE_COMPUTE_BIT,0,sizeof(int)*4,s->pc);
+  vkCmdDispatch(vk->cap_cmd,groups,1,1);
   VkMemoryBarrier2 mb={.sType=VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
     .srcStageMask=VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,.srcAccessMask=VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
     .dstStageMask=VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,.dstAccessMask=VK_ACCESS_2_SHADER_STORAGE_READ_BIT};
   VkDependencyInfo dep={.sType=VK_STRUCTURE_TYPE_DEPENDENCY_INFO,.memoryBarrierCount=1,.pMemoryBarriers=&mb};
-  vkCmdPipelineBarrier2(vk->replay_cmd,&dep);
+  vkCmdPipelineBarrier2(vk->cap_cmd,&dep);
 }
 
 /* After an eager kernel: HOST_CACHED outputs are already CPU-visible (just
@@ -723,7 +731,7 @@ void rt_vk_sgd_update(RT* c, RtBuf* w, RtBuf* g, float lr, float wd) {
   memcpy(&lrbits,&lr,sizeof(float)); memcpy(&wdbits,&wd,sizeof(float));
   p[5]=(int)lrbits; p[6]=(int)wdbits;
   int pc[4]={n,0,0,0}; uint32_t groups=((n+255)/256);
-  VkCommandBuffer cmd = slot?vk->replay_cmd:vk->cmd;
+  VkCommandBuffer cmd = slot?vk->cap_cmd:vk->cmd;
   VkDescriptorSet set = slot?slot->set:vk->set;
   if(!slot){ VkCommandBufferBeginInfo bi={.sType=VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
     vkBeginCommandBuffer(cmd,&bi); }
@@ -781,7 +789,7 @@ void rt_vk_layernorm(RT* c, RtBuf* x, RtBuf* w, RtBuf* b, RtBuf* res, RtBuf* out
   pack_addr(p,10,outaddr);
   if(res) pack_addr(p,12,buf_addr(c,res));
   int pc[4]={rows,cols,0,0};
-  VkCommandBuffer cmd = slot?vk->replay_cmd:vk->cmd;
+  VkCommandBuffer cmd = slot?vk->cap_cmd:vk->cmd;
   VkDescriptorSet set = slot?slot->set:vk->set;
   if(!slot){ VkCommandBufferBeginInfo bi={.sType=VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
     vkBeginCommandBuffer(cmd,&bi); }
@@ -811,10 +819,10 @@ void rt_vk_softmax(RT* c, RtBuf* in, RtBuf* bias, RtBuf* out, int kind) {
   int pc[4]={rows,cols,kind,0};
   VkPipeline pipe=vk->softmax[(kind?1:0)+(bias?2:0)];
   if(slot){ if(slot->pipeline==VK_NULL_HANDLE){slot->pipeline=pipe;memcpy(slot->pc,pc,sizeof(int)*4);slot->groups=1;}
-    vkCmdBindPipeline(vk->replay_cmd,VK_PIPELINE_BIND_POINT_COMPUTE,pipe);
-    vkCmdBindDescriptorSets(vk->replay_cmd,VK_PIPELINE_BIND_POINT_COMPUTE,vk->playout,0,1,&slot->set,0,NULL);
-    vkCmdPushConstants(vk->replay_cmd,vk->playout,VK_SHADER_STAGE_COMPUTE_BIT,0,sizeof(pc),pc);
-    vkCmdDispatch(vk->replay_cmd,rows,1,1); return; }
+    vkCmdBindPipeline(vk->cap_cmd,VK_PIPELINE_BIND_POINT_COMPUTE,pipe);
+    vkCmdBindDescriptorSets(vk->cap_cmd,VK_PIPELINE_BIND_POINT_COMPUTE,vk->playout,0,1,&slot->set,0,NULL);
+    vkCmdPushConstants(vk->cap_cmd,vk->playout,VK_SHADER_STAGE_COMPUTE_BIT,0,sizeof(pc),pc);
+    vkCmdDispatch(vk->cap_cmd,rows,1,1); return; }
   VkCommandBufferBeginInfo bi={.sType=VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
   vkBeginCommandBuffer(vk->cmd,&bi);
   vkCmdBindPipeline(vk->cmd,VK_PIPELINE_BIND_POINT_COMPUTE,pipe);
@@ -865,7 +873,7 @@ void rt_vk_reduce(RT* c, RtBuf* in, int kind, int axis, RtBuf* out) {
   pack_addr(p,8,outaddr);
   int total=outer*inner; int pc[4]={total,kind,0,0};
   if (slot) {
-    record_reduce(vk,vk->replay_cmd,slot->set,pc,(uint32_t)total);
+    record_reduce(vk,vk->cap_cmd,slot->set,pc,(uint32_t)total);
     slot->pipeline=vk->reduce_s1; memcpy(slot->pc,pc,sizeof(int)*4); slot->groups=1;
     return;
   }
@@ -880,6 +888,7 @@ void rt_vk_reduce(RT* c, RtBuf* in, int kind, int axis, RtBuf* out) {
 void rt_vk_capture_begin(RT* c){
   RtVk* vk=c->vk; if(!vk||!vk->dev) return;
   vk->capture_slot_count=0; vk->capturing=1;
+  vk->cap_cmd=vk->replay_cmd;
   VkCommandBufferBeginInfo bi={.sType=VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
     .flags=VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT};
   vkBeginCommandBuffer(vk->replay_cmd,&bi);
@@ -889,6 +898,54 @@ void rt_vk_capture_end(RT* c){
   vkEndCommandBuffer(vk->replay_cmd);
   vk->capturing=0; vk->replay_count=vk->capture_slot_count;
 }
+/* PR #38: capture graph `idx` into its own command buffer. Slots accumulate
+ * across graphs (each graph's dispatches reference their own slot params/out). */
+void rt_vk_stream_begin(RT* c, int idx){
+  RtVk* vk=c->vk; if(!vk||!vk->dev) return;
+  if(idx<0||idx>=RT_MAX_GRAPHS) return;
+  if(idx==0){ vk->capture_slot_count=0; c->capture_nout=0; }
+  vk->capturing=1; vk->cap_cmd=vk->graph_cmds[idx];
+  vkResetCommandBuffer(vk->graph_cmds[idx],0);
+  VkCommandBufferBeginInfo bi={.sType=VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+    .flags=VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT};
+  vkBeginCommandBuffer(vk->graph_cmds[idx],&bi);
+}
+void rt_vk_stream_end(RT* c, int idx){
+  RtVk* vk=c->vk; if(!vk||!vk->dev) return;
+  if(idx<0||idx>=RT_MAX_GRAPHS) return;
+  /* PR #38: make this graph's in-place weight writes visible to the next
+   * graph in the same submit (separate command buffers need an explicit barrier). */
+  VkMemoryBarrier2 mb={.sType=VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
+    .srcStageMask=VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,.srcAccessMask=VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+    .dstStageMask=VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,.dstAccessMask=VK_ACCESS_2_SHADER_STORAGE_READ_BIT};
+  VkDependencyInfo dep={.sType=VK_STRUCTURE_TYPE_DEPENDENCY_INFO,.memoryBarrierCount=1,.pMemoryBarriers=&mb};
+  vkCmdPipelineBarrier2(vk->graph_cmds[idx],&dep);
+  vkEndCommandBuffer(vk->graph_cmds[idx]);
+  vk->capturing=0;
+  if(idx+1>vk->graph_n) vk->graph_n=idx+1;
+  vk->replay_count=vk->capture_slot_count;
+}
+/* Submit the first n captured graphs in ONE submit (one timeline round trip).
+ * Weights update in place across graphs; same-queue order preserves that. */
+void rt_vk_stream_submit(RT* c, int n){
+  RtVk* vk=c->vk; if(!vk||!vk->dev||!vk->graph_n) return;
+  if(n>vk->graph_n) n=vk->graph_n;
+  VkCommandBufferSubmitInfo cbs[RT_MAX_GRAPHS];
+  for(int i=0;i<n;++i) cbs[i]=(VkCommandBufferSubmitInfo){
+    .sType=VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,.commandBuffer=vk->graph_cmds[i]};
+  vk->tick += n;
+  VkSemaphoreSubmitInfo s={.sType=VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+    .semaphore=vk->timeline,.value=vk->tick,.stageMask=VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT};
+  VkSubmitInfo2 si={.sType=VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
+    .commandBufferInfoCount=(uint32_t)n,.pCommandBufferInfos=cbs,
+    .signalSemaphoreInfoCount=1,.pSignalSemaphoreInfos=&s};
+  vkQueueSubmit2(vk->queue,1,&si,VK_NULL_HANDLE);
+  VkSemaphoreWaitInfo wi={.sType=VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,
+    .semaphoreCount=1,.pSemaphores=&vk->timeline,.pValues=&vk->tick};
+  vkWaitSemaphores(vk->dev,&wi,UINT64_MAX);
+  vk->pending=0;
+}
+
 /* Submit one replay. Sync submissions wait on the previous timeline value then
  * signal the next (self-chain). Async submissions ONLY signal: all submits are
  * on the same queue so they execute in order, and waiting on the final tick
@@ -962,6 +1019,42 @@ void rt_vk_download_outputs(RT* c){
   }
 }
 void rt_vk_replay(RT* c){ rt_vk_submit_only(c); rt_vk_download_outputs(c); }
+/* PR #38: create a CPU-mapped HOST_CACHED device buffer for an input leaf.
+ * The shader reads it by device address; the CPU writes fresh batches directly
+ * (no H2D copy command), so each replay uses new data. */
+float* rt_vk_map_input(RT* c, RtBuf* b) {
+  RtVk* vk=c->vk; if(!vk||!vk->dev||!b) return NULL;
+  if (b->vk) { RtVkBuf* v=(RtVkBuf*)b->vk; if(v->map) return (float*)v->map; }
+  RtVkBuf* vb=(RtVkBuf*)calloc(1,sizeof(RtVkBuf));
+  VkDeviceSize sz=sizeof(float)*(size_t)(b->n?b->n:1);
+  VkBufferCreateInfo bci={.sType=VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,.size=sz,
+    .usage=VK_BUFFER_USAGE_STORAGE_BUFFER_BIT|VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT|
+           VK_BUFFER_USAGE_TRANSFER_DST_BIT|VK_BUFFER_USAGE_TRANSFER_SRC_BIT};
+  vkCreateBuffer(vk->dev,&bci,NULL,&vb->buf);
+  VkMemoryRequirements req; vkGetBufferMemoryRequirements(vk->dev,vb->buf,&req);
+  uint32_t mt=mem_type(vk,req,VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT|VK_MEMORY_PROPERTY_HOST_CACHED_BIT);
+  VkMemoryAllocateFlagsInfo mfi={.sType=VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_FLAGS_INFO,
+    .flags=VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT};
+  VkMemoryAllocateInfo ai={.sType=VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,.allocationSize=req.size,
+    .memoryTypeIndex=mt,.pNext=&mfi};
+  vkAllocateMemory(vk->dev,&ai,NULL,&vb->mem);
+  vkBindBufferMemory(vk->dev,vb->buf,vb->mem,0);
+  VkBufferDeviceAddressInfo adi={.sType=VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,.buffer=vb->buf};
+  vb->addr=vkGetBufferDeviceAddress(vk->dev,&adi);
+  vb->size=sz;
+  vkMapMemory(vk->dev,vb->mem,0,req.size,0,&vb->map);
+  b->vk=vb; b->host_valid=0;   /* no upload: shader reads mapped memory */
+  memcpy(vb->map,b->host,sz);  /* seed from leaf host data */
+  return (float*)vb->map;
+}
+void rt_vk_flush_input(RT* c, RtBuf* b) {
+  RtVk* vk=c->vk; if(!vk||!vk->dev||!b||!b->vk) return;
+  RtVkBuf* vb=(RtVkBuf*)b->vk; if(!vb->map) return;
+  VkMappedMemoryRange r={.sType=VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
+    .memory=vb->mem,.offset=0,.size=vb->size};
+  vkFlushMappedMemoryRanges(vk->dev,1,&r);
+}
+
 void rt_vk_upload(RT* c, RtBuf* b, const float* data){
   RtVk* vk=c->vk; if(!vk||!vk->dev) return;
   RtVkBuf* vb=vkbuf(c,b);
@@ -1102,10 +1195,15 @@ void rt_vk_replay(RT* c){ (void)c; }
 void rt_vk_submit_only(RT* c){ (void)c; }
 void rt_vk_submit_async(RT* c){ (void)c; }
 void rt_vk_replay_n(RT* c,int n){ (void)c;(void)n; }
+void rt_vk_stream_begin(RT* c,int i){ (void)c;(void)i; }
+void rt_vk_stream_end(RT* c,int i){ (void)c;(void)i; }
+void rt_vk_stream_submit(RT* c,int n){ (void)c;(void)n; }
 void rt_vk_download_outputs(RT* c){ (void)c; }
 void rt_vk_download_to(RT* c, RtBuf* b, float* out){ (void)c; (void)b; (void)out; }
 const float* rt_vk_read_ptr(RT* c, RtBuf* b, int slot){ (void)c; (void)slot; return b?(const float*)b->host:NULL; }
 void rt_vk_upload(RT* c, RtBuf* b, const float* d){ (void)c;(void)b;(void)d; }
+float* rt_vk_map_input(RT* c, RtBuf* b){ (void)c; return b?(float*)b->host:NULL; }
+void rt_vk_flush_input(RT* c, RtBuf* b){ (void)c;(void)b; }
 void rt_vk_download(RT* c, RtBuf* b){ (void)c;(void)b; }
 void rt_vk_download_lazy(RT* c, RtBuf* b){ (void)c;(void)b; }
 #endif
