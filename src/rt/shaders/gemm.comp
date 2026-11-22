@@ -1,0 +1,38 @@
+#version 450
+#extension GL_EXT_buffer_reference2 : require
+#extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
+/* Bitsy 0.2 tiled GEMM. Tile sizes are specialization constants (BEAM-lite:
+ * a small set of pipelines keyed by BM/BN/BK). Bindless device addresses. */
+layout(local_size_x = 256) in;
+layout(constant_id = 0) const int BM = 16;
+layout(constant_id = 1) const int BN = 16;
+layout(constant_id = 2) const int BK = 16;
+
+layout(buffer_reference, std430, buffer_reference_align = 4) readonly buffer F32 {
+  float v[];
+};
+/* params words: [0]=M [1]=N [2]=K, [4..]=Aaddr,Baddr,Caddr (2 words each) */
+layout(std430, binding = 0) readonly buffer Params { int param[]; };
+
+uint64_t paddr(int base) {
+  return (uint64_t(uint(param[base])) | (uint64_t(uint(param[base + 1])) << 32));
+}
+void main() {
+  int M = param[0], N = param[1], K = param[2];
+  F32 A = F32(paddr(4)), B = F32(paddr(6)), C = F32(paddr(8));
+  int tile = int(gl_WorkGroupID.x);
+  int tid = int(gl_LocalInvocationID.x);
+  int tilesN = (N + BN - 1) / BN;
+  int row = (tile / tilesN) * BM;
+  int col = (tile % tilesN) * BN;
+  if (row >= M || col >= N) return;
+  int threads = int(gl_WorkGroupSize.x);
+  for (int e = 0; e < BM * BN; ++e) {
+    int r = row + e / BN, c = col + e % BN;
+    if ((e % threads) != tid || r >= M || c >= N) continue;
+    float acc = 0.0;
+    for (int k = 0; k < K; ++k) acc += A.v[r * K + k] * B.v[k * N + c];
+    C.v[r * N + c] = acc;
+  }
+}
+

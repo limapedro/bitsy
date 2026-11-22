@@ -6,6 +6,26 @@ updates to this file and `ARCHITECTURE_LOG.md`, and a tagged release.
 
 Status legend: **done** / **in progress** / **planned**.
 
+## 0.2 rewrite — tinygrad-inspired minimal core (exp_040)
+
+Following the user directive to adopt tinygrad's philosophy (fewest lines,
+maximum performance) and to bring the C+Vulkan core under **4096 lines**, the
+0.2 line replaces the eager per-op dispatcher with a four-layer compact runtime:
+lazy graph → fusion scheduler → parameterized kernels → capture/replay executor.
+Version **0.2** of this architecture; the old eager core is retained only as a
+numeric reference. See `experiments/exp_040/` and `docs/study/`.
+
+| Phase | Name | Focus | Status |
+|---|---|---|---|
+| R0 | Study | Read tinygrad, PyTorch 2.15, Vulkan spec; record findings | **done** (docs/study/, docs/research/) |
+| R1 | IR | One interned node type; lazy ops + autograd in C | **done** (PR #1; exp_040 FINDINGS) |
+| R2 | Fuse | Scheduler collapses pointwise chains into one kernel | **done** (PR #1: 1-dispatch proof on CPU+Vulkan) |
+| R3 | Kernels | One parameterized GEMM + reduce + fused elementwise; drop 10 GEMM variants | planned |
+| R4 | Exec | Vulkan device/allocator + command-buffer capture/replay (JIT) | planned |
+| R5 | Verify | Parity gate green, ≤4096 lines, benchmarks, tag 0.2, push main | planned |
+
+The legacy milestone table below is kept for historical traceability.
+
 | # | Name | Focus | Status |
 |---|---|---|---|
 | M0 | Anvil | Repository, CMake, CI, conventions, empty Python package, parity harness skeleton, first `add` on `cpu_ref`; renamed to Bitsy and restyled | **done** (`v0.2.0-bitsy`, supersedes `v0.1.0-m0`) |
