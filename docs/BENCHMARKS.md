@@ -58,6 +58,22 @@ this GPU — see FINDINGS_PR15).
 
 ---
 
+## 2026-11-22 20:45 — PR #59: CUDA LayerNorm ported; CUDA softmax measured and withheld
+
+Ported LayerNorm to a CUDA kernel (`norm_cuda.cu`, one block per row, shared
+mean/variance reduction) with the dual-buffer handoff and enabled it by default.
+Also implemented CUDA softmax/log_softmax in the same module; forward matched
+PyTorch (softmax diff 7.5e-09, log_softmax 1.4e-06) and reached parity
+(0.049 vs 0.048 ms), **but enabling it regressed two v2 parity gates**
+(`end_to_end_gradient_flow`, `training_scale_gradients` — both use
+`cross_entropy` → log_softmax backward). Its hook is therefore disabled and
+softmax stays on Vulkan; the kernel is retained as a reference.
+
+LayerNorm CUDA path is enabled and all gates remain green across two full
+rounds: v2 48/48, op 27/27, gradcheck 25/25, model 10/10, API 113/113,
+CTest 2/2. End-to-end 4-layer MLP: 0.3702 vs 0.4241 ms/step (0.87×,
+1.15× faster). Core 3,530 lines.
+
 ## 2026-11-22 20:10 — PR #58: root-caused the corruption — fast path back on by default, CUDA GEMM shipped
 
 Found the real cause of PR #57's intermittent `grad_reshape` corruption: the

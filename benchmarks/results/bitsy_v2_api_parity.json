@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-22T14:11:23.493814+00:00",
+  "generated_at": "2026-11-22T14:23:42.572361+00:00",
   "environment": {
     "torch": "2.11.0+cu126",
     "gpu": "NVIDIA GeForce GTX 1660 SUPER"
@@ -525,19 +525,19 @@
     },
     {
       "name": "ln_bwd_(4,)_x",
-      "max_abs_diff": 5.403830982686486e-08,
+      "max_abs_diff": 5.956690074526705e-08,
       "tol": 0.0001,
       "passed": true
     },
     {
       "name": "ln_bwd_(4,)_res",
-      "max_abs_diff": 5.403830982686486e-08,
+      "max_abs_diff": 5.956690074526705e-08,
       "tol": 0.0001,
       "passed": true
     },
     {
       "name": "ln_bwd_(4,)_w",
-      "max_abs_diff": 1.1920928955078125e-07,
+      "max_abs_diff": 5.960464477539063e-08,
       "tol": 0.0001,
       "passed": true
     },

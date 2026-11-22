@@ -19,6 +19,10 @@ void rt_cn_flush(void);
 /* PR #55: single-kernel CUDA reduction (sum/mean/max/min). */
 int rt_cn_reduce_fast(void* in,void* out,int outer,int stride,int inner,int kind);
 int rt_cn_gemm_fast(void* A,void* B,void* bias,void* C,int M,int N,int K,int flags);
+/* PR #59: CUDA softmax / LayerNorm. */
+int rt_cn_softmax(void* in,void* bias,void* out,int rows,int cols,int kind,int has_bias);
+int rt_cn_layernorm(void* in,void* w,void* b,void* res,void* out,
+                    int rows,int cols,float eps,int has_res);
 #ifdef __cplusplus
 }
 #endif
