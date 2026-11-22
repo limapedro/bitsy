@@ -236,6 +236,30 @@ class Tensor:
   def reshape(self, *shape) -> "Tensor":
     return Tensor(self.rt, self.rt.reshape(self.h, shape), shape, self.requires_grad)
 
+  def flatten(self, start_dim: int = 0) -> "Tensor":
+    s = list(self.shape)
+    if start_dim < 0: start_dim += len(s)
+    left, right = s[:start_dim], s[start_dim:]
+    n = 1
+    for d in right: n *= d
+    return self.reshape(*(tuple(left) + (n,)))
+
+  def squeeze(self, dim: int = None) -> "Tensor":
+    s = list(self.shape)
+    if dim is not None:
+      if dim < 0: dim += len(s)
+      if s[dim] != 1: return self
+      s.pop(dim)
+    else:
+      s = [d for d in s if d != 1]
+    return self.reshape(*s)
+
+  def unsqueeze(self, dim: int) -> "Tensor":
+    s = list(self.shape)
+    if dim < 0: dim += len(s) + 1
+    s.insert(dim, 1)
+    return self.reshape(*s)
+
   def T(self): return self.trans()
 
   # ---- fused compositions (zero new C) ----

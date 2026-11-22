@@ -108,6 +108,19 @@ def run(cfg=CFG):
     tx = torch.tensor(xpos, device="cuda")
     rec_fwd(nm, md(bf(bx).numpy(), tf(tx).detach().cpu().numpy()))
 
+  # ---- view/shape ops (reshape-based compositions) ----
+  views = [
+    ("flatten",     lambda t: t.reshape(8,16).flatten(),      lambda t: t.reshape(8,16).flatten()),
+    ("flatten_dim1", lambda t: t.reshape(8,4,4).flatten(1),   lambda t: t.reshape(8,4,4).flatten(1)),
+    ("squeeze",     lambda t: t.reshape(8,1,16).squeeze(),    lambda t: t.reshape(8,1,16).squeeze()),
+    ("squeeze_dim", lambda t: t.reshape(8,1,16).squeeze(1),  lambda t: t.reshape(8,1,16).squeeze(1)),
+    ("unsqueeze",   lambda t: t.reshape(8,16).unsqueeze(1),   lambda t: t.reshape(8,16).unsqueeze(1)),
+  ]
+  for nm, bf, tf in views:
+    bx = bv.Tensor.from_numpy(eng.rt, x.copy())
+    tx = torch.tensor(x, device="cuda")
+    rec_fwd(nm, md(bf(bx).numpy(), tf(tx).detach().cpu().numpy()))
+
   # ---- two-input losses (forward + grad on first input) ----
   losses = [
     ("l1_loss",      lambda a,b: F.l1_loss(a,b),            lambda a,b: torch.nn.functional.l1_loss(a,b)),

@@ -40,6 +40,8 @@ void main() {
   if (row0 >= M || col0 >= N) return;   /* whole workgroup returns together */
 
   int NE = (BM * BN) / 256;             /* outputs per thread (compile-time) */
+  /* acc[] capacity must be >= BM*BN/256 for the selected tile. 16 covers the
+   * largest validated tile (64x64); larger tiles would overflow it. */
   float acc[16];
   for (int e = 0; e < NE; ++e) acc[e] = 0.0;
 

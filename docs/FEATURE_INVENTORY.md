@@ -27,7 +27,7 @@ Per-function numeric and performance evidence lives in [PROGRESS.md](PROGRESS.md
 |---|---|
 | `shape`, `stride`, `numel`, `ndim`, `element_size`, `is_contiguous` | partial (shape/strides/numel/contiguity in C) |
 | `view`, `reshape`, `transpose`, `t` | done (contiguous `view` + 2D strided transpose; `Tensor.transpose` differentiable since exp_037) |
-| `squeeze`, `unsqueeze`, `flatten` | missing |
+| `squeeze`, `unsqueeze`, `flatten` | done (PR #14: reshape-based compositions, 60-case parity) |
 | `permute`, `expand`, `expand_as`, `repeat`, `narrow`, `unbind`, `unfold`, `roll`, `flip` | missing |
 | `cat`, `stack`, `hstack`, `vstack`, `dstack`, `column_stack`, `moveaxis`, `swapaxes` | missing |
 | `index_select`, `gather`, `scatter`, `scatter_`, `index_add`, `index_copy`, `index_fill`, `put`, `take` | missing |
