@@ -201,6 +201,8 @@ def run(cfg=CFG):
                                                       lambda a,b: torch.nn.functional.cosine_similarity(a,b,dim=-1)),
     ("pairwise_dist",lambda a,b: F.pairwise_distance(a,b),
                                                       lambda a,b: torch.nn.functional.pairwise_distance(a,b)),
+    ("ln_residual",  lambda a,b: bv.nn.LayerNorm(eng, a.shape[-1])(a, residual=b),
+                                                      lambda a,b: torch.nn.LayerNorm(a.shape[-1]).to(a.device)(a+b)),
     ("greater",      lambda a,b: F.greater(a,b),      lambda a,b: (a>b).float()),
     ("less",         lambda a,b: F.less(a,b),         lambda a,b: (a<b).float()),
     ("equal",        lambda a,b: F.equal(a,b),        lambda a,b: (a==b).float()),
@@ -225,6 +227,26 @@ def run(cfg=CFG):
   ]
   for nm, bf, tf in special_cases:
     rec_fwd(nm, md(bf(bs).numpy(), tf(ts).detach().cpu().numpy()))
+
+  # ---- LayerNorm backward (residual + weight + bias), scalar mse loss ----
+  # 1-D only: mse_loss's mean() over axis 0 is a true scalar only for 1-D inputs.
+  for shp in ((4,),):
+    xv=rng.standard_normal(shp).astype(np.float32)
+    rv=rng.standard_normal(shp).astype(np.float32)
+    e2=bv.Engine(device=bv.Engine.VULKAN)
+    X2=bv.Tensor.from_numpy(e2.rt,xv,requires_grad=True)
+    R2=bv.Tensor.from_numpy(e2.rt,rv,requires_grad=True)
+    ln2=bv.nn.LayerNorm(e2,shp[-1])
+    loss=F.mse_loss(ln2(X2,residual=R2), bv.Tensor.from_numpy(e2.rt,np.zeros(shp,np.float32)))
+    loss.backward(params=[X2,R2,ln2.W,ln2.b])
+    tx2=torch.tensor(xv,requires_grad=True); tr2=torch.tensor(rv,requires_grad=True)
+    tl2=torch.nn.LayerNorm(shp[-1]);
+    tloss=torch.nn.functional.mse_loss(tl2(tx2+tr2),torch.zeros(shp))
+    tloss.backward()
+    pairs=[("x",X2.grad,tx2.grad.detach().numpy()),("res",R2.grad,tr2.grad.detach().numpy()),
+           ("w",ln2.W.grad,tl2.weight.grad.detach().numpy()),("b",ln2.b.grad,tl2.bias.grad.detach().numpy())]
+    for nm,bg,tg in pairs:
+      rec_fwd(f"ln_bwd_{shp}_{nm}", md(bg.reshape(tg.shape),tg))
 
   passed = sum(r["passed"] for r in results)
   report = {

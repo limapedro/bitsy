@@ -57,7 +57,7 @@ class _RT:
     return self.lib.rt_gemm(self.ctx, a, b, bias or C.c_void_p(), ta, tb)
   def reduce(self, a, kind, axis, keepdim): return self.lib.rt_reduce(self.ctx, a, kind, axis, keepdim)
   def softmax(self, a, bias, kind): return self.lib.rt_softmax(self.ctx, a, bias, kind)
-  def layernorm(self, x, w, b, eps): return self.lib.rt_layernorm(self.ctx, x, w, b, eps)
+  def layernorm(self, x, w, b, res, eps): return self.lib.rt_layernorm(self.ctx, x, w, b, res, eps)
   def where(self, c, a, b): return self.lib.rt_where(self.ctx, c, a, b)
   def transpose(self, a): return self.lib.rt_transpose(self.ctx, a)
   def reshape(self, a, shape):
