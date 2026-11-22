@@ -15,6 +15,24 @@
 
 #define RT_NBUF 512
 
+/* One captured dispatch: its own params + output buffers + descriptor set so
+ * replayed dispatches don't clobber each other's arguments. */
+#define RT_CAPTURE_SLOTS 64
+typedef struct {
+  VkBuffer params, out;
+  VkDeviceMemory params_mem, out_mem;
+  void* params_map;
+  void* out_map;
+  VkDeviceSize out_size;
+  VkDescriptorSet set;
+  VkPipeline pipeline;
+  int pc[4];
+  uint32_t groups;
+  RtBuf* out_buf;      /* C output buffer whose host receives slot->out after replay */
+  int output_in_slot;  /* 1=fused (writes via binding1); 0=gemm/reduce (device addr) */
+  int used;
+} RtCaptureSlot;
+
 typedef struct {
   VkBuffer buf;
   VkDeviceMemory mem;
@@ -52,6 +70,9 @@ struct RtVk {
   uint64_t tick;
   VkCommandBuffer replay_cmd;
   int replay_count;
+  int capturing;
+  int capture_slot_count;
+  RtCaptureSlot cap_slots[RT_CAPTURE_SLOTS];
 };
 
 static void* spv_data(const unsigned char* h, size_t* n) { (void)h; (void)n; return NULL; }
@@ -132,8 +153,9 @@ void rt_vk_init(RT* c) {
     .queueFamilyIndex=vk->qfam, .flags=VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT };
   vkCreateCommandPool(vk->dev, &pci, NULL, &vk->pool);
   VkCommandBufferAllocateInfo ai = { .sType=VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-    .commandPool=vk->pool, .level=VK_COMMAND_BUFFER_LEVEL_PRIMARY, .commandBufferCount=2 };
-  vkAllocateCommandBuffers(vk->dev, &ai, &vk->cmd); /* cmd[0], cmd[1] contiguous */
+    .commandPool=vk->pool, .level=VK_COMMAND_BUFFER_LEVEL_PRIMARY, .commandBufferCount=1 };
+  vkAllocateCommandBuffers(vk->dev, &ai, &vk->cmd);
+  vkAllocateCommandBuffers(vk->dev, &ai, &vk->replay_cmd);  /* prebuilt replay graph */
 
   VkFenceCreateInfo fci = { .sType=VK_STRUCTURE_TYPE_FENCE_CREATE_INFO };
   vkCreateFence(vk->dev, &fci, NULL, &vk->fence);
@@ -155,9 +177,10 @@ void rt_vk_init(RT* c) {
   VkPipelineLayoutCreateInfo plci = { .sType=VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
     .setLayoutCount=1, .pSetLayouts=&vk->set_layout, .pushConstantRangeCount=1, .pPushConstantRanges=&pcr };
   vkCreatePipelineLayout(vk->dev, &plci, NULL, &vk->playout);
-  VkDescriptorPoolSize ps = { .type=VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, .descriptorCount=2 };
+  VkDescriptorPoolSize ps = { .type=VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+    .descriptorCount=2*(RT_CAPTURE_SLOTS+1) };
   VkDescriptorPoolCreateInfo dpci = { .sType=VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-    .maxSets=1, .poolSizeCount=1, .pPoolSizes=&ps };
+    .maxSets=RT_CAPTURE_SLOTS+1, .poolSizeCount=1, .pPoolSizes=&ps };
   vkCreateDescriptorPool(vk->dev, &dpci, NULL, &vk->dpool);
   VkDescriptorSetAllocateInfo dsai = { .sType=VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
     .descriptorPool=vk->dpool, .descriptorSetCount=1, .pSetLayouts=&vk->set_layout };
@@ -214,6 +237,11 @@ void rt_vk_init(RT* c) {
 void rt_vk_shutdown(RT* c) {
   RtVk* vk = c->vk; if (!vk || !vk->dev) return;
   vkDeviceWaitIdle(vk->dev);
+  for (int i=0;i<vk->capture_slot_count;++i) {
+    RtCaptureSlot* s=&vk->cap_slots[i];
+    vkDestroyBuffer(vk->dev,s->params,NULL); vkFreeMemory(vk->dev,s->params_mem,NULL);
+    vkDestroyBuffer(vk->dev,s->out,NULL); vkFreeMemory(vk->dev,s->out_mem,NULL);
+  }
   vkDestroySemaphore(vk->dev, vk->timeline, NULL);
   vkDestroyFence(vk->dev, vk->fence, NULL);
   vkDestroyPipelineCache(vk->dev, vk->pcache, NULL);
@@ -269,31 +297,112 @@ static void submit_wait(RtVk* vk) {
   vkResetFences(vk->dev, 1, &vk->fence);
 }
 
+/* Create a self-contained params+out buffer pair and descriptor set for one
+ * captured dispatch. Reuses the same memory-type selection as the main buffers. */
+static RtCaptureSlot* cap_slot_new(RtVk* vk, RtBuf* out) {
+  if (vk->capture_slot_count >= RT_CAPTURE_SLOTS) return NULL;
+  RtCaptureSlot* s = &vk->cap_slots[vk->capture_slot_count++];
+  memset(s, 0, sizeof(*s)); s->used = 1; s->out_buf = out;
+  s->output_in_slot = 1;  /* fused output goes to this slot's out buffer */
+  VkPhysicalDeviceMemoryProperties mp; vkGetPhysicalDeviceMemoryProperties(vk->phys,&mp);
+  uint32_t mt=0;
+  VkDeviceSize out_bytes = sizeof(float) * (size_t)((out && out->n) ? out->n : 1);
+  if (out_bytes < 64*1024) out_bytes = 64*1024;
+  VkBufferCreateInfo bci = { .sType=VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+    .size=64*1024, .usage=VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
+                          VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT };
+  VkMemoryAllocateFlagsInfo mfi = { .sType=VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_FLAGS_INFO,
+    .flags=VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT };
+  VkMemoryRequirements req;
+  /* params */
+  vkCreateBuffer(vk->dev,&bci,NULL,&s->params);
+  vkGetBufferMemoryRequirements(vk->dev,s->params,&req);
+  for(uint32_t i=0;i<mp.memoryTypeCount;++i) if((req.memoryTypeBits&(1u<<i)) &&
+    (mp.memoryTypes[i].propertyFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) &&
+    (mp.memoryTypes[i].propertyFlags & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)){mt=i;break;}
+  VkMemoryAllocateInfo ai = { .sType=VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+    .allocationSize=req.size, .memoryTypeIndex=mt, .pNext=&mfi };
+  vkAllocateMemory(vk->dev,&ai,NULL,&s->params_mem);
+  vkBindBufferMemory(vk->dev,s->params,s->params_mem,0);
+  vkMapMemory(vk->dev,s->params_mem,0,req.size,0,&s->params_map);
+  /* out (sized to the dispatch's output) */
+  bci.size = out_bytes;
+  vkCreateBuffer(vk->dev,&bci,NULL,&s->out);
+  vkGetBufferMemoryRequirements(vk->dev,s->out,&req);
+  ai.allocationSize=req.size;
+  vkAllocateMemory(vk->dev,&ai,NULL,&s->out_mem);
+  vkBindBufferMemory(vk->dev,s->out,s->out_mem,0);
+  vkMapMemory(vk->dev,s->out_mem,0,req.size,0,&s->out_map);
+  s->out_size = req.size;
+  /* descriptor set pointing at this slot's params + out */
+  VkDescriptorSetAllocateInfo dsai = { .sType=VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+    .descriptorPool=vk->dpool, .descriptorSetCount=1, .pSetLayouts=&vk->set_layout };
+  vkAllocateDescriptorSets(vk->dev,&dsai,&s->set);
+  VkDescriptorBufferInfo pi={.buffer=s->params,.offset=0,.range=64*1024};
+  VkDescriptorBufferInfo oi={.buffer=s->out,.offset=0,.range=out_bytes};
+  VkWriteDescriptorSet w[2]={
+    {.sType=VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,.dstSet=s->set,.dstBinding=0,
+     .descriptorCount=1,.descriptorType=VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,.pBufferInfo=&pi},
+    {.sType=VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,.dstSet=s->set,.dstBinding=1,
+     .descriptorCount=1,.descriptorType=VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,.pBufferInfo=&oi}};
+  vkUpdateDescriptorSets(vk->dev,2,w,0,NULL);
+  return s;
+}
+
+/* Record one dispatch into a capture slot; returns the slot (params already
+ * written by caller via slot->params_map). */
+static void cap_record(RtVk* vk, RtCaptureSlot* s, VkPipeline pipe,
+                       const int pc[4], uint32_t groups) {
+  s->pipeline=pipe; memcpy(s->pc,pc,sizeof(int)*4); s->groups=groups;
+  vkCmdBindPipeline(vk->replay_cmd,VK_PIPELINE_BIND_POINT_COMPUTE,pipe);
+  vkCmdBindDescriptorSets(vk->replay_cmd,VK_PIPELINE_BIND_POINT_COMPUTE,vk->playout,0,1,&s->set,0,NULL);
+  vkCmdPushConstants(vk->replay_cmd,vk->playout,VK_SHADER_STAGE_COMPUTE_BIT,0,sizeof(int)*4,s->pc);
+  vkCmdDispatch(vk->replay_cmd,groups,1,1);
+  VkMemoryBarrier2 mb={.sType=VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
+    .srcStageMask=VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,.srcAccessMask=VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+    .dstStageMask=VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,.dstAccessMask=VK_ACCESS_2_SHADER_STORAGE_READ_BIT};
+  VkDependencyInfo dep={.sType=VK_STRUCTURE_TYPE_DEPENDENCY_INFO,.memoryBarrierCount=1,.pMemoryBarriers=&mb};
+  vkCmdPipelineBarrier2(vk->replay_cmd,&dep);
+}
+
 void rt_vk_fused(RT* c, RtFusion* f, RtBuf* out) {
   RtVk* vk = c->vk; if (!vk->dev) return;
-  int* p = (int*)vk->params_map;
+  RtCaptureSlot* slot = vk->capturing ? cap_slot_new(vk, out) : NULL;
+  int* p = (int*)(slot ? slot->params_map : vk->params_map);
   p[0]=out->n; p[1]=f->ninst; p[2]=f->ninputs; p[3]=f->ndim;
   for (int j=0;j<f->ndim;++j) p[4+j]=(int)f->dims[j];
+  /* output device address; in capture mode write to the slot's out buffer so
+   * replayed dispatches don't clobber each other; in eager mode use out's buf */
+  uint64_t outaddr;
+  if (slot) {
+    VkBufferDeviceAddressInfo oai={.sType=VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,.buffer=slot->out};
+    outaddr = vkGetBufferDeviceAddress(vk->dev,&oai);
+  } else outaddr = vkbuf(c, out)->addr;
+  pack_addr(p, 40, outaddr);
   for (int i=0;i<f->ninputs;++i) {
     RtVkBuf* vb = vkbuf(c, f->in_buf[i]);
     for (int j=0;j<RT_MAXDIMS;++j) p[8+i*RT_MAXDIMS+j]=(int)f->in_stride[i][j];
-    pack_addr(p, 40+i*2, vb->addr);
+    pack_addr(p, 42+i*2, vb->addr);
   }
   for (int k=0;k<f->ninst;++k) {
-    RtInst in = f->inst[k]; int b=56+k*4;
+    RtInst in = f->inst[k]; int b=58+k*4;
     p[b]=in.op; p[b+1]=in.a; p[b+2]=in.b;
     memcpy(&p[b+3], &in.c, sizeof(float));
   }
+  int pc[4] = { out->n, f->ninst, f->ninputs, f->ndim };
+  uint32_t groups = (out->n+255)/256;
+  if (slot) { cap_record(vk, slot, vk->fused[0], pc, groups); return; }
   VkCommandBufferBeginInfo bi = { .sType=VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
   vkBeginCommandBuffer(vk->cmd, &bi);
   vkCmdBindPipeline(vk->cmd, VK_PIPELINE_BIND_POINT_COMPUTE, vk->fused[0]);
   vkCmdBindDescriptorSets(vk->cmd, VK_PIPELINE_BIND_POINT_COMPUTE, vk->playout, 0,1,&vk->set,0,NULL);
-  int pc[4] = { out->n, f->ninst, f->ninputs, f->ndim };
   vkCmdPushConstants(vk->cmd, vk->playout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(pc), pc);
-  vkCmdDispatch(vk->cmd, (out->n+255)/256, 1, 1);
+  vkCmdDispatch(vk->cmd, groups, 1, 1);
   vkEndCommandBuffer(vk->cmd);
   submit_wait(vk);
-  memcpy(out->host, vk->out_map, sizeof(float)*(size_t)out->n);
+  { void* m; vkMapMemory(vk->dev,((RtVkBuf*)out->vk)->mem,0,
+      sizeof(float)*(size_t)out->n,0,&m);
+    memcpy(out->host,m,sizeof(float)*(size_t)out->n); vkUnmapMemory(vk->dev,((RtVkBuf*)out->vk)->mem); }
 }
 
 void rt_vk_gemm(RT* c, RtBuf* a, RtBuf* b, RtBuf* bias,
@@ -302,19 +411,22 @@ void rt_vk_gemm(RT* c, RtBuf* a, RtBuf* b, RtBuf* bias,
   int ar=(int)a->dims[0], ac=(int)a->dims[1];
   int br=(int)b->dims[0], bc=(int)b->dims[1];
   int M = trans_a?ac:ar, K = trans_a?ar:ac, N = trans_b?br:bc;
-  int* p=(int*)vk->params_map;
+  RtCaptureSlot* slot = vk->capturing ? cap_slot_new(vk, out) : NULL;
+  int* p=(int*)(slot ? slot->params_map : vk->params_map);
   p[0]=M;p[1]=N;p[2]=K; p[3]=trans_a | (trans_b<<1) | (bias?4:0);
   p[4]=ar; p[5]=ac; p[6]=br; p[7]=bc;
   pack_addr(p,8,vkbuf(c,a)->addr); pack_addr(p,10,vkbuf(c,b)->addr);
   pack_addr(p,12,vkbuf(c,out)->addr);
   uint64_t baddr = bias ? vkbuf(c,bias)->addr : 0;
   pack_addr(p,14,baddr);
+  int pc[4]={M,N,K,p[3]}; uint32_t groups=((M+15)/16)*((N+15)/16);
+  if (slot) { cap_record(vk, slot, vk->gemm[0], pc, groups); return; }
   VkCommandBufferBeginInfo bi={.sType=VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
   vkBeginCommandBuffer(vk->cmd,&bi);
   vkCmdBindPipeline(vk->cmd,VK_PIPELINE_BIND_POINT_COMPUTE,vk->gemm[0]);
   vkCmdBindDescriptorSets(vk->cmd,VK_PIPELINE_BIND_POINT_COMPUTE,vk->playout,0,1,&vk->set,0,NULL);
-  int pc[4]={M,N,K,p[3]}; vkCmdPushConstants(vk->cmd,vk->playout,VK_SHADER_STAGE_COMPUTE_BIT,0,sizeof(pc),pc);
-  vkCmdDispatch(vk->cmd, ((M+15)/16)*((N+15)/16), 1,1);
+  vkCmdPushConstants(vk->cmd,vk->playout,VK_SHADER_STAGE_COMPUTE_BIT,0,sizeof(pc),pc);
+  vkCmdDispatch(vk->cmd, groups, 1,1);
   vkEndCommandBuffer(vk->cmd);
   submit_wait(vk);
   void* m; vkMapMemory(vk->dev, ((RtVkBuf*)out->vk)->mem, 0, sizeof(float)*(size_t)out->n,0,&m);
@@ -326,23 +438,36 @@ void rt_vk_reduce(RT* c, RtBuf* in, int kind, int axis, RtBuf* out) {
   int outer=1,stride=(int)in->dims[axis],inner=1;
   for(int i=0;i<axis;++i)outer*=(int)in->dims[i];
   for(int i=axis+1;i<in->ndim;++i)inner*=(int)in->dims[i];
-  int* p=(int*)vk->params_map; p[0]=outer;p[1]=stride;p[2]=inner;p[3]=kind;
+  RtCaptureSlot* slot = vk->capturing ? cap_slot_new(vk, out) : NULL;
+  int* p=(int*)(slot ? slot->params_map : vk->params_map);
+  p[0]=outer;p[1]=stride;p[2]=inner;p[3]=kind;
   pack_addr(p,4,vkbuf(c,in)->addr); pack_addr(p,6,vkbuf(c,out)->addr);
+  int total=outer*inner; int pc[4]={total,kind,0,0}; uint32_t groups=(total+255)/256;
+  if (slot) { cap_record(vk, slot, vk->reduce, pc, groups); return; }
   VkCommandBufferBeginInfo bi={.sType=VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
   vkBeginCommandBuffer(vk->cmd,&bi);
   vkCmdBindPipeline(vk->cmd,VK_PIPELINE_BIND_POINT_COMPUTE,vk->reduce);
   vkCmdBindDescriptorSets(vk->cmd,VK_PIPELINE_BIND_POINT_COMPUTE,vk->playout,0,1,&vk->set,0,NULL);
-  int total=outer*inner; int pc[4]={total,kind,0,0};
   vkCmdPushConstants(vk->cmd,vk->playout,VK_SHADER_STAGE_COMPUTE_BIT,0,sizeof(pc),pc);
-  vkCmdDispatch(vk->cmd,(total+255)/256,1,1);
+  vkCmdDispatch(vk->cmd,groups,1,1);
   vkEndCommandBuffer(vk->cmd);
   submit_wait(vk);
   void* m; vkMapMemory(vk->dev,((RtVkBuf*)out->vk)->mem,0,sizeof(float)*(size_t)out->n,0,&m);
   memcpy(out->host,m,sizeof(float)*(size_t)out->n); vkUnmapMemory(vk->dev,((RtVkBuf*)out->vk)->mem);
 }
 
-void rt_vk_capture_begin(RT* c){ RtVk* vk=c->vk; if(vk&&vk->dev){ VkCommandBufferBeginInfo bi={.sType=VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO}; vkBeginCommandBuffer(vk->replay_cmd,&bi);} }
-void rt_vk_capture_end(RT* c){ RtVk* vk=c->vk; if(vk&&vk->dev) vkEndCommandBuffer(vk->replay_cmd); }
+void rt_vk_capture_begin(RT* c){
+  RtVk* vk=c->vk; if(!vk||!vk->dev) return;
+  vk->capture_slot_count=0; vk->capturing=1;
+  VkCommandBufferBeginInfo bi={.sType=VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+    .flags=VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT};
+  vkBeginCommandBuffer(vk->replay_cmd,&bi);
+}
+void rt_vk_capture_end(RT* c){
+  RtVk* vk=c->vk; if(!vk||!vk->dev) return;
+  vkEndCommandBuffer(vk->replay_cmd);
+  vk->capturing=0; vk->replay_count=vk->capture_slot_count;
+}
 void rt_vk_replay(RT* c){
   RtVk* vk=c->vk; if(!vk||!vk->dev||!vk->replay_count)return;
   vk->tick++;
@@ -353,6 +478,31 @@ void rt_vk_replay(RT* c){
   vkQueueSubmit2(vk->queue,1,&si,VK_NULL_HANDLE);
   VkSemaphoreWaitInfo wi={.sType=VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,.semaphoreCount=1,.pSemaphores=&vk->timeline,.pValues=&vk->tick};
   vkWaitSemaphores(vk->dev,&wi,UINT64_MAX);
+  /* copy each dispatch's result into its output buffer's host view */
+  for (int i=0;i<vk->capture_slot_count;++i) {
+    RtCaptureSlot* s=&vk->cap_slots[i];
+    if (!s->out_buf) continue;
+    if (s->output_in_slot) {
+      memcpy(s->out_buf->host, s->out_map, sizeof(float)*(size_t)s->out_buf->n);
+    } else {
+      RtVkBuf* vb=(RtVkBuf*)s->out_buf->vk;
+      if (vb) { void* m; vkMapMemory(vk->dev,vb->mem,0,vb->size,0,&m);
+        memcpy(s->out_buf->host,m,vb->size); vkUnmapMemory(vk->dev,vb->mem); }
+    }
+  }
+}
+void rt_vk_upload(RT* c, RtBuf* b, const float* data){
+  RtVk* vk=c->vk; if(!vk||!vk->dev) return;
+  RtVkBuf* vb=vkbuf(c,b);
+  void* m; vkMapMemory(vk->dev,vb->mem,0,vb->size,0,&m);
+  memcpy(m,data,vb->size); vkUnmapMemory(vk->dev,vb->mem);
+  memcpy(b->host,data,vb->size);
+}
+void rt_vk_download(RT* c, RtBuf* b){
+  RtVk* vk=c->vk; if(!vk||!vk->dev||!b->vk) return;
+  RtVkBuf* vb=(RtVkBuf*)b->vk;
+  void* m; vkMapMemory(vk->dev,vb->mem,0,vb->size,0,&m);
+  memcpy(b->host,m,vb->size); vkUnmapMemory(vk->dev,vb->mem);
 }
 #else
 /* CPU-only build: no Vulkan device. */
@@ -365,4 +515,6 @@ void rt_vk_reduce(RT* c, RtBuf* i, int kind, int ax, RtBuf* o){ (void)c;(void)i;
 void rt_vk_capture_begin(RT* c){ (void)c; }
 void rt_vk_capture_end(RT* c){ (void)c; }
 void rt_vk_replay(RT* c){ (void)c; }
+void rt_vk_upload(RT* c, RtBuf* b, const float* d){ (void)c;(void)b;(void)d; }
+void rt_vk_download(RT* c, RtBuf* b){ (void)c;(void)b; }
 #endif

@@ -8,6 +8,7 @@
 #define RT_MAXIN   8
 #define RT_MAXINST 256
 #define RT_MAXBUF  256
+#define RT_MAX_CAPTURE_SLOTS 64
 
 /* Fused-kernel instruction set (also mirrored in fused.comp). */
 typedef enum {
@@ -78,6 +79,8 @@ struct RT {
   int capture_n;
   RTTensor* capture_src[RT_MAXBUF];
   int capture_nsrc;
+  RtBuf* capture_outputs[RT_MAXBUF];
+  int capture_nout;
   RTTensor** nodes;
   int nnodes;
   int capnodes;
@@ -95,6 +98,8 @@ void rt_vk_reduce(RT*, RtBuf* in, int kind, int axis, RtBuf* out);
 void rt_vk_capture_begin(RT*);
 void rt_vk_capture_end(RT*);
 void rt_vk_replay(RT*);
+void rt_vk_upload(RT*, RtBuf* b, const float* data);   /* refresh a leaf's device data */
+void rt_vk_download(RT*, RtBuf* b);                    /* copy device result back to b->host */
 
 /* rt.c internal helpers */
 void rt_errf(RT*, const char* fmt, ...);

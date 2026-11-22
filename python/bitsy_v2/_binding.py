@@ -30,4 +30,8 @@ def load(build_dir: Path) -> C.CDLL:
   lib.rt_gemm.restype=C.c_void_p
   lib.rt_reduce.argtypes=[C.c_void_p,C.c_void_p,C.c_int,C.c_int,C.c_int]
   lib.rt_reduce.restype=C.c_void_p
+  lib.rt_upload.argtypes=[C.c_void_p,C.c_void_p,C.POINTER(C.c_float)]
+  lib.rt_capture_begin.argtypes=[C.c_void_p]
+  lib.rt_capture_end.argtypes=[C.c_void_p]
+  lib.rt_replay.argtypes=[C.c_void_p]
   return lib

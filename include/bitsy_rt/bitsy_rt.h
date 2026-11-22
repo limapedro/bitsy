@@ -101,6 +101,7 @@ RT_API RTTensor* rt_scalar(RT*, float value);
 /* Execution + data */
 RT_API void rt_realize(RT*, RTTensor*);
 RT_API void rt_to_host(RTTensor*, float* out);
+RT_API void rt_upload(RT*, RTTensor*, const float* data);  /* update leaf data in place */
 RT_API int  rt_ndim(const RTTensor*);
 RT_API void rt_shape(const RTTensor*, int64_t* out);
 

@@ -15,16 +15,15 @@ layout(buffer_reference, std430, buffer_reference_align = 4) readonly buffer F32
  * [0]=n [1]=ninst [2]=ninputs [3]=ndim
  * [4..7]=out dims
  * [8..8+32]=in_stride[8][4]
- * [40..]=input device addresses (2 x uint64, 8 slots)
- * [56..]=program (4 words/inst: op, a, b, c-bits) */
+ * [40..41]=OUTPUT device address (uint64)
+ * [42..]=input device addresses (2 x uint64, 8 slots)
+ * [58..]=program (4 words/inst: op, a, b, c-bits) */
 layout(std430, binding = 0) readonly buffer Params { int param[]; };
-layout(std430, binding = 1) writeonly buffer Out { float outv[]; };
 
-uint64_t get_addr(int slot) {
-  int base = 40 + slot * 2;
+uint64_t get_addr(int base) {
   return (uint64_t(uint(param[base])) | (uint64_t(uint(param[base + 1])) << 32));
 }
-float load_in(int slot, int64_t off) { return F32(get_addr(slot)).v[int(off)]; }
+float load_in(int slot, int64_t off) { return F32(get_addr(42 + slot * 2)).v[int(off)]; }
 
 /* RtInstOp: 0 LOAD 1 ADD 2 SUB 3 MUL 4 DIV 5 NEG 6 EXP 7 LOG 8 SQRT
  *   9 TANH 10 SIGM 11 RELU 12 GELU 13 GT0 14 GELUB
@@ -86,7 +85,7 @@ void main() {
   float stk[256];
   int sp = 0;
   for (int k = 0; k < param[1]; ++k) {
-    int base = 56 + k * 4;
+    int base = 58 + k * 4;
     int op = param[base], a = param[base + 1], b = param[base + 2];
     if (op == 0) {
       int64_t off = 0;
@@ -106,6 +105,6 @@ void main() {
       stk[sp++] = apply1(op, x);
     }
   }
-  outv[i] = stk[sp - 1];
+  F32(get_addr(40)).v[i] = stk[sp - 1];
 }
 

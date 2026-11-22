@@ -66,5 +66,11 @@ class Engine:
   def __getattr__(self, name):
     return getattr(self.rt, name)
 
+  def upload(self, t, arr):
+    a = np.ascontiguousarray(arr, dtype=np.float32)
+    self.lib.rt_upload(self.rt.ctx, t.h, a.ctypes.data_as(C.POINTER(C.c_float)))
+  def capture_begin(self): self.lib.rt_capture_begin(self.rt.ctx)
+  def capture_end(self): self.lib.rt_capture_end(self.rt.ctx)
+  def replay(self): self.lib.rt_replay(self.rt.ctx)
   def dispatch(self): return self.lib.rt_dispatch_count(self.rt.ctx)
   def reset_dispatch(self): self.lib.rt_reset_dispatch_count(self.rt.ctx)
