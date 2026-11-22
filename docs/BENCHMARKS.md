@@ -58,6 +58,28 @@ this GPU — see FINDINGS_PR15).
 
 ---
 
+## 2026-11-22 12:55 — PR #45: exported Win32 fence-handle wait tested and rejected
+
+Tried a genuinely different sync path: export the Vulkan fence as an opaque
+Win32 handle (`VK_KHR_external_fence` + `VK_KHR_external_fence_win32`) and wait
+with `WaitForSingleObject` in the Windows kernel, bypassing `vkWaitForFences`.
+QPC A/B on 1M-float add (40 iterations, warmup 5):
+```
+Vulkan fence wait:  wall 1.0742 ms, wait 828.5 us/op
+Win32 handle wait:  wall 1.2841 ms, wait 912.5 us/op   (WORSE)
+```
+The kernel wait adds ~84 us/op — the exported-handle indirection is slower than
+the driver's own fence wait. Fully reverted (no extension enable, no handles,
+no timing instrumentation left).
+
+CUDA external-semaphore/buffer interop was considered as the other suggested
+path but rejected without implementation: it would make the compact C core
+depend on libcuda at runtime, breaking the CUDA-less Linux software-Vulkan CI
+that every PR must pass. It is not a viable option for this codebase.
+
+Gates: v2 48/48, op 27/27, gradcheck 25/25, model 10/10, API 108/108, ctest 2/2.
+Core 3,159 lines.
+
 ## 2026-11-22 12:20 — PR #44: precise host-cost breakdown — the sync floor is driver-bound
 
 Measured the single-call host path with high-resolution `QueryPerformanceCounter`
