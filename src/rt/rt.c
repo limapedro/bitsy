@@ -750,10 +750,10 @@ static RTTensor* grad_wrt(RT* c, RTTensor* t, int s, RTTensor* g) {
       /* dw/db: sum over all leading axes, keep the last (feature) axis.
        * A 1-D input has no leading axes -> no reduction needed. */
       if(s==1){ RTTensor* gw=rt_mul(c,g,xhat);
-        for(int d=x->ndim-2;d>=0;--d) gw=rt_reduce(c,gw,RT_REDUCE_SUM,d,1);
+        for(int ax=x->ndim-2;ax>=0;--ax) gw=rt_reduce(c,gw,RT_REDUCE_SUM,ax,1);
         return rt_reshape(c,gw,w->ndim,w->dims); }
       if(s==2){ RTTensor* gb=g; RTTensor* bias=t->src[2];
-        for(int d=x->ndim-2;d>=0;--d) gb=rt_reduce(c,gb,RT_REDUCE_SUM,d,1);
+        for(int ax=x->ndim-2;ax>=0;--ax) gb=rt_reduce(c,gb,RT_REDUCE_SUM,ax,1);
         return rt_reshape(c,gb,bias->ndim,bias->dims); }
       RTTensor* dxh=rt_mul(c,g,w);
       RTTensor* s1=rt_reduce(c,dxh,RT_REDUCE_SUM,ax,1);

@@ -1,0 +1,76 @@
+#version 450
+#extension GL_EXT_buffer_reference2 : require
+#extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
+/* Register-blocked GEMM: each thread owns a 4x4 output tile (16 accumulators)
+ * and uses vec4 loads + outer-product FMA from shared memory. 16x16 workgroups
+ * of 256 threads cover a 64x64 output tile. */
+layout(local_size_x = 256) in;
+layout(buffer_reference, std430, buffer_reference_align = 4) readonly buffer F32 {
+  float v[];
+};
+layout(buffer_reference, std430, buffer_reference_align = 4) writeonly buffer F32W {
+  float v[];
+};
+layout(std430, binding = 0) readonly buffer Params { int param[]; };
+uint64_t paddr(int b){ return uint64_t(uint(param[b])) | (uint64_t(uint(param[b+1]))<<32); }
+
+shared float As[64*8];
+shared float Bs[8*64];
+
+void main(){
+  int M=param[0], N=param[1], K=param[2], flags=param[3];
+  bool ta=(flags&1)!=0, tb=(flags&2)!=0, hb=(flags&4)!=0, relu=(flags&8)!=0;
+  F32 A=F32(paddr(8)), B=F32(paddr(10)), bias=F32(paddr(14));
+  F32W C=F32W(paddr(12));
+  int tile=int(gl_WorkGroupID.x), tid=int(gl_LocalInvocationID.x);
+  int tilesN=(N+63)/64;
+  int row0=(tile/tilesN)*64, col0=(tile%tilesN)*64;
+  if(row0>=M||col0>=N) return;
+  int br=(tid/16)*4, bc=(tid%16)*4;   /* this thread's 4x4 block */
+  int r=row0+br, c=col0+bc;
+  float a00=0.,a01=0.,a02=0.,a03=0.,a10=0.,a11=0.,a12=0.,a13=0.;
+  float a20=0.,a21=0.,a22=0.,a23=0.,a30=0.,a31=0.,a32=0.,a33=0.;
+  for(int k0=0;k0<K;k0+=8){
+    for(int idx=tid;idx<64*8;idx+=256){ int rr=idx/8, kk=idx%8;
+      int gr=row0+rr, gk=k0+kk;
+      As[idx]=(gr<M&&gk<K)?(ta?A.v[gk*M+gr]:A.v[gr*K+gk]):0.0; }
+    for(int idx=tid;idx<8*64;idx+=256){ int kk=idx/64, cc=idx%64;
+      int gk=k0+kk, gc=col0+cc;
+      Bs[idx]=(gk<K&&gc<N)?(tb?B.v[gc*K+gk]:B.v[gk*N+gc]):0.0; }
+    barrier();
+    for(int kk=0;kk<8;++kk){
+      vec4 av=vec4(As[(br+0)*8+kk],As[(br+1)*8+kk],As[(br+2)*8+kk],As[(br+3)*8+kk]);
+      vec4 bv=vec4(Bs[kk*64+bc+0],Bs[kk*64+bc+1],Bs[kk*64+bc+2],Bs[kk*64+bc+3]);
+      a00=fma(av.x,bv.x,a00); a01=fma(av.x,bv.y,a01); a02=fma(av.x,bv.z,a02); a03=fma(av.x,bv.w,a03);
+      a10=fma(av.y,bv.x,a10); a11=fma(av.y,bv.y,a11); a12=fma(av.y,bv.z,a12); a13=fma(av.y,bv.w,a13);
+      a20=fma(av.z,bv.x,a20); a21=fma(av.z,bv.y,a21); a22=fma(av.z,bv.z,a22); a23=fma(av.z,bv.w,a23);
+      a30=fma(av.w,bv.x,a30); a31=fma(av.w,bv.y,a31); a32=fma(av.w,bv.z,a32); a33=fma(av.w,bv.w,a33);
+    }
+    barrier();
+  }
+  if(r+3<M && c+3<N){
+    a00+=hb?bias.v[c+0]:0.; a01+=hb?bias.v[c+1]:0.; a02+=hb?bias.v[c+2]:0.; a03+=hb?bias.v[c+3]:0.;
+    a10+=hb?bias.v[c+0]:0.; a11+=hb?bias.v[c+1]:0.; a12+=hb?bias.v[c+2]:0.; a13+=hb?bias.v[c+3]:0.;
+    a20+=hb?bias.v[c+0]:0.; a21+=hb?bias.v[c+1]:0.; a22+=hb?bias.v[c+2]:0.; a23+=hb?bias.v[c+3]:0.;
+    a30+=hb?bias.v[c+0]:0.; a31+=hb?bias.v[c+1]:0.; a32+=hb?bias.v[c+2]:0.; a33+=hb?bias.v[c+3]:0.;
+    if(relu){
+      a00=max(a00,0.);a01=max(a01,0.);a02=max(a02,0.);a03=max(a03,0.);
+      a10=max(a10,0.);a11=max(a11,0.);a12=max(a12,0.);a13=max(a13,0.);
+      a20=max(a20,0.);a21=max(a21,0.);a22=max(a22,0.);a23=max(a23,0.);
+      a30=max(a30,0.);a31=max(a31,0.);a32=max(a32,0.);a33=max(a33,0.);
+    }
+    C.v[(r+0)*N+c+0]=a00; C.v[(r+0)*N+c+1]=a01; C.v[(r+0)*N+c+2]=a02; C.v[(r+0)*N+c+3]=a03;
+    C.v[(r+1)*N+c+0]=a10; C.v[(r+1)*N+c+1]=a11; C.v[(r+1)*N+c+2]=a12; C.v[(r+1)*N+c+3]=a13;
+    C.v[(r+2)*N+c+0]=a20; C.v[(r+2)*N+c+1]=a21; C.v[(r+2)*N+c+2]=a22; C.v[(r+2)*N+c+3]=a23;
+    C.v[(r+3)*N+c+0]=a30; C.v[(r+3)*N+c+1]=a31; C.v[(r+3)*N+c+2]=a32; C.v[(r+3)*N+c+3]=a33;
+  } else {
+    /* edge: scalar fallback for partial 4x4 blocks */
+    for(int i=0;i<4;++i) for(int j=0;j<4;++j){
+      if(r+i>=M||c+j>=N) continue;
+      float v=i==0?(j==0?a00:j==1?a01:j==2?a02:a03):i==1?(j==0?a10:j==1?a11:j==2?a12:a13):
+              i==2?(j==0?a20:j==1?a21:j==2?a22:a23):(j==0?a30:j==1?a31:j==2?a32:a33);
+      if(hb) v+=bias.v[c+j]; if(relu) v=max(v,0.);
+      C.v[(r+i)*N+c+j]=v;
+    }
+  }
+}
