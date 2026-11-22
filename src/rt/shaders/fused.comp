@@ -1,0 +1,93 @@
+#version 450
+#extension GL_EXT_buffer_reference2 : require
+#extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
+/* Bitsy 0.2 fused pointwise kernel. One dispatch evaluates an entire elementwise
+ * chain per element via a small stack interpreter. Inputs are bindless device
+ * addresses; shapes/strides/program live in a std430 params buffer.
+ * Opcode numbers match RtInstOp in rt_internal.h exactly. */
+layout(local_size_x = 256) in;
+
+layout(buffer_reference, std430, buffer_reference_align = 4) readonly buffer F32 {
+  float v[];
+};
+
+/* params layout (int32 words):
+ * [0]=n [1]=ninst [2]=ninputs [3]=ndim
+ * [4..7]=out dims
+ * [8..8+32]=in_stride[8][4]
+ * [40..]=input device addresses (2 x uint64, 8 slots)
+ * [56..]=program (4 words/inst: op, a, b, c-bits) */
+layout(std430, binding = 0) readonly buffer Params { int param[]; };
+layout(std430, binding = 1) writeonly buffer Out { float outv[]; };
+
+uint64_t get_addr(int slot) {
+  int base = 40 + slot * 2;
+  return (uint64_t(uint(param[base])) | (uint64_t(uint(param[base + 1])) << 32));
+}
+float load_in(int slot, int64_t off) { return F32(get_addr(slot)).v[int(off)]; }
+
+/* RtInstOp: 0 LOAD 1 ADD 2 SUB 3 MUL 4 DIV 5 NEG 6 EXP 7 LOG 8 SQRT
+ *           9 TANH 10 SIGM 11 RELU 12 GELU 13 GT0 14 GELUB */
+float apply1(int op, float x) {
+  if (op == 5) return -x;
+  if (op == 6) return exp(x);
+  if (op == 7) return log(x);
+  if (op == 8) return sqrt(max(x, 0.0));
+  if (op == 9) return tanh(x);
+  if (op == 10) return 1.0 / (1.0 + exp(-x));
+  if (op == 11) return x > 0.0 ? x : 0.0;
+  if (op == 12 || op == 14) {                 /* GELU / GELUB uses erf below */
+    float s = x < 0.0 ? -1.0 : 1.0, ax = abs(x) * 0.70710678;
+    float t = 1.0 / (1.0 + 0.3275911 * ax);
+    float p = ((((1.061405429 * t - 1.453152027) * t + 1.421413741) * t
+                - 0.284496736) * t + 0.254829592) * t;
+    float e = s * (1.0 - p * exp(-ax * ax));
+    return x * 0.5 * (1.0 + e);
+  }
+  if (op == 13) return x > 0.0 ? 1.0 : 0.0;
+  return x;
+}
+float apply2(int op, float a, float b) {
+  if (op == 1) return a + b;
+  if (op == 2) return a - b;
+  if (op == 3) return a * b;
+  if (op == 4) return b != 0.0 ? a / b : 0.0;
+  if (op == 14) {                             /* GELUB: a=grad, b=x */
+    float s = b < 0.0 ? -1.0 : 1.0, ax = abs(b) * 0.70710678;
+    float t = 1.0 / (1.0 + 0.3275911 * ax);
+    float p = ((((1.061405429 * t - 1.453152027) * t + 1.421413741) * t
+                - 0.284496736) * t + 0.254829592) * t;
+    float e = s * (1.0 - p * exp(-ax * ax));
+    float base = 0.5 * (1.0 + e);
+    float phi = 0.39894228 * exp(-0.5 * b * b);
+    return a * (base + b * phi);
+  }
+  return a;
+}
+void main() {
+  uint i = gl_GlobalInvocationID.x;
+  if (i >= uint(param[0])) return;
+  int nd = param[3];
+  int coord[4];
+  int rem = int(i);
+  for (int j = nd - 1; j >= 0; --j) { coord[j] = rem % param[4 + j]; rem /= param[4 + j]; }
+  float stk[256];
+  int sp = 0;
+  for (int k = 0; k < param[1]; ++k) {
+    int base = 56 + k * 4;
+    int op = param[base], a = param[base + 1], b = param[base + 2];
+    if (op == 0) {
+      int64_t off = 0;
+      for (int j = 0; j < nd; ++j) off += int64_t(coord[j]) * int64_t(param[8 + a * 4 + j]);
+      stk[sp++] = load_in(a, off);
+    } else if (op == 1 || op == 2 || op == 3 || op == 4 || op == 14) {
+      float y = stk[--sp], x = stk[--sp];
+      stk[sp++] = apply2(op, x, y);
+    } else {
+      float x = stk[--sp];
+      stk[sp++] = apply1(op, x);
+    }
+  }
+  outv[i] = stk[sp - 1];
+}
+
