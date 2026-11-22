@@ -20,6 +20,8 @@ def load(build_dir: Path) -> C.CDLL:
   lib.rt_from_host.argtypes = [C.c_void_p, C.POINTER(C.c_float), C.c_int,
                                C.POINTER(C.c_int64), C.c_int]
   lib.rt_from_host.restype = C.c_void_p
+  lib.rt_backward.argtypes = [C.c_void_p, C.c_void_p]
+  lib.rt_grad.argtypes = [C.c_void_p]; lib.rt_grad.restype = C.c_void_p
   lib.rt_to_host.argtypes = [C.c_void_p, C.POINTER(C.c_float)]
   lib.rt_realize.argtypes = [C.c_void_p, C.c_void_p]
   lib.rt_dispatch_count.argtypes = [C.c_void_p]; lib.rt_dispatch_count.restype = C.c_int
@@ -34,6 +36,9 @@ def load(build_dir: Path) -> C.CDLL:
     fn = getattr(lib, f"rt_{n}")
     fn.argtypes = [C.c_void_p, C.c_void_p]; fn.restype = C.c_void_p
   lib.rt_where.argtypes = [C.c_void_p]*4; lib.rt_where.restype = C.c_void_p
+  lib.rt_transpose.argtypes = [C.c_void_p, C.c_void_p]; lib.rt_transpose.restype = C.c_void_p
+  lib.rt_reshape.argtypes = [C.c_void_p, C.c_void_p, C.c_int, C.POINTER(C.c_int64)]
+  lib.rt_reshape.restype = C.c_void_p
   lib.rt_gemm.argtypes = [C.c_void_p, C.c_void_p, C.c_void_p, C.c_void_p, C.c_int, C.c_int]
   lib.rt_gemm.restype = C.c_void_p
   lib.rt_reduce.argtypes = [C.c_void_p, C.c_void_p, C.c_int, C.c_int, C.c_int]
@@ -51,12 +56,15 @@ class RT:
   def __del__(self):
     self.lib.rt_destroy(self.ctx)
 
-  def tensor(self, arr: np.ndarray) -> C.c_void_p:
+  def tensor(self, arr: np.ndarray, requires_grad: bool = False) -> C.c_void_p:
     a = np.ascontiguousarray(arr, dtype=np.float32)
     dims = (C.c_int64 * a.ndim)(*a.shape)
     flat = a.flatten()
     return self.lib.rt_from_host(self.ctx, flat.ctypes.data_as(C.POINTER(C.c_float)),
-                                 a.ndim, dims, 0)
+                                 a.ndim, dims, 1 if requires_grad else 0)
+
+  def backward(self, loss): self.lib.rt_backward(self.ctx, loss)
+  def grad(self, t, shape): return self.get(self.lib.rt_grad(t), shape)
 
   def get(self, t: C.c_void_p, shape) -> np.ndarray:
     out = np.zeros(shape, dtype=np.float32)
@@ -77,6 +85,11 @@ class RT:
 
   def where(self, cond, a, b):
     return self.lib.rt_where(self.ctx, cond, a, b)
+
+  def transpose(self, a): return self.lib.rt_transpose(self.ctx, a)
+  def reshape(self, a, shape):
+    dims=(C.c_int64*len(shape))(*shape)
+    return self.lib.rt_reshape(self.ctx, a, len(shape), dims)
 
   def reset_dispatch(self): self.lib.rt_reset_dispatch_count(self.ctx)
   def dispatch(self) -> int: return self.lib.rt_dispatch_count(self.ctx)

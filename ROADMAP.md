@@ -20,6 +20,7 @@ numeric reference. See `experiments/exp_040/` and `docs/study/`.
 | R0 | Study | Read tinygrad, PyTorch 2.15, Vulkan spec; record findings | **done** (docs/study/, docs/research/) |
 | R1 | IR | One interned node type; lazy ops + autograd in C | **done** (PR #1; exp_040 FINDINGS) |
 | R2 | Fuse | Scheduler collapses pointwise chains into one kernel | **done** (PR #1: 1-dispatch proof on CPU+Vulkan) |
+| R2b | Autograd | Full backward rules on compact core | **done** (PR #3: 25/25 gradcheck vs PyTorch CUDA) |
 | R3 | Kernels | One parameterized GEMM + reduce + fused elementwise; drop 10 GEMM variants | **done** (PR #2: gemm+bias/transpose, reduce sum/mean/max/min, 27/27 vs PyTorch CUDA) |
 | R4 | Exec | Vulkan device/allocator + command-buffer capture/replay (JIT) | planned |
 | R5 | Verify | Parity gate green, ≤4096 lines, benchmarks, tag 0.2, push main | planned |
