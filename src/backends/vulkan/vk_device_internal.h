@@ -60,6 +60,7 @@ typedef struct {
   VkPipeline dual_mul_pipeline;
   VkPipeline sgd_fused_pipeline;
   VkPipeline gemm_bias_tanh_pipeline;
+  VkPipeline gelu_pipeline;
   VkDescriptorSetLayout sgd_set_layout;
   VkDescriptorSet sgd_set;
   VkPipelineLayout sgd_pipeline_layout;

@@ -17,6 +17,8 @@ bt_status_t bt_vk_capture_begin(void);
 bt_status_t bt_vk_capture_end(void);
 bt_status_t bt_vk_replay(int count);
 bt_status_t bt_vk_capture_sync_chunk(void);
+bt_status_t bt_vk_gelu(const bt_tensor_t* x, const bt_tensor_t* g, uint32_t mode,
+                       bt_tensor_t* out);
 bt_status_t bt_vk_sgd_step(const bt_tensor_t* w, const bt_tensor_t* grad,
                            float lr, bt_tensor_t* out);
 bt_status_t bt_vk_reduce_sum(const bt_tensor_t* a, uint32_t axis, bt_tensor_t* out);

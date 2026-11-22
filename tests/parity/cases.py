@@ -9,7 +9,10 @@ import torch
 
 ValueGenerator = Callable[[tuple[int, ...], torch.dtype, int], torch.Tensor]
 BINARY = ("add", "add_relu", "sub", "mul", "div")
-UNARY = ("relu", "sigmoid", "tanh", "exp", "log")
+UNARY = ("relu", "sigmoid", "tanh", "exp", "log", "sqrt", "gelu")
+# _op_cases generates the standard normal-valued grid; sqrt/gelu have dedicated
+# explicit cases (sqrt needs positive inputs, gelu uses torch.nn.functional).
+_GRID_UNARY = ("relu", "sigmoid", "tanh", "exp", "log")
 
 # *** value sets ***
 
@@ -50,7 +53,7 @@ class ParityCase:
 
 def _op_cases(device:str) -> tuple[ParityCase, ...]:
   out = []
-  for op in BINARY + UNARY:
+  for op in BINARY + _GRID_UNARY:
     shape = (7, 13)
     out.append(ParityCase(f"{op}_{device}", op, shape, shape, "normal", device=device))
   return tuple(out)
@@ -75,6 +78,13 @@ CASES:tuple[ParityCase, ...] = (
   ParityCase("add_empty_vulkan", "add", (0, 2), (1, 2), "normal", device="vulkan"),
   ParityCase("log_cpu", "log", (7, 13), (7, 13), "positive"),
   ParityCase("log_vulkan", "log", (7, 13), (7, 13), "positive", device="vulkan"),
+  # exp_037: new primitives. sqrt uses positive values (torch sqrt of negatives
+  # is NaN; Bitsy clamps at 0 — documented divergence, so the gate uses valid
+  # inputs). GELU is exact-erf and checked against torch.nn.functional.gelu.
+  ParityCase("sqrt_cpu", "sqrt", (7, 13), (7, 13), "positive"),
+  ParityCase("sqrt_vulkan", "sqrt", (7, 13), (7, 13), "positive", device="vulkan"),
+  ParityCase("gelu_cpu", "gelu", (7, 13), (7, 13), "normal"),
+  ParityCase("gelu_vulkan", "gelu", (7, 13), (7, 13), "normal", device="vulkan"),
   ParityCase("matmul_cpu", "matmul", (4, 5), (5, 6), "normal"),
   ParityCase("matmul_vulkan", "matmul", (4, 5), (5, 6), "normal", device="vulkan"),
   ParityCase("matmul_large_vulkan", "matmul", (32, 64), (64, 32), "normal", device="vulkan"),

@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-21T22:54:33.647204+00:00",
+  "generated_at": "2026-11-22T00:38:43.860665+00:00",
   "environment": {
     "platform": "Windows-10-10.0.26300-SP0",
     "python": "3.10.11",
@@ -22,6 +22,8 @@
       "tanh",
       "exp",
       "log",
+      "sqrt",
+      "gelu",
       "matmul"
     ],
     "backends": [
@@ -31,8 +33,8 @@
     "seed": 1234
   },
   "summary": {
-    "total": 44,
-    "passed": 44,
+    "total": 48,
+    "passed": 48,
     "failed": 0,
     "skipped": []
   },
@@ -510,6 +512,102 @@
       ],
       "dtype": "float32",
       "value_set": "positive",
+      "bitsy_vs_torch": {
+        "passed": true,
+        "mode": "rtol_atol",
+        "elements": 91,
+        "mismatches": 0
+      },
+      "passed": true
+    },
+    {
+      "name": "sqrt_cpu",
+      "op": "sqrt",
+      "device": "cpu",
+      "shape": [
+        7,
+        13
+      ],
+      "dtype": "float32",
+      "value_set": "positive",
+      "bitsy_vs_torch": {
+        "passed": true,
+        "mode": "rtol_atol",
+        "elements": 91,
+        "mismatches": 0
+      },
+      "torch_cuda_vs_torch_cpu": {
+        "passed": true,
+        "mode": "rtol_atol",
+        "elements": 91,
+        "mismatches": 0
+      },
+      "bitsy_vs_torch_cuda": {
+        "passed": true,
+        "mode": "rtol_atol",
+        "elements": 91,
+        "mismatches": 0
+      },
+      "passed": true
+    },
+    {
+      "name": "sqrt_vulkan",
+      "op": "sqrt",
+      "device": "vulkan",
+      "shape": [
+        7,
+        13
+      ],
+      "dtype": "float32",
+      "value_set": "positive",
+      "bitsy_vs_torch": {
+        "passed": true,
+        "mode": "rtol_atol",
+        "elements": 91,
+        "mismatches": 0
+      },
+      "passed": true
+    },
+    {
+      "name": "gelu_cpu",
+      "op": "gelu",
+      "device": "cpu",
+      "shape": [
+        7,
+        13
+      ],
+      "dtype": "float32",
+      "value_set": "normal",
+      "bitsy_vs_torch": {
+        "passed": true,
+        "mode": "rtol_atol",
+        "elements": 91,
+        "mismatches": 0
+      },
+      "torch_cuda_vs_torch_cpu": {
+        "passed": true,
+        "mode": "rtol_atol",
+        "elements": 91,
+        "mismatches": 0
+      },
+      "bitsy_vs_torch_cuda": {
+        "passed": true,
+        "mode": "rtol_atol",
+        "elements": 91,
+        "mismatches": 0
+      },
+      "passed": true
+    },
+    {
+      "name": "gelu_vulkan",
+      "op": "gelu",
+      "device": "vulkan",
+      "shape": [
+        7,
+        13
+      ],
+      "dtype": "float32",
+      "value_set": "normal",
       "bitsy_vs_torch": {
         "passed": true,
         "mode": "rtol_atol",
@@ -1067,7 +1165,7 @@
     {
       "name": "end_to_end_gradient_flow",
       "grad_flow": {
-        "generated_at": "2026-11-21T22:54:33.621178+00:00",
+        "generated_at": "2026-11-22T00:38:43.836128+00:00",
         "environment": {
           "torch": "2.11.0+cu126",
           "torch_device": "cuda",
@@ -1105,7 +1203,7 @@
     {
       "name": "training_scale_gradients",
       "train_scale": {
-        "generated_at": "2026-11-21T22:54:33.647204+00:00",
+        "generated_at": "2026-11-22T00:38:43.859144+00:00",
         "environment": {
           "torch": "2.11.0+cu126",
           "torch_device": "cuda",

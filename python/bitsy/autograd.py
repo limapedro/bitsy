@@ -110,7 +110,13 @@ class Tensor:
   def __truediv__(self, other) -> "Tensor":
     b = self._coerce(other)
     out = C.div(self._t, b._t)
-    return self._op(out, (self, b), lambda g: (self._op(C.div(g._t, b._t), (), None),))
+    def back(g):
+      # exp_037: d/da = g/b, d/db = -g*a/b^2 (was missing before).
+      return (g / b, (g * self) / (b * b) * -1)
+    return self._op(out, (self, b), back)
+
+  def __rtruediv__(self, other) -> "Tensor":
+    return self._coerce(other) / self
 
   def __matmul__(self, other) -> "Tensor":
     out = C.matmul(self._t, other._t)
@@ -162,6 +168,11 @@ class Tensor:
     ct = C.view(self._t, tuple(shape))
     return self._op(ct, (self,), lambda g: (self._op(C.view(g._t, self.shape), (), None),))
 
+  def transpose(self) -> "Tensor":
+    """Differentiable transpose of a 2D tensor (zero-dispatch strided view)."""
+    ct = C.transpose_view(self._t)
+    return self._op(ct, (self,), lambda g: (self._op(C.transpose_view(g._t), (), None),))
+
   def exp(self) -> "Tensor":
     out = C.exp(self._t)
     return self._op(out, (self,), lambda g: (self._op(C.mul(g._t, out), (), None),))
@@ -170,11 +181,19 @@ class Tensor:
     out = C.log(self._t)
     return self._op(out, (self,), lambda g: (self._op(C.div(g._t, self._t), (), None),))
 
+  def sqrt(self) -> "Tensor":
+    out = C.sqrt(self._t)
+    return self._op(out, (self,), lambda g: (g / (2 * self._op(out, (), None)),))
+
   def __neg__(self) -> "Tensor": return _scalar(0, self) - self
+
+  def gelu(self) -> "Tensor":
+    out = C.gelu(self._t)
+    return self._op(out, (self,), lambda g: (self._op(C.gelu_backward(g._t, self._t), (), None),))
 
   def relu(self) -> "Tensor":
     out = C.relu(self._t)
-    return self._op(out, (self,), lambda g: (g,))
+    return self._op(out, (self,), lambda g: (self._op(C.relu_backward(g._t, out), (), None),))
 
   def _topo(self) -> list["Tensor"]:
     seen, order = set(), []

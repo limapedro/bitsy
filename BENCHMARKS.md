@@ -9,6 +9,27 @@ For function-by-function status, numeric differences and the same ratios in a
 tracker form, see [docs/PROGRESS.md](docs/PROGRESS.md). The full API inventory is
 [docs/FEATURE_INVENTORY.md](docs/FEATURE_INVENTORY.md).
 
+## Model parity and performance (2026-11-22, exp_037/038/039)
+
+Small models compared against PyTorch CUDA with identical copied weights;
+`python benchmarks/models/rnn_lstm_parity.py` and
+`python benchmarks/models/gpt2_tiny.py`. Median of 20/10 iterations after
+warmup, correct device sync, live GPU clock logged. Full distributions:
+`benchmarks/results/rnn_lstm_parity.json`, `benchmarks/results/gpt2_tiny.json`.
+
+| model | params | forward bitsy ms | forward torch ms | ratio torch/bitsy | clock MHz |
+|---|---:|---:|---:|---:|---:|
+| RNN (B3 T4 I5 H6) | — | 1.75 (1.39–4.78) | 0.26 (0.19–0.54) | 0.15 | 1530 |
+| LSTM (B3 T4 I5 H6) | — | 5.36 (4.25–7.33) | 0.22 (0.17–0.69) | 0.04 | 1530 |
+| GPT-2 small | 2,162,688 | 25.42 (14.75–79.68) | 14.69 (9.80–24.77) | 0.58 | 1950 |
+
+**All three are honest performance misses** — Bitsy is slower. Numeric parity
+passes for all three (RNN h 5.9e-6, LSTM h 2.1e-6/c 3.1e-6, GPT-2 loss 0.0/
+logits 1.16e-6, grads ≤5.1e-7). Cause: Python-level dispatch of small ops and
+submit/fence overhead versus fused cuDNN kernels. Consistent with the accepted
+ceiling; no speed target is claimed. Details: `experiments/exp_038/FINDINGS.md`,
+`experiments/exp_039/FINDINGS.md`.
+
 ## Elementwise results (updated 2026-11-21, exp_011)
 
 `python benchmarks/ops/elementwise.py` on the GTX 1660 Super, torch

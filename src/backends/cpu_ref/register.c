@@ -19,6 +19,7 @@ KERNEL(sigmoid, BT_OP_SIGMOID)
 KERNEL(op_tanh, BT_OP_TANH)
 KERNEL(op_exp, BT_OP_EXP)
 KERNEL(op_log, BT_OP_LOG)
+KERNEL(op_sqrt, BT_OP_SQRT)
 
 #define REG(op, fn) bt_register_binary(op, BT_BACKEND_CPU_REF, BT_FLOAT32, fn)
 
@@ -33,6 +34,7 @@ bt_status_t bt_cpu_ref_register(void) {
   if ((status = REG(BT_OP_TANH, op_tanh))) return status;
   if ((status = REG(BT_OP_EXP, op_exp))) return status;
   if ((status = REG(BT_OP_LOG, op_log))) return status;
+  if ((status = REG(BT_OP_SQRT, op_sqrt))) return status;
   if ((status = REG(BT_OP_FUSED_ADD_RELU, bt_cpu_ref_add_relu))) return status;
   if ((status = REG(BT_OP_MATMUL, bt_cpu_ref_matmul))) return status;
   if ((status = REG(BT_OP_TRANSPOSE, bt_cpu_ref_transpose))) return status;

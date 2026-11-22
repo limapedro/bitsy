@@ -74,8 +74,11 @@ _fn("bt_tensor_release", [_ptr], None)
 _fn("bt_tensor_copy_to_host", [_ptr, _ptr, ctypes.c_size_t], ctypes.c_int)
 for _name in ("add", "sub", "mul", "div", "add_relu"):
   _fn(f"bt_{_name}", [_ptr, _ptr, ctypes.POINTER(_ptr)], ctypes.c_int)
-for _name in ("relu", "sigmoid", "tanh", "exp", "log"):
+for _name in ("relu", "sigmoid", "tanh", "exp", "log", "sqrt"):
   _fn(f"bt_{_name}", [_ptr, ctypes.POINTER(_ptr)], ctypes.c_int)
+_fn("bt_relu_backward", [_ptr, _ptr, ctypes.POINTER(_ptr)], ctypes.c_int)
+_fn("bt_gelu", [_ptr, ctypes.POINTER(_ptr)], ctypes.c_int)
+_fn("bt_gelu_backward", [_ptr, _ptr, ctypes.POINTER(_ptr)], ctypes.c_int)
 _fn("bt_matmul", [_ptr, _ptr, ctypes.POINTER(_ptr)], ctypes.c_int)
 _fn("bt_transpose", [_ptr, ctypes.POINTER(_ptr)], ctypes.c_int)
 _fn("bt_tensor_transpose_view", [_ptr, ctypes.POINTER(_ptr)], ctypes.c_int)
@@ -178,6 +181,25 @@ def _op(name:str, a:Tensor, b:Tensor|None=None) -> Tensor:
 
 def add(a:Tensor, b:Tensor) -> Tensor: return _op("add", a, b)
 def add_relu(a:Tensor, b:Tensor) -> Tensor: return _op("add_relu", a, b)
+def sqrt(a:Tensor) -> Tensor:
+  out = _ptr()
+  _check(_lib.bt_sqrt(_ptr(a._ptr), ctypes.byref(out)))
+  return Tensor(out.value, a.shape, a._device)
+
+def gelu(a:Tensor) -> Tensor:
+  out = _ptr()
+  _check(_lib.bt_gelu(_ptr(a._ptr), ctypes.byref(out)))
+  return Tensor(out.value, a.shape, a._device)
+
+def gelu_backward(g:Tensor, x:Tensor) -> Tensor:
+  out = _ptr()
+  _check(_lib.bt_gelu_backward(_ptr(g._ptr), _ptr(x._ptr), ctypes.byref(out)))
+  return Tensor(out.value, g.shape, g._device)
+
+def relu_backward(g:Tensor, out_fwd:Tensor) -> Tensor:
+  out = _ptr()
+  _check(_lib.bt_relu_backward(_ptr(g._ptr), _ptr(out_fwd._ptr), ctypes.byref(out)))
+  return Tensor(out.value, g.shape, g._device)
 def sub(a:Tensor, b:Tensor) -> Tensor: return _op("sub", a, b)
 def mul(a:Tensor, b:Tensor) -> Tensor: return _op("mul", a, b)
 def div(a:Tensor, b:Tensor) -> Tensor: return _op("div", a, b)

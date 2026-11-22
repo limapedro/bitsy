@@ -46,7 +46,8 @@ def success_case(case:ParityCase, config:ParityConfig) -> dict[str, Any]:
   if on_gpu:
     lhs, rhs = lhs.cuda(), rhs.cuda()
   torch_op = (lambda x, y: torch.relu(torch.add(x, y))) if case.op == "add_relu" \
-             else getattr(torch, case.op)
+             else (torch.nn.functional.gelu if case.op == "gelu"
+                   else getattr(torch, case.op))
   bitsy_op = getattr(bt, case.op)
 
   if case.op in UNARY:

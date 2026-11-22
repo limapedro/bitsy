@@ -26,7 +26,8 @@ Per-function numeric and performance evidence lives in [PROGRESS.md](PROGRESS.md
 | Representative API | Status |
 |---|---|
 | `shape`, `stride`, `numel`, `ndim`, `element_size`, `is_contiguous` | partial (shape/strides/numel/contiguity in C) |
-| `view`, `reshape`, `transpose`, `t`, `squeeze`, `unsqueeze`, `flatten` | partial (contiguous `view` + 2D transpose) |
+| `view`, `reshape`, `transpose`, `t` | done (contiguous `view` + 2D strided transpose; `Tensor.transpose` differentiable since exp_037) |
+| `squeeze`, `unsqueeze`, `flatten` | missing |
 | `permute`, `expand`, `expand_as`, `repeat`, `narrow`, `unbind`, `unfold`, `roll`, `flip` | missing |
 | `cat`, `stack`, `hstack`, `vstack`, `dstack`, `column_stack`, `moveaxis`, `swapaxes` | missing |
 | `index_select`, `gather`, `scatter`, `scatter_`, `index_add`, `index_copy`, `index_fill`, `put`, `take` | missing |
@@ -40,7 +41,8 @@ Per-function numeric and performance evidence lives in [PROGRESS.md](PROGRESS.md
 | `add`, `sub`, `mul`, `div` | done (cpu_ref + Vulkan, broadcast) |
 | `relu`, `sigmoid`, `tanh`, `exp`, `log` | done (cpu_ref + Vulkan) |
 | `true_divide`, `floor_divide`, `mod`, `remainder`, `fmod`, `pow`, `rpow`, `neg`, `abs`, `sign` | missing |
-| `sqrt`, `rsqrt`, `square`, `reciprocal`, `exp2`, `expm1`, `log2`, `log10`, `log1p`, `logaddexp` | missing |
+| `sqrt` | done (exp_037: cpu_ref + Vulkan, backward `1/(2*sqrt(x))`; clamps negatives at 0, PyTorch returns NaN — documented in exp_037 FINDINGS) |
+| `rsqrt`, `square`, `reciprocal`, `exp2`, `expm1`, `log2`, `log10`, `log1p`, `logaddexp` | missing |
 | `sin`, `cos`, `tan`, `asin`, `acos`, `atan`, `atan2`, `sinh`, `cosh`, `asinh`, `acosh`, `atanh` | missing |
 | `erf`, `erfc`, `erfinv`, `lgamma`, `gamma`, `digamma` | missing |
 | `clamp`, `clip`, `round`, `floor`, `ceil`, `trunc`, `frac`, `nan_to_num`, `nan_to_num_` | missing |
@@ -108,18 +110,23 @@ Per-function numeric and performance evidence lives in [PROGRESS.md](PROGRESS.md
 | `ReLU`, `Tanh`, `Sigmoid` | done |
 | `Conv1d`, `Conv3d`, `ConvTranspose*`, `Bilinear`, `LazyLinear` | missing |
 | `MaxPool*`, `AvgPool*`, `Adaptive*Pool*`, `MaxUnpool*`, `LPPool*` | missing |
-| `BatchNorm*`, `LayerNorm`, `GroupNorm`, `InstanceNorm*`, `RMSNorm` | missing |
-| `RNN`, `LSTM`, `GRU`, cells, `PackedSequence` | missing |
-| `MultiheadAttention`, `Transformer*`, scaled dot-product attention | missing |
-| `Embedding`, `EmbeddingBag`, `Dropout*`, `Upsample`, `PixelShuffle`, `ModuleList/Dict` | missing |
+| `LayerNorm` | done (exp_037: last-dim, eps=1e-5, fwd/grads match PyTorch ~1e-6) |
+| `BatchNorm*`, `GroupNorm`, `InstanceNorm*`, `RMSNorm` | missing |
+| `RNN`, `LSTM`, cells | done (exp_038: unidirectional, copy-in weights; separate gate Parameters, packed layout not emulated) |
+| `GRU`, `PackedSequence` | missing |
+| `MultiheadAttention`, `Transformer*` | partial (exp_039: per-head projections + masked attention composed in an example GPT-2, not a reusable nn module) |
+| `Embedding` | done (exp_037: one-hot matmul lookup, dense weight grad) |
+| `Dropout` | partial (eval/identity only; no training mask) |
+| `EmbeddingBag`, `Upsample`, `PixelShuffle`, `ModuleList/Dict` | missing |
 
 ## 11. Activations and losses (`nn.functional`)
 
 | Representative API | Status |
 |---|---|
-| `relu`, `sigmoid`, `tanh`, `softmax` (via `log_softmax` internally) | partial |
+| `relu`, `sigmoid`, `tanh`, `softmax` (via `log_softmax` internally) | done (exp_037: softmax dx 1.7e-7) |
 | fused `add + relu` pointwise kernel | done |
-| `gelu`, `silu`, `mish`, `leaky_relu`, `elu`, `selu`, `softplus`, `log_softmax`, `glu` | missing |
+| `gelu`, `log_softmax` | done (exp_037: exact-erf gelu fwd/bwd 1.2e-7; `log_softmax` now handles >256 cols) |
+| `silu`, `mish`, `leaky_relu`, `elu`, `selu`, `softplus`, `glu` | missing |
 | `mse_loss`, `cross_entropy` | done |
 | `nll_loss`, `l1_loss`, `smooth_l1_loss`/`huber_loss`, `bce_loss`, `bce_with_logits_loss` | missing |
 | `kl_div`, `poisson_nll_loss`, `hinge_loss`, `triplet_margin_loss`, `ctc_loss` | missing |
@@ -129,7 +136,8 @@ Per-function numeric and performance evidence lives in [PROGRESS.md](PROGRESS.md
 | Representative API | Status |
 |---|---|
 | `SGD` | done (plain SGD) |
-| SGD momentum/Nesterov/weight decay, `Adam`, `AdamW`, `RMSprop`, `Adagrad`, `Adadelta`, `LBFGS`, `NAdam` | missing |
+| `AdamW` | done (exp_037: betas/eps/decoupled weight decay, bias correction; one-step match 1.5e-8) |
+| SGD momentum/Nesterov/weight decay, `Adam`, `RMSprop`, `Adagrad`, `Adadelta`, `LBFGS`, `NAdam` | missing |
 | `lr_scheduler.*` (`StepLR`, `CosineAnnealingLR`, `OneCycleLR`, `ReduceLROnPlateau`, ...) | missing |
 | `clip_grad_norm_`, `clip_grad_value_`, fused update kernels | missing |
 
