@@ -58,7 +58,26 @@ this GPU — see FINDINGS_PR15).
 
 ---
 
-## 2026-11-22 05:45 — PR #29 (in progress): residual+LayerNorm fusion + LN backward bug fix
+## 2026-11-22 06:05 — PR #30 (in progress): register-blocked vec4 GEMM
+
+Researched further GEMM strategies (web searches returned nothing usable), then
+implemented `gemm_vec4.comp`: each thread owns a **4×4 output tile** (16
+accumulator registers), loading `vec4` A/B slices from shared memory and doing a
+16-FMA outer product per k-step. 16×16 workgroups cover a 64×64 output tile.
+BN/BK handling, bias and ReLU epilogues preserved. A/B 3 repeats (n=1024 GEMM+ReLU):
+```
+baseline scalar kernel: 2.56 / 2.62 / 2.64 ms
+vec4 register-blocked:  2.38 / 2.24 / 2.57 ms   (~10% faster)
+```
+Made vec4 the default. Numerical diffs unchanged (4.2e-05 … 2.2e-04).
+Latest full sweep (clock 1530→1935): GEMM n=1024 2.80 ms (1.71×), GEMM+ReLU
+2.16 ms (1.74×); n=512 GEMM+ReLU 2.01×. Prior shared-memory scalar kernel was
+~2.4× at n=1024. GEMM remains ~1.7× off cuBLAS (tensor cores blocked by hardware).
+
+Gates: v2 48/48, op 27/27, gradcheck 25/25, model 10/10, API 88/88, ctest 2/2.
+Core 2,682 lines. Also fixed a variable-shadowing warning in LN backward.
+
+## 2026-11-22 05:45 — PR #29: residual+LayerNorm fusion + LN backward bug fix
 
 `LayerNorm(x + residual)` previously took 2 dispatches (add + layernorm).
 Extended `layernorm.comp` with a `HAS_RES` spec constant and 2 pipeline variants;

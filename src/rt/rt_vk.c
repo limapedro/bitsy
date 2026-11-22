@@ -14,6 +14,7 @@
 #include "rt_fused.spv.h"
 #include "rt_fused_sp.spv.h"
 #include "rt_gemm.spv.h"
+#include "rt_gemm_vec4.spv.h"
 #include "rt_reduce.spv.h"
 #include "rt_softmax.spv.h"
 #include "rt_layernorm.spv.h"
@@ -66,6 +67,7 @@ struct RtVk {
   int sp_keys[256];         /* 0 = empty; else key+1 */
   int sp_count;
   VkPipeline gemm[3];       /* tile variants: 16x16x16, 32x32x8, 64x64x8 */
+  VkPipeline gemm_v4;
   int gemm_bm[3], gemm_bn[3];
   VkPipeline reduce, reduce_s1;
   VkPipeline softmax[4];   /* 0/1 = softmax/logsoftmax, 2/3 = +bias */
@@ -317,6 +319,7 @@ void rt_vk_init(RT* c) {
   VkShaderModule sf = shader(vk, rt_fused_spv, rt_fused_spv_bytes);
   vk->fused_sp_module = shader(vk, rt_fused_sp_spv, rt_fused_sp_spv_bytes);
   VkShaderModule sg = shader(vk, rt_gemm_spv, rt_gemm_spv_bytes);
+  VkShaderModule svg = shader(vk, rt_gemm_vec4_spv, rt_gemm_vec4_spv_bytes);
   VkShaderModule sr = shader(vk, rt_reduce_spv, rt_reduce_spv_bytes);
   VkShaderModule ss = shader(vk, rt_softmax_spv, rt_softmax_spv_bytes);
   VkShaderModule sl = shader(vk, rt_layernorm_spv, rt_layernorm_spv_bytes);
@@ -327,6 +330,7 @@ void rt_vk_init(RT* c) {
   vk->gemm_bm[0]=16; vk->gemm_bn[0]=16;
   vk->gemm_bm[1]=32; vk->gemm_bn[1]=32;
   vk->gemm_bm[2]=64; vk->gemm_bn[2]=64;
+  vk->gemm_v4 = make_pipeline(vk, svg, 0, 0,0,0);
   vk->reduce = make_pipeline(vk, sr, 1, 0,64,0);   /* STAGE=0, NPART=64 */
   vk->reduce_s1 = make_pipeline(vk, sr, 1, 1,64,0); /* STAGE=1, NPART=64 */
   vk->softmax[0] = make_pipeline(vk, ss, 1, 0,0,0);
@@ -402,6 +406,7 @@ void rt_vk_shutdown(RT* c) {
     vkDestroyBuffer(vk->dev,vk->rb_buf[i],NULL); vkFreeMemory(vk->dev,vk->rb_mem[i],NULL);
   }
   for(int i=0;i<2;++i) if(vk->layernorm[i]) vkDestroyPipeline(vk->dev,vk->layernorm[i],NULL);
+  if(vk->gemm_v4) vkDestroyPipeline(vk->dev,vk->gemm_v4,NULL);
   for(int i=0;i<4;++i) if(vk->softmax[i]) vkDestroyPipeline(vk->dev,vk->softmax[i],NULL);
   if (vk->reduce_s1) vkDestroyPipeline(vk->dev,vk->reduce_s1,NULL);
   if (vk->reduce_part) { vkDestroyBuffer(vk->dev,vk->reduce_part,NULL); vkFreeMemory(vk->dev,vk->reduce_part_mem,NULL); }
@@ -635,8 +640,10 @@ void rt_vk_gemm(RT* c, RtBuf* a, RtBuf* b, RtBuf* bias,
   uint64_t baddr = bias ? vkbuf(c,bias)->addr : 0;
   pack_addr(p,14,baddr);
   int variant = gemm_variant(M, N);
-  VkPipeline gp = vk->gemm[variant];
-  int BM = vk->gemm_bm[variant], BN = vk->gemm_bn[variant];
+  int use_v4 = vk->gemm_v4 != VK_NULL_HANDLE;   /* PR #30: register-blocked default */
+  VkPipeline gp = use_v4 ? vk->gemm_v4 : vk->gemm[variant];
+  int BM = use_v4 ? 64 : vk->gemm_bm[variant];
+  int BN = use_v4 ? 64 : vk->gemm_bn[variant];
   int pc[4]={M,N,K,p[3]};
   uint32_t groups=((M+BM-1)/BM)*((N+BN-1)/BN);
   if (slot) { cap_record(vk, slot, gp, pc, groups); return; }
