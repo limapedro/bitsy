@@ -46,14 +46,14 @@ Per-function numeric and performance evidence lives in [PROGRESS.md](PROGRESS.md
 | `sin`, `cos`, `tan`, `asin`, `acos`, `atan`, `atan2`, `sinh`, `cosh`, `asinh`, `acosh`, `atanh` | missing |
 | `erf`, `erfc`, `erfinv`, `lgamma`, `gamma`, `digamma` | missing |
 | `clamp`, `clip`, `round`, `floor`, `ceil`, `trunc`, `frac`, `nan_to_num`, `nan_to_num_` | partial (PR #9: `clamp`/`clip`; PR #13: `clamp_min`/`clamp_max`; rounding family missing) |
-| `hypot`, `copysign`, `nextafter`, `lerp`, `addcmul`, `addcdiv` | partial (PR #9: `lerp` done; rest missing) |
+| `hypot`, `copysign`, `nextafter`, `lerp`, `addcmul`, `addcdiv` | partial (PR #9: `lerp`; PR #15: `hypot`/`copysign`; rest missing) |
 
 ## 4. Comparisons, logical, bitwise
 
 | Representative API | Status |
 |---|---|
-| `eq`, `ne`, `gt`, `ge`, `lt`, `le`, `equal`, `greater`, `less` | done (PR #2 C primitives; PR #9 Python `Tensor` methods, 44-case parity) |
-| `isclose`, `allclose`, `isnan`, `isinf`, `isfinite` | partial (PR #12: `isclose`/`allclose` done; `isnan`/`isinf`/`isfinite` missing) |
+| `eq`, `ne`, `gt`, `ge`, `lt`, `le`, `equal`, `greater`, `less` | done (PR #2 C primitives; PR #9 Python methods; PR #15 `equal`/`greater`/`less` functional aliases) |
+| `isclose`, `allclose`, `isnan`, `isinf`, `isfinite` | done (PR #12: `isclose`/`allclose`; PR #15: `isnan`/`isinf`/`isfinite` + `nan_to_num`) |
 | `logical_and`, `logical_or`, `logical_not`, `logical_xor`, `all`, `any` | done (PR #9: four logical helpers; PR #12: `all`/`any` via min/max reductions) |
 | `bitwise_and`, `bitwise_or`, `bitwise_xor`, `bitwise_not`, `left_shift`, `right_shift` | missing |
 
