@@ -184,7 +184,7 @@ int rt_cn_reduce_max_atomic(void* in,void* out,int outer,int stride,int inner,in
   unsigned int* hp=(unsigned int*)s->host;
   for(int i=0;i<lines;++i) hp[i]=bits;
   if(s->cuMemcpyHtoDAsync((CUdptr)(size_t)out,s->host,bytes,s->stream)!=0) return -2;
-  int nb=stride>8192?1024:(stride>512?64:1);
+  int nb=stride>8192?128:(stride>512?64:1);  /* fewer blocks -> fewer atomics */
   if(nb>stride) nb=stride>0?stride:1;
   CUdptr i=(CUdptr)(size_t)in,o=(CUdptr)(size_t)out;
   void* args[7]={(void*)&i,(void*)&o,(void*)&outer,(void*)&stride,(void*)&inner,(void*)&kind,(void*)&nb};

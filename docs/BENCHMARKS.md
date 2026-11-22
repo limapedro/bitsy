@@ -58,6 +58,32 @@ this GPU — see FINDINGS_PR15).
 
 ---
 
+## 2026-11-22 23:35 — PR #64: add/mul anomaly resolved — it was a measurement-order artifact
+
+Reversing the case order in PR #63's stable harness flipped which ops looked
+slow: add/mul became fast (0.71×/0.75×, 7/7) and the now-first fused/max became
+slow. So the "add 1.37×, mul 1.22×" result was **not** op-specific — the first
+cases in a fixed order pay a warmup/clock-ramp cost the intra-round clock filter
+did not catch.
+
+Fixed properly: `stable_bench.py` now **rotates the case order every round**, so
+each case is measured at every position; the first (warmup) rotation is
+discarded and clock-changing rounds are still dropped. Two consecutive runs now
+agree with high win counts:
+```
+add 0.64-0.79× (7/7)   mul 0.66-0.84× (6/7)   sub 0.74× (6/7)
+div 0.77× (5-6/7)      relu 0.71-0.78×        exp 0.65-0.80×
+fused 0.77-0.89× (6-7/7)   sum 0.76× (4/7)    mean 0.81× (5/7)
+max 1.55× (1/7)  <- the only remaining single-op gap
+```
+So **all pointwise ops genuinely beat PyTorch** under a rotation-unbiased
+measurement — this restores (and now properly gates) the earlier claim that
+PR #63 had retracted. Reduced max atomic count (1024→128 blocks) gave a small
+improvement but max remains ~1.5× slower.
+
+All gates green twice: v2 48/48, op 27/27, gradcheck 25/25, model 10/10,
+API 113/113, CTest 2/2. Core 3,602 lines.
+
 ## 2026-11-22 23:00 — PR #63: stable benchmark methodology — single-op ratios are workload-dependent, not noise
 
 Prior single-op sweeps swung between 0.7× and 1.5× for the same code, so I
