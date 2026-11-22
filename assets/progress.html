@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Bitsy — Progress Dashboard</title>
+<style>
+:root{--bg:#0d1117;--panel:#161b22;--line:#30363d;--track:#21262d;--mut:#8b949e;--txt:#e6edf3;--g:#2ea043;--a:#d29922;--r:#f85149;
+--mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;--sans:-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--txt);font:14px/1.5 var(--sans);-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.wrap{max-width:1180px;margin:0 auto;padding:36px 28px 56px}
+header{display:flex;justify-content:space-between;align-items:flex-end;gap:24px;flex-wrap:wrap;padding-bottom:22px;border-bottom:1px solid var(--line)}
+header h1{margin:0;font:700 40px/1 var(--mono);letter-spacing:-.03em;display:flex;align-items:center;gap:14px}
+header p{margin:10px 0 0;color:var(--mut);max-width:60ch}
+.chips{display:flex;gap:8px;flex-wrap:wrap}
+.chip{font:12px var(--mono);color:var(--mut);border:1px solid var(--line);padding:3px 9px;border-radius:3px;white-space:nowrap}
+h2{font:600 18px/1.2 var(--sans);margin:48px 0 4px}
+.hint{color:var(--mut);margin:0 0 16px;font-size:13px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:20px;break-inside:avoid}
+.mono{font-family:var(--mono)}.mut{color:var(--mut)}
+/* overview */
+.hero{display:grid;grid-template-columns:5fr 7fr;gap:16px}
+.big{font:700 92px/1 var(--mono);letter-spacing:-.05em;margin:6px 0 14px}
+.lbl{color:var(--mut);font-size:13px}
+.subs{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.sub .top{display:flex;justify-content:space-between;align-items:center}
+.sub .v{font:700 34px/1.1 var(--mono);margin:8px 0 10px}
+.bar{height:8px;background:var(--track);border-radius:1px;position:relative}.bar i{display:block;height:100%}
+.tag{font:11px var(--mono);border:1px dashed var(--mut);color:var(--mut);padding:1px 6px;border-radius:3px}
+/* roadmap */
+.tl{display:grid;grid-template-columns:repeat(5,1fr);gap:12px}
+.ph{background:var(--panel);border:1px solid var(--line);border-top:4px solid var(--line);border-radius:6px;padding:16px}
+.node{width:28px;height:28px;display:grid;place-items:center;font:700 14px var(--mono);background:var(--track);border-radius:2px}
+.ph h3{margin:12px 0 2px;font-size:16px}
+.st{font:600 12px var(--mono)}
+.ph p{color:var(--mut);font-size:12.5px;margin:10px 0 14px;min-height:54px}
+/* speed */
+.legend{display:flex;gap:18px;flex-wrap:wrap;margin-bottom:14px;font-size:12.5px;color:var(--mut)}
+.legend span{display:inline-flex;align-items:center;gap:7px}.legend i{width:12px;height:12px;display:inline-block;border-radius:1px}
+/* parity */
+.gh{display:flex;align-items:baseline;gap:14px;margin:22px 0 10px;flex-wrap:wrap}
+.gh b{font-size:15px}.gh .mono{font-size:15px}
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px}
+.tile{background:var(--panel);border:1px solid var(--line);border-top:3px solid var(--line);border-radius:4px;padding:14px;break-inside:avoid}
+.tile .h{display:flex;justify-content:space-between;gap:8px;margin-bottom:10px}
+.tile .n{font-weight:600}.tile .c{font:600 13px var(--mono)}
+.tile .f{display:flex;justify-content:space-between;gap:8px;margin-top:12px;font:11.5px var(--mono);color:var(--mut)}
+.tc{border:1px solid var(--line);padding:0 6px;border-radius:3px}
+/* bottom */
+.two{display:grid;grid-template-columns:6fr 6fr;gap:16px;align-items:start}
+.bl{list-style:none;margin:0;padding:0}
+.bl li{display:grid;grid-template-columns:44px 1fr auto;gap:12px;align-items:center;padding:9px 0;border-top:1px solid var(--line)}
+.bl li:first-child{border-top:0}
+.ph-b{font:600 12px var(--mono);background:var(--track);text-align:center;padding:2px 0;border-radius:3px}
+.stat{display:flex;gap:28px;margin-bottom:14px;flex-wrap:wrap}
+.stat div{font:700 26px var(--mono)}.stat small{display:block;font:12px var(--sans);color:var(--mut);font-weight:400}
+footer{margin-top:40px;padding-top:16px;border-top:1px solid var(--line);color:var(--mut);font-size:12.5px;display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}
+svg{display:block;max-width:100%}
+@media(max-width:900px){.wrap{padding:24px 18px}.big{font-size:72px}.tl{grid-template-columns:repeat(3,1fr)}.two{grid-template-columns:1fr}}
+@media(max-width:620px){.hero,.subs{grid-template-columns:1fr}.tl{grid-template-columns:1fr 1fr}}
+@media print{body{background:#0d1117}.wrap{max-width:none;padding:12px}h2{margin-top:28px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div>
+    <h1><svg id="logo" width="34" height="34" viewBox="0 0 34 34" aria-hidden="true"></svg><span id="pname"></span></h1>
+    <p id="tag"></p>
+  </div>
+  <div class="chips" id="chips"></div>
+</header>
+
+<h2>At a glance</h2>
+<p class="hint">Weighted health score and the four sub-scores behind it.</p>
+<section class="hero" id="hero"></section>
+
+<h2>Roadmap</h2>
+<p class="hint">Five phases from research to release. Each bar is the share of that phase's exit criteria met.</p>
+<section class="tl" id="roadmap"></section>
+
+<h2>Speed vs PyTorch</h2>
+<p class="hint">Ratio = torch_ms / bitsy_ms on the same GPU. 1.00 means equal speed; below 1.00 Bitsy is slower.</p>
+<section class="card">
+  <div class="legend">
+    <span><i style="background:#2ea043"></i>≥ 1.00 parity</span>
+    <span><i style="background:#d29922"></i>0.50 – 0.99</span>
+    <span><i style="background:#f85149"></i>&lt; 0.50</span>
+    <span><i style="background:#e6edf3;width:3px;height:14px"></i>target 1.00</span>
+  </div>
+  <div id="speed"></div>
+</section>
+
+<h2>Numeric parity</h2>
+<p class="hint">Each square is one check against PyTorch: green passes, grey is pending. Max |Δ| is the worst absolute difference seen, compared with the tile's tolerance class.</p>
+<section id="parity"></section>
+
+<div class="two">
+  <div>
+    <h2>Still needed</h2>
+    <p class="hint">Open work, ordered by phase.</p>
+    <section class="card"><ul class="bl" id="backlog"></ul></section>
+  </div>
+  <div>
+    <h2>Line budget</h2>
+    <p class="hint">C + Vulkan core, counted per LINE_BUDGET.</p>
+    <section class="card" id="budget"></section>
+  </div>
+</div>
+
+<footer>
+  <span id="foot"></span>
+  <span>Rendered from the DATA block in this file. Swap it for docs/progress.json.</span>
+</footer>
+</div>
+
+<script>
+/* =====================================================================
+   DATA BLOCK — injected by tools/gen_progress.py from docs/progress.json.
+   Do not edit by hand here; edit docs/progress.json and regenerate.
+   ===================================================================== */
+const DATA = {
+  "project": {
+    "name": "Bitsy",
+    "tagline": "A small fp32 deep-learning framework. C11 core, Vulkan compute, one goal: match PyTorch on a GTX 1660 Super.",
+    "chips": [
+      "C11 core",
+      "Vulkan compute",
+      "fp32",
+      "GTX 1660 Super",
+      "docs-only branch"
+    ],
+    "updated": "2026-11-22",
+    "ref": "docs/progress.json"
+  },
+  "weights": {
+    "numerics": 0.3,
+    "speed": 0.4,
+    "completeness": 0.2,
+    "budget": 0.1
+  },
+  "budget": {
+    "used": 0,
+    "cap": 4096,
+    "target": 2850,
+    "stretch": 2048,
+    "status": "planned"
+  },
+  "phases": [
+    {
+      "id": 0,
+      "name": "Research",
+      "status": "done",
+      "progress": 1,
+      "note": "PyTorch semantics, tinygrad design, Vulkan limits on TU116."
+    },
+    {
+      "id": 1,
+      "name": "Skeleton",
+      "status": "pending",
+      "progress": 0,
+      "note": "C11 tensor core, Vulkan device bring-up, benchmark harness."
+    },
+    {
+      "id": 2,
+      "name": "Lazy + parity",
+      "status": "pending",
+      "progress": 0,
+      "note": "Lazy graph, scheduler, fusion. Every op within tolerance."
+    },
+    {
+      "id": 3,
+      "name": "Speed",
+      "status": "pending",
+      "progress": 0,
+      "note": "GEMM, captured step, RNN/LSTM, GPT-2 toward 1.00."
+    },
+    {
+      "id": 4,
+      "name": "Release",
+      "status": "pending",
+      "progress": 0,
+      "note": "Docs, packaging, line-budget audit."
+    }
+  ],
+  "speed": [
+    {
+      "name": "Elementwise",
+      "ratio": 0.47,
+      "scope": "per-step",
+      "note": "4096..1M elements, eager"
+    },
+    {
+      "name": "GEMM",
+      "ratio": 0.22,
+      "scope": "per-step",
+      "note": "fp32 matmul; autotune up to ~0.71"
+    },
+    {
+      "name": "Captured training step",
+      "ratio": 0.46,
+      "scope": "per-step",
+      "note": "forward + backward + update"
+    },
+    {
+      "name": "RNN",
+      "ratio": 0.15,
+      "scope": "per-step",
+      "note": "B3 T4 I5 H6, one sequence step"
+    },
+    {
+      "name": "LSTM",
+      "ratio": 0.04,
+      "scope": "per-step",
+      "note": "B3 T4 I5 H6, one sequence step"
+    },
+    {
+      "name": "GPT-2",
+      "ratio": 0.58,
+      "scope": "full-model",
+      "note": "2.16M params, end-to-end run"
+    }
+  ],
+  "tolerances": {
+    "exact": 0,
+    "tight": 1e-06,
+    "loose": 0.0001,
+    "model": 0.001
+  },
+  "parity": {
+    "groups": [
+      {
+        "title": "Ops",
+        "tiles": [
+          {
+            "name": "Unary math",
+            "total": 10,
+            "pass": 10,
+            "maxAbsDiff": 1.2e-07,
+            "tol": "tight"
+          },
+          {
+            "name": "Binary & compare",
+            "total": 5,
+            "pass": 5,
+            "maxAbsDiff": 0,
+            "tol": "exact"
+          },
+          {
+            "name": "sqrt / gelu",
+            "total": 4,
+            "pass": 4,
+            "maxAbsDiff": 1.2e-07,
+            "tol": "tight"
+          },
+          {
+            "name": "matmul (fwd/grad)",
+            "total": 3,
+            "pass": 3,
+            "maxAbsDiff": 4.8e-07,
+            "tol": "loose"
+          },
+          {
+            "name": "softmax/log_softmax",
+            "total": 4,
+            "pass": 4,
+            "maxAbsDiff": 3e-08,
+            "tol": "tight"
+          },
+          {
+            "name": "reduce / transpose",
+            "total": 4,
+            "pass": 4,
+            "maxAbsDiff": 1e-06,
+            "tol": "loose"
+          },
+          {
+            "name": "ce_loss / sgd",
+            "total": 4,
+            "pass": 4,
+            "maxAbsDiff": 1e-06,
+            "tol": "loose"
+          },
+          {
+            "name": "training-scale gate",
+            "total": 1,
+            "pass": 1,
+            "maxAbsDiff": 6e-08,
+            "tol": "loose"
+          },
+          {
+            "name": "grad-flow gate",
+            "total": 1,
+            "pass": 1,
+            "maxAbsDiff": 6e-08,
+            "tol": "loose"
+          }
+        ]
+      },
+      {
+        "title": "Models",
+        "tiles": [
+          {
+            "name": "MNIST MLP",
+            "total": 1,
+            "pass": 1,
+            "maxAbsDiff": 1.5e-07,
+            "tol": "model"
+          },
+          {
+            "name": "CIFAR CNN",
+            "total": 1,
+            "pass": 1,
+            "maxAbsDiff": 1.2e-05,
+            "tol": "model"
+          },
+          {
+            "name": "RNN",
+            "total": 1,
+            "pass": 1,
+            "maxAbsDiff": 5.9e-06,
+            "tol": "model"
+          },
+          {
+            "name": "LSTM",
+            "total": 1,
+            "pass": 1,
+            "maxAbsDiff": 3.1e-06,
+            "tol": "model"
+          },
+          {
+            "name": "GPT-2 small",
+            "total": 1,
+            "pass": 1,
+            "maxAbsDiff": 1.16e-06,
+            "tol": "model"
+          }
+        ]
+      }
+    ]
+  },
+  "backlog": [
+    {
+      "title": "Benchmark harness per BENCHMARK_METHODOLOGY",
+      "phase": 1,
+      "metric": "speed"
+    },
+    {
+      "title": "C11 tensor core and Vulkan device bring-up",
+      "phase": 1,
+      "metric": "completeness"
+    },
+    {
+      "title": "Lazy graph and scheduler",
+      "phase": 2,
+      "metric": "completeness"
+    },
+    {
+      "title": "Elementwise fusion pass",
+      "phase": 2,
+      "metric": "speed"
+    },
+    {
+      "title": "Tiled GEMM kernel (TU116 has no tensor cores)",
+      "phase": 3,
+      "metric": "speed"
+    },
+    {
+      "title": "Captured training-step replay",
+      "phase": 3,
+      "metric": "speed"
+    },
+    {
+      "title": "Fused RNN and LSTM cell kernels",
+      "phase": 3,
+      "metric": "speed"
+    },
+    {
+      "title": "GPT-2 attention and layernorm fusion",
+      "phase": 3,
+      "metric": "speed"
+    },
+    {
+      "title": "Line-budget check in CI (<= 4096)",
+      "phase": 4,
+      "metric": "budget"
+    }
+  ]
+};
+/* ===================== END DATA BLOCK ===================== */
+
+const C={g:'#2ea043',a:'#d29922',r:'#f85149',grey:'#30363d',track:'#21262d',mut:'#8b949e',txt:'#e6edf3'};
+const MONO='ui-monospace,Consolas,monospace',SANS='Segoe UI,Roboto,Helvetica,Arial,sans-serif';
+const $=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const pct=(x,d=0)=>(x*100).toFixed(d)+'%', fmt=n=>n.toLocaleString('en-US');
+const sum=(a,k)=>a.reduce((s,x)=>s+x[k],0), mean=a=>a.reduce((s,x)=>s+x,0)/a.length;
+const tierSpeed=r=>r>=1?C.g:r>=.5?C.a:C.r, tierScore=s=>s>=.8?C.g:s>=.5?C.a:C.r;
+const T=(x,y,s,o={})=>`<text x="${x}" y="${y}" fill="${o.f||C.txt}" font-size="${o.s||13}" font-weight="${o.w||400}" text-anchor="${o.a||'start'}" font-family="${o.m?MONO:SANS}">${esc(s)}</text>`;
+const exp=x=>x===null||x===undefined?'—':x===0?'0':x.toExponential(1).replace('e-','e−');
+
+function icon(k){ // 16px icons made of rects only
+  const p={numerics:'<rect x="1" y="3" width="14" height="3"/><rect x="1" y="10" width="14" height="3"/>',
+  speed:'<rect x="1" y="2" width="4" height="12"/><rect x="6" y="6" width="4" height="8"/><rect x="11" y="10" width="4" height="4"/>',
+  completeness:'<rect x="1" y="1" width="6" height="6"/><rect x="9" y="1" width="6" height="6"/><rect x="1" y="9" width="6" height="6"/><rect x="9" y="9" width="6" height="6" fill="none" stroke="#8b949e"/>',
+  budget:'<rect x="1" y="5" width="14" height="6" fill="none" stroke="#8b949e"/><rect x="1" y="5" width="8" height="6"/>'}[k];
+  return `<svg width="16" height="16" viewBox="0 0 16 16" fill="${C.mut}">${p}</svg>`;
+}
+
+function render(D){
+  /* ---- header ---- */
+  $('pname').textContent=D.project.name; $('tag').textContent=D.project.tagline;
+  $('chips').innerHTML=D.project.chips.map(c=>`<span class="chip">${esc(c)}</span>`).join('');
+  $('logo').innerHTML=[0,1,2,3].map(i=>`<rect x="${(i%2)*18}" y="${Math.floor(i/2)*18}" width="16" height="16" fill="${[C.g,C.a,C.grey,C.g][i]}"/>`).join('');
+  $('foot').textContent=`Snapshot ${D.project.updated} · source ${D.project.ref}`;
+
+  /* ---- scores ---- */
+  const tiles=D.parity.groups.flatMap(g=>g.tiles), B=D.budget, ph=D.phases;
+  const gOps=D.parity.groups[0], gMod=D.parity.groups[1];
+  const nP=sum(tiles,'pass'), nT=sum(tiles,'total');
+  const budgetScore=B.status==='planned'?null:(B.used<=B.target?1:Math.max(0,1-(B.used-B.target)/(B.cap-B.target)));
+  const S=[
+    {k:'numerics',   n:'Numerics',     v:nT?nP/nT:0, d:`${sum(gOps.tiles,'pass')}/${sum(gOps.tiles,'total')} ops · ${sum(gMod.tiles,'pass')}/${sum(gMod.tiles,'total')} models pass`},
+    {k:'speed',      n:'Speed',        v:mean(D.speed.map(s=>Math.min(s.ratio,1))), d:`mean of ratios capped at 1.00 · ${D.speed.filter(s=>s.ratio>=1).length}/${D.speed.length} at parity`},
+    {k:'completeness',n:'Completeness',v:mean(ph.map(p=>p.progress)), d:`${ph.filter(p=>p.status==='done').length}/${ph.length} phases done`},
+    {k:'budget',     n:'Line budget',  v:budgetScore, d:B.status==='planned'?`planned · target ${fmt(B.target)} of ${fmt(B.cap)} lines`:`${fmt(B.used)} of ${fmt(B.cap)} lines used`}
+  ];
+  const live=S.filter(s=>s.v!==null), W=D.weights;
+  const head=live.reduce((a,s)=>a+s.v*W[s.k],0)/live.reduce((a,s)=>a+W[s.k],0);
+  const nSeg=50,on=Math.round(head*nSeg);
+  const seg=`<svg viewBox="0 0 600 22" width="100%" height="22" preserveAspectRatio="none">`+
+    Array.from({length:nSeg},(_,i)=>`<rect x="${i*12}" y="0" width="10" height="22" fill="${i<on?tierScore(head):C.grey}"/>`).join('')+`</svg>`;
+  $('hero').innerHTML=`
+   <div class="card"><div class="lbl">Overall health</div>
+     <div class="big" style="color:${tierScore(head)}">${pct(head)}</div>${seg}
+     <p class="lbl" style="margin:14px 0 0">Weighted: ${live.map(s=>`${s.n.toLowerCase()} ${Math.round(W[s.k]*100)}`).join(' · ')}${live.length<S.length?'. Line budget is left out until code exists.':''}</p></div>
+   <div class="subs">${S.map(s=>`
+     <div class="card sub" title="${esc(s.d)}"><div class="top"><span class="lbl">${s.n}</span>${icon(s.k)}</div>
+       <div class="v" style="color:${s.v===null?C.mut:tierScore(s.v)}">${s.v===null?'n/a':pct(s.v)}${s.v===null?' <span class="tag">planned</span>':''}</div>
+       <div class="bar"><i style="width:${s.v===null?0:s.v*100}%;background:${s.v===null?C.grey:tierScore(s.v)}"></i></div>
+       <div class="lbl" style="margin-top:10px;font-size:12px">${esc(s.d)}</div></div>`).join('')}</div>`;
+
+  /* ---- roadmap ---- */
+  const stC={done:C.g,active:C.a,pending:C.grey}, stT={done:'DONE',active:'IN PROGRESS',pending:'PENDING'};
+  $('roadmap').innerHTML=ph.map(p=>`<div class="ph" style="border-top-color:${stC[p.status]}" title="Phase ${p.id}: ${pct(p.progress)}">
+    <div class="node" style="${p.status==='done'?`background:${C.g}`:''}">${p.id}</div>
+    <h3>${esc(p.name)}</h3><div class="st" style="color:${p.status==='pending'?C.mut:stC[p.status]}">${stT[p.status]} · ${pct(p.progress)}</div>
+    <p>${esc(p.note)}</p><div class="bar"><i style="width:${p.progress*100}%;background:${stC[p.status]}"></i></div></div>`).join('');
+
+  /* ---- speed chart ---- */
+  const L=210,Wd=560,MAXR=1.25,Sx=Wd/MAXR,X=r=>L+Math.min(r,MAXR)*Sx,RH=56,GH=34,TOP=30;
+  const groups=[['per-step','Per-step: one op or training iteration'],['full-model','Full-model: end-to-end run']];
+  let y=TOP,body='';
+  groups.forEach(([sc,title])=>{
+    const rows=D.speed.filter(s=>s.scope===sc); if(!rows.length) return;
+    body+=`<rect x="0" y="${y+4}" width="1000" height="1" fill="${C.grey}"/>`+T(0,y+26,title,{f:C.mut,s:12,w:600}); y+=GH;
+    rows.forEach(s=>{
+      const f=tierSpeed(s.ratio);
+      body+=`<g><title>${esc(s.name)}: ${s.ratio.toFixed(2)}× PyTorch speed (${s.scope})${s.ratio<1?`, needs ${(1/s.ratio).toFixed(1)}× speedup`:''}</title>`+
+        T(0,y+22,s.name,{w:600,s:14})+T(0,y+40,s.note||'',{f:C.mut,s:11.5})+
+        `<rect x="${L}" y="${y+10}" width="${Wd}" height="24" fill="${C.track}"/><rect x="${L}" y="${y+10}" width="${X(s.ratio)-L}" height="24" fill="${f}"/></g>`+
+        T(L+Wd+22,y+28,s.ratio.toFixed(2)+'×',{f,s:16,w:700,m:1})+
+        T(L+Wd+98,y+28,s.ratio<1?(1/s.ratio).toFixed(1)+'× to go':'at parity',{f:C.mut,s:11.5,m:1});
+      y+=RH;
+    });
+  });
+  const H=y+8,grid=[[0,'0'],[.5,'0.50'],[1,'1.00']].map(([v,l])=>
+    `<rect x="${X(v)}" y="${TOP}" width="1" height="${H-TOP-8}" fill="${v===1?C.txt:C.grey}"/>`+T(X(v),18,v===1?'target 1.00':l,{a:'middle',f:v===1?C.txt:C.mut,s:11.5,m:1,w:v===1?700:400})).join('');
+  const mark=`<rect x="${X(1)-1}" y="${TOP}" width="3" height="${H-TOP-8}" fill="${C.txt}"/>`;
+  $('speed').innerHTML=`<svg viewBox="0 0 1000 ${H}" width="100%" role="img" aria-label="Speed ratio versus PyTorch">${grid}${body}${mark}</svg>`;
+
+  /* ---- parity tiles ---- */
+  const micro=t=>{const sz=t.total<=5?22:12,g=3,cols=Math.min(t.total,12),rows=Math.ceil(t.total/cols),w=cols*(sz+g)-g,h=rows*(sz+g)-g;
+    let r='';for(let i=0;i<t.total;i++)r+=`<rect x="${(i%cols)*(sz+g)}" y="${Math.floor(i/cols)*(sz+g)}" width="${sz}" height="${sz}" fill="${i<t.pass?C.g:C.grey}"><title>check ${i+1}: ${i<t.pass?'pass':'pending'}</title></rect>`;
+    return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">${r}</svg>`;};
+  $('parity').innerHTML=D.parity.groups.map(g=>{
+    const p=sum(g.tiles,'pass'),t=sum(g.tiles,'total'),f=p===t?C.g:p?C.a:C.mut;
+    return `<div class="gh"><b>${esc(g.title)}</b><span class="mono" style="color:${f}">${pct(t?p/t:0,2)} (${p}/${t})</span></div>
+    <div class="tiles">${g.tiles.map(x=>{
+      const atol=D.tolerances[x.tol],ok=x.maxAbsDiff===null||x.maxAbsDiff<=atol,tc=x.pass===x.total?C.g:x.pass?C.a:C.grey;
+      return `<div class="tile" style="border-top-color:${tc}" title="${esc(x.name)}: ${x.pass}/${x.total} pass, tolerance ${x.tol} (atol ${exp(atol)})">
+        <div class="h"><span class="n">${esc(x.name)}</span><span class="c" style="color:${tc===C.grey?C.mut:tc}">${x.pass}/${x.total}</span></div>${micro(x)}
+        <div class="f"><span style="color:${ok?C.mut:C.r}">max|Δ| ${exp(x.maxAbsDiff)}</span><span class="tc">${x.tol} ≤ ${exp(atol)}</span></div></div>`}).join('')}</div>`}).join('');
+
+  /* ---- backlog ---- */
+  $('backlog').innerHTML=[...D.backlog].sort((a,b)=>a.phase-b.phase).map(b=>`<li><span class="ph-b" title="Roadmap phase ${b.phase}">P${b.phase}</span><span>${esc(b.title)}</span><span class="chip">${esc(b.metric)}</span></li>`).join('');
+
+  /* ---- line budget ---- */
+  const bx=v=>16+Math.min(v,B.cap)/B.cap*608,uc=B.used>B.cap?C.r:B.used>B.target?C.a:C.g;
+  const tick=(v,l,a)=>`<rect x="${bx(v)}" y="24" width="1" height="36" fill="${C.mut}"/>`+T(bx(v),76,l+' '+fmt(v),{a,f:C.mut,s:11.5,m:1});
+  $('budget').innerHTML=`<div class="stat"><div style="color:${uc}">${fmt(B.used)}<small>lines used</small></div><div>${pct(B.used/B.cap,1)}<small>of ${fmt(B.cap)} cap</small></div><div>${fmt(B.cap-B.used)}<small>headroom</small></div></div>
+   <svg viewBox="0 0 640 90" width="100%" role="img" aria-label="Line budget">
+    <rect x="16" y="30" width="608" height="24" fill="${C.track}"/>
+    <rect x="16.5" y="30.5" width="${bx(B.target)-16}" height="23" fill="none" stroke="${C.mut}" stroke-dasharray="4 3"><title>Planned size ${fmt(B.target)}</title></rect>
+    <rect x="16" y="30" width="${bx(B.used)-16}" height="24" fill="${uc}"><title>${fmt(B.used)} lines used</title></rect>
+    ${tick(B.stretch,'stretch','middle')}${tick(B.target,'target','middle')}${tick(B.cap,'cap','end')}</svg>
+   <p class="lbl" style="margin:12px 0 0">${B.status==='planned'?`Nothing counted yet. The dashed outline marks the planned size (${fmt(B.target)}).`:`Counted from the repository.`}</p>`;
+}
+render(DATA);
+</script>
+</body>
+</html>
