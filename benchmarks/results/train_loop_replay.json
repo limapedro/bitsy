@@ -1,0 +1,102 @@
+{
+  "generated_at": "2026-11-22T09:34:21.025509+00:00",
+  "environment": {
+    "torch": "2.11.0+cu126",
+    "gpu": "GTX 1660 SUPER",
+    "clock": [
+      1530.0,
+      1530.0
+    ]
+  },
+  "config": {
+    "build_dir": "E:\\__PROJECTS__\\Hagane\\build-rtvk",
+    "batch": 64,
+    "in_f": 256,
+    "hidden": 128,
+    "out_f": 1,
+    "lr": 0.01,
+    "steps": [
+      10,
+      100,
+      500
+    ],
+    "warmup": 5,
+    "iters": 20,
+    "tol": 0.001,
+    "result_path": "E:\\__PROJECTS__\\Hagane\\benchmarks\\results\\train_loop_replay.json"
+  },
+  "correctness": {
+    "w1": 3.5762786865234375e-07,
+    "w2": 1.9073486328125e-06,
+    "passed": true
+  },
+  "results": [
+    {
+      "N": 10,
+      "batch_one_submit": {
+        "median_ms": 2.281100008985959,
+        "spread_ms": [
+          1.8949000223074108,
+          3.2649999775458127
+        ]
+      },
+      "torch": {
+        "median_ms": 2.950750000309199,
+        "spread_ms": [
+          2.6144000003114343,
+          3.1413999968208373
+        ]
+      },
+      "per_step": {
+        "batch": 0.2281100008985959,
+        "torch": 0.2950750000309199
+      },
+      "gap_batch_vs_torch": 0.7730577001599357
+    },
+    {
+      "N": 100,
+      "batch_one_submit": {
+        "median_ms": 13.196649990277365,
+        "spread_ms": [
+          12.909499986562878,
+          13.739099988015369
+        ]
+      },
+      "torch": {
+        "median_ms": 27.513599998201244,
+        "spread_ms": [
+          26.028499996755272,
+          29.046899988316
+        ]
+      },
+      "per_step": {
+        "batch": 0.13196649990277365,
+        "torch": 0.27513599998201244
+      },
+      "gap_batch_vs_torch": 0.47964097723090116
+    },
+    {
+      "N": 500,
+      "batch_one_submit": {
+        "median_ms": 33.053149993065745,
+        "spread_ms": [
+          32.54590000142343,
+          33.90790001139976
+        ]
+      },
+      "torch": {
+        "median_ms": 139.5252500078641,
+        "spread_ms": [
+          134.3646000023,
+          146.1661999928765
+        ]
+      },
+      "per_step": {
+        "batch": 0.06610629998613149,
+        "torch": 0.2790505000157282
+      },
+      "gap_batch_vs_torch": 0.23689726405222541
+    }
+  ],
+  "note": "Entire fwd+bwd+SGD update captured into one command buffer, N steps in one submit."
+}

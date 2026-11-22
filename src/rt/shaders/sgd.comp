@@ -1,0 +1,22 @@
+#version 450
+#extension GL_EXT_buffer_reference2 : require
+#extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
+/* Fused in-place SGD: w -= lr*(grad + wd*w). One invocation per element.
+ * Reads grad from a capture slot (or device buffer), updates w in place so the
+ * next replayed iteration sees the new weights. All inside one command buffer. */
+layout(local_size_x = 256) in;
+layout(buffer_reference, std430, buffer_reference_align = 4) readonly buffer F32 { float v[]; };
+layout(buffer_reference, std430, buffer_reference_align = 4) writeonly buffer F32W { float v[]; };
+/* params: [0]=n, [1]=wAddr(2), [3]=gAddr(2), [5]=lr-bits, [6]=wd-bits */
+layout(std430, binding = 0) readonly buffer Params { int param[]; };
+uint64_t paddr(int b){ return uint64_t(uint(param[b])) | (uint64_t(uint(param[b+1]))<<32); }
+void main(){
+  uint i=gl_GlobalInvocationID.x;
+  int n=param[0]; if(i>=uint(n)) return;
+  float lr, wd;
+  uint lrb=uint(param[5]), wdb=uint(param[6]);
+  lr=uintBitsToFloat(lrb); wd=uintBitsToFloat(wdb);
+  F32 W=F32(paddr(1)), G=F32(paddr(3));
+  float w=W.v[int(i)];
+  W.v[int(i)]=w-lr*(G.v[int(i)]+wd*w);
+}

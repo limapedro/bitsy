@@ -101,6 +101,10 @@ class Engine:
   def replay_submit_only(self): self.lib.rt_replay_submit_only(self.rt.ctx)
   def replay_submit_async(self): self.lib.rt_replay_submit_async(self.rt.ctx)
   def replay_n(self, n): self.lib.rt_replay_n(self.rt.ctx, n)
+  def sgd_update(self, w, grad, lr, wd=0.0): self.lib.rt_sgd_update(self.rt.ctx, w, grad, lr, wd)
+  def grad_tensor(self, leaf):
+    h = leaf.h if hasattr(leaf, "h") else leaf
+    return self.lib.rt_grad(h)
   def device_time_ms(self): return self.lib.rt_device_time_ms(self.rt.ctx)
   def copy_time_ms(self): return self.lib.rt_copy_time_ms(self.rt.ctx)
   def dispatch(self): return self.lib.rt_dispatch_count(self.rt.ctx)

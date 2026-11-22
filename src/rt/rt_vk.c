@@ -19,6 +19,7 @@
 #include "rt_softmax.spv.h"
 #include "rt_layernorm.spv.h"
 #include "rt_transpose.spv.h"
+#include "rt_sgd.spv.h"
 
 #define RT_NBUF 512
 
@@ -74,6 +75,7 @@ struct RtVk {
   VkPipeline softmax[4];   /* 0/1 = softmax/logsoftmax, 2/3 = +bias */
   VkPipeline layernorm[2];   /* 0=plain, 1=with residual */
   VkPipeline transpose;
+  VkPipeline sgd;
   VkBuffer reduce_part; VkDeviceMemory reduce_part_mem;   /* two-stage partials */
   VkPipelineCache pcache;
   RtVkBuf bufs[RT_NBUF];
@@ -342,6 +344,7 @@ void rt_vk_init(RT* c) {
   VkShaderModule ss = shader(vk, rt_softmax_spv, rt_softmax_spv_bytes);
   VkShaderModule sl = shader(vk, rt_layernorm_spv, rt_layernorm_spv_bytes);
   VkShaderModule stp = shader(vk, rt_transpose_spv, rt_transpose_spv_bytes);
+  VkShaderModule sgdmod = shader(vk, rt_sgd_spv, rt_sgd_spv_bytes);
   vk->fused[0] = make_pipeline(vk, sf, 0, 0,0,0);
   vk->gemm[0] = make_pipeline(vk, sg, 1, 16,16,16);
   vk->gemm[1] = make_pipeline(vk, sg, 1, 32,32,8);
@@ -359,6 +362,7 @@ void rt_vk_init(RT* c) {
   vk->layernorm[0] = make_pipeline(vk, sl, 1, 0,0,0);
   vk->layernorm[1] = make_pipeline(vk, sl, 1, 1,0,0);  /* HAS_RES=1 */
   vk->transpose = make_pipeline(vk, stp, 0, 0,0,0);
+  vk->sgd = make_pipeline(vk, sgdmod, 0, 0,0,0);
 
   /* params + output staging buffers (host visible) */
   VkBufferCreateInfo bci = { .sType=VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
@@ -425,6 +429,7 @@ void rt_vk_shutdown(RT* c) {
     vkUnmapMemory(vk->dev,vk->rb_mem[i]);
     vkDestroyBuffer(vk->dev,vk->rb_buf[i],NULL); vkFreeMemory(vk->dev,vk->rb_mem[i],NULL);
   }
+  if(vk->sgd) vkDestroyPipeline(vk->dev,vk->sgd,NULL);
   if(vk->transpose) vkDestroyPipeline(vk->dev,vk->transpose,NULL);
   for(int i=0;i<2;++i) if(vk->layernorm[i]) vkDestroyPipeline(vk->dev,vk->layernorm[i],NULL);
   if(vk->ts_pool) vkDestroyQueryPool(vk->dev,vk->ts_pool,NULL);
@@ -703,6 +708,37 @@ void rt_vk_gemm(RT* c, RtBuf* a, RtBuf* b, RtBuf* bias,
   vkEndCommandBuffer(vk->cmd);
   submit_wait(vk);
   finish_output(vk, out);
+}
+
+void rt_vk_sgd_update(RT* c, RtBuf* w, RtBuf* g, float lr, float wd) {
+  RtVk* vk=c->vk; if(!vk->dev) return;
+  int n=w->n;
+  RtCaptureSlot* slot = vk->capturing ? cap_slot_new(vk,NULL) : NULL;
+  int* p=(int*)(slot?slot->params_map:vk->params_map);
+  p[0]=n;
+  uint64_t waddr=vkbuf(c,w)->addr;   /* stable leaf buffer: updated in place */
+  uint64_t gaddr=buf_addr(c,g);      /* grad may live in a capture slot */
+  pack_addr(p,1,waddr); pack_addr(p,3,gaddr);
+  uint32_t lrbits=0, wdbits=0;
+  memcpy(&lrbits,&lr,sizeof(float)); memcpy(&wdbits,&wd,sizeof(float));
+  p[5]=(int)lrbits; p[6]=(int)wdbits;
+  int pc[4]={n,0,0,0}; uint32_t groups=((n+255)/256);
+  VkCommandBuffer cmd = slot?vk->replay_cmd:vk->cmd;
+  VkDescriptorSet set = slot?slot->set:vk->set;
+  if(!slot){ VkCommandBufferBeginInfo bi={.sType=VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
+    vkBeginCommandBuffer(cmd,&bi); }
+  vkCmdBindPipeline(cmd,VK_PIPELINE_BIND_POINT_COMPUTE,vk->sgd);
+  vkCmdBindDescriptorSets(cmd,VK_PIPELINE_BIND_POINT_COMPUTE,vk->playout,0,1,&set,0,NULL);
+  vkCmdPushConstants(cmd,vk->playout,VK_SHADER_STAGE_COMPUTE_BIT,0,sizeof(pc),pc);
+  vkCmdDispatch(cmd,groups,1,1);
+  /* ensure the in-place weight write is visible to the next replayed iteration */
+  VkMemoryBarrier2 mb={.sType=VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
+    .srcStageMask=VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,.srcAccessMask=VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+    .dstStageMask=VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,.dstAccessMask=VK_ACCESS_2_SHADER_STORAGE_READ_BIT};
+  VkDependencyInfo dep={.sType=VK_STRUCTURE_TYPE_DEPENDENCY_INFO,.memoryBarrierCount=1,.pMemoryBarriers=&mb};
+  vkCmdPipelineBarrier2(cmd,&dep);
+  if(slot){ if(slot->pipeline==VK_NULL_HANDLE){slot->pipeline=vk->sgd;memcpy(slot->pc,pc,sizeof(int)*4);slot->groups=1;} return; }
+  vkEndCommandBuffer(cmd); submit_wait(vk);
 }
 
 void rt_vk_transpose(RT* c, RtBuf* in, RtBuf* out) {
@@ -1059,6 +1095,7 @@ void rt_vk_reduce(RT* c, RtBuf* i, int kind, int ax, RtBuf* o){ (void)c;(void)i;
 void rt_vk_softmax(RT* c, RtBuf* i, RtBuf* bi, RtBuf* o, int k){ (void)c;(void)i;(void)bi;(void)o;(void)k; }
 void rt_vk_layernorm(RT* c, RtBuf* x, RtBuf* w, RtBuf* b, RtBuf* r, RtBuf* o, float e){ (void)c;(void)x;(void)w;(void)b;(void)r;(void)o;(void)e; }
 void rt_vk_transpose(RT* c, RtBuf* i, RtBuf* o){ (void)c;(void)i;(void)o; }
+void rt_vk_sgd_update(RT* c, RtBuf* w, RtBuf* g, float lr, float wd){ (void)c;(void)w;(void)g;(void)lr;(void)wd; }
 void rt_vk_capture_begin(RT* c){ (void)c; }
 void rt_vk_capture_end(RT* c){ (void)c; }
 void rt_vk_replay(RT* c){ (void)c; }
