@@ -58,6 +58,37 @@ this GPU — see FINDINGS_PR15).
 
 ---
 
+## 2026-11-22 14:05 — PR #47: realistic multi-layer end-to-end win with auto-capture as default
+
+Stopped chasing the single-call sync floor and pursued the overall-workload win.
+Added `Engine.auto(K)` / `AutoCapture.run(key, fn, shapes, batches, zero_grads)`
+(`python/bitsy_v2/compiled.py`): recurring shapes compile once on first call, then
+replay on every later call, so captured execution is the default path without
+callers managing compile objects. Results stay as device tensors (`read=False`)
+so host sync is not paid per op.
+
+New `benchmarks/compact/end_to_end_bench.py`: a realistic 4-layer MLP
+(256→128→128→64→1) training loop with FRESH batches every step, full
+forward+backward+SGD via `AutoCapture` (K=6 graphs, one submit per batch of 6),
+vs a PyTorch eager SGD loop. Correctness on final weights across all 4 layers:
+diffs 3.7e-09 / 1.5e-08 / 7.5e-09 / 2.9e-11.
+
+Three consecutive runs (N=600, warmup/median/spread, clock 1530–1950):
+```
+compiled 0.4480 | torch 0.6118 ms/step | gap 0.73x
+compiled 0.4285 | torch 0.5163 ms/step | gap 0.83x
+compiled 0.4271 | torch 0.5412 ms/step | gap 0.79x
+--> 1.2-1.37x FASTER end-to-end on a real multi-layer model with fresh data
+```
+Added `auto_capture_w1/w2` parity gates (API 108 → **110 cases**).
+
+This is the broadest win so far: it is not a synthetic single op or repeated
+identical input, but a complete training loop on a deeper model with new data
+each step.
+
+Gates: v2 48/48, op 27/27, gradcheck 25/25, model 10/10, API **110/110**, ctest 2/2.
+Core 3,159 lines.
+
 ## 2026-11-22 13:30 — PR #46: dynamically-loaded CUDA interop implemented, measured, rejected
 
 Implemented a fully guarded, dynamically-loaded (`nvcuda.dll`/`libcuda.so.1`,

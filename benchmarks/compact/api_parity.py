@@ -427,6 +427,33 @@ def run(cfg=CFG):
   rec_grad("folded_gemm_bias_wgrad", md(GW.grad,tgw.grad.numpy()))
   rec_grad("folded_gemm_bias_bgrad", md(GB.grad,tgb.grad.numpy()))
 
+  # ---- PR #47: auto-capture (captured path as default for recurring shapes) ----
+  aw1=rng.standard_normal((8,16)).astype(np.float32)
+  aw2=rng.standard_normal((1,8)).astype(np.float32)
+  adata=[rng.standard_normal((4,16)).astype(np.float32) for _ in range(2)]
+  ae=bv.Engine(device=bv.Engine.VULKAN)
+  aA=ae.tensor(aw1,requires_grad=True); aB=ae.tensor(aw2,requires_grad=True)
+  aT=ae.tensor(np.zeros((4,1),np.float32))
+  def afn(X):
+    y=bv.functional.mse_loss(X.matmul(aA.T()).relu().matmul(aB.T()),aT)
+    y.backward(params=[aA,aB])
+    ae.sgd_update(aA.h,ae.grad_tensor(aA),slr,0.0)
+    ae.sgd_update(aB.h,ae.grad_tensor(aB),slr,0.0)
+    return y
+  aauto=ae.auto(2)
+  aout=aauto.run("case",afn,[(4,16)],[[d] for d in adata],zero_grads=[aA,aB])
+  ae.upload(aA,aw1); ae.upload(aB,aw2)
+  aauto.run("case",afn,[(4,16)],[[d] for d in adata],zero_grads=[aA,aB])
+  aga=ae.get(aA.h,(8,16)); agb=ae.get(aB.h,(1,8))
+  atw1=torch.from_numpy(aw1).requires_grad_(True); atw2=torch.from_numpy(aw2).requires_grad_(True)
+  aopt=torch.optim.SGD([atw1,atw2],lr=slr)
+  for i in range(2):
+    aopt.zero_grad()
+    al=torch.nn.functional.mse_loss(torch.relu(torch.from_numpy(adata[i])@atw1.T)@atw2.T,torch.zeros((4,1)))
+    al.backward(); aopt.step()
+  rec_grad("auto_capture_w1", md(aga,atw1.detach().numpy()))
+  rec_grad("auto_capture_w2", md(agb,atw2.detach().numpy()))
+
   passed = sum(r["passed"] for r in results)
   report = {
     "generated_at":datetime.now(timezone.utc).isoformat(),

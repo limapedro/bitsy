@@ -37,6 +37,24 @@ class Compiled:
     return out[0] if len(out) == 1 else tuple(out)
 
 
+class AutoCapture:
+  """Caches compiled callables by key so recurring shapes automatically use the
+  captured/replay path after the first call. This makes amortized execution the
+  default: callers write a normal function, and repeat calls skip re-capture.
+  """
+  def __init__(self, engine, K=6):
+    self.eng = engine
+    self.K = K
+    self._cache = {}
+
+  def run(self, key, fn, shapes, batches, zero_grads=None):
+    c = self._cache.get(key)
+    if c is None:
+      c = self.eng.compile_many(fn, shapes, self.K, zero_grads=zero_grads)
+      self._cache[key] = c
+    return c(batches)
+
+
 class CompiledMany:
   """K captured graphs with distinct CPU-mapped inputs, submitted in ONE call.
 
