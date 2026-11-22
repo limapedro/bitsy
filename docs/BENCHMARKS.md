@@ -58,6 +58,30 @@ this GPU — see FINDINGS_PR15).
 
 ---
 
+## 2026-11-22 13:30 — PR #46: dynamically-loaded CUDA interop implemented, measured, rejected
+
+Implemented a fully guarded, dynamically-loaded (`nvcuda.dll`/`libcuda.so.1`,
+no link-time dependency) CUDA interop path: Vulkan exported a timeline semaphore
+and each DEVICE_LOCAL output buffer as Win32 handles; eager submits signaled the
+semaphore; CUDA imported both and did wait + async D2H + stream sync instead of
+the Vulkan fence/copy. Correctness passed.
+
+QPC breakdown of the CUDA path on 1M-float add:
+```
+cuWaitExternalSemaphoresAsync   30.6 us   (fast, as hoped)
+cuMemcpyDtoHAsync              990.0 us   (!!! vs ~300 us raw CUDA D2H)
+cuStreamSynchronize              6.2 us   (fast)
+--> wall 1.126 ms, no win
+```
+A standalone raw-CUDA control measured add+D2H+sync at **0.388 ms** vs PyTorch's
+0.627 ms — so CUDA's sync is not the blocker, but copying from Vulkan-imported
+external memory costs ~990 us (3x a native CUDA allocation). The interop path
+cannot beat the baseline and was **fully reverted** (module deleted, CMake and
+all core edits restored; gates green).
+
+Gates: v2 48/48, op 27/27, gradcheck 25/25, model 10/10, API 108/108, ctest 2/2.
+Core 3,159 lines.
+
 ## 2026-11-22 12:55 — PR #45: exported Win32 fence-handle wait tested and rejected
 
 Tried a genuinely different sync path: export the Vulkan fence as an opaque
