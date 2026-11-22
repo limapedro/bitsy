@@ -140,7 +140,20 @@ RTTensor* rt_log(RT* c, RTTensor* a) { return unary(c, RT_LOG, a); }
 RTTensor* rt_sqrt(RT* c, RTTensor* a) { return unary(c, RT_SQRT, a); }
 RTTensor* rt_tanh(RT* c, RTTensor* a) { return unary(c, RT_TANH, a); }
 RTTensor* rt_sigm(RT* c, RTTensor* a) { return unary(c, RT_SIGM, a); }
-RTTensor* rt_relu(RT* c, RTTensor* a) { return unary(c, RT_RELU, a); }
+/* PR #23: fold an unrealized GEMM + ReLU into one dispatch. Create a distinct
+ * RT_GEMM_RELU node (not mutate the GEMM) so other consumers of the GEMM stay
+ * correct. */
+static RTTensor* gemm_relu(RT* c, RTTensor* a) {
+  RTTensor* t = node_new(c, RT_GEMM_RELU, a->ndim, a->dims, a->nsrc,
+                         a->src[0], a->src[1], a->src[2]);
+  if (!t) return NULL;
+  t->axis = a->axis; t->keepdim = a->keepdim;
+  return t;
+}
+RTTensor* rt_relu(RT* c, RTTensor* a) {
+  if (a && !a->buf && a->op == RT_MATMUL) return gemm_relu(c, a);
+  return unary(c, RT_RELU, a);
+}
 RTTensor* rt_gelu(RT* c, RTTensor* a) { return unary(c, RT_GELU, a); }
 /* PR #2: additional pointwise primitives */
 RTTensor* rt_pow(RT* c, RTTensor* a, RTTensor* b) { return pointwise(c, RT_POW, a, b); }
@@ -195,8 +208,11 @@ RTTensor* rt_gemm(RT* c, RTTensor* a, RTTensor* b, RTTensor* bias,
   if (ka != kb) { rt_errf(c, "gemm K mismatch %lld vs %lld", (long long)ka, (long long)kb); return NULL; }
   int64_t M = trans_a ? a->dims[1] : a->dims[0];
   int64_t N = trans_b ? b->dims[0] : b->dims[1];
-  if (bias && !(bias->ndim == 1 && bias->dims[0] == N)) {
-    rt_errf(c, "gemm bias must be shape (N,)"); return NULL;
+  /* bias may be (N,) or (1,N): identical memory layout, both valid for the
+   * shader's bias.v[c] epilogue. nn.Linear uses (1,N). */
+  if (bias && !((bias->ndim == 1 && bias->dims[0] == N) ||
+                (bias->ndim == 2 && bias->dims[0] == 1 && bias->dims[1] == N))) {
+    rt_errf(c, "gemm bias must be shape (N,) or (1,N)"); return NULL;
   }
   int64_t d[2] = { M, N };
   RTTensor* t = node_new(c, RT_MATMUL, 2, d, bias ? 3 : 2, a, b, bias);
@@ -306,7 +322,8 @@ static int emit_pointwise(RT* c, RTTensor* t, RtFusion* f) {
 
 static void realize_node(RT* c, RTTensor* t);
 static int is_cut(RTOp op) {
-  return op == RT_MATMUL || op == RT_REDUCE || op == RT_TRANSPOSE || op == RT_RESHAPE;
+  return op == RT_MATMUL || op == RT_GEMM_RELU || op == RT_REDUCE ||
+         op == RT_TRANSPOSE || op == RT_RESHAPE;
 }
 
 /* Emit expression onto the fused stack; returns the stack slot holding value.
@@ -535,13 +552,17 @@ static void realize_node(RT* c, RTTensor* t) {
   if (t->buf) return;
   if (!is_cut(t->op)) { realize_fused(c, t); return; }  /* emit() materialises cut ancestors */
   for (int i=0;i<t->nsrc;++i) if (t->src[i]) realize_node(c, t->src[i]);
-  if (t->op == RT_MATMUL) {
+  if (t->op == RT_MATMUL || t->op == RT_GEMM_RELU) {
     RtBuf* out = rt_buf_new(c, 2, t->dims, c->device);
     RtBuf* bias = t->nsrc > 2 && t->src[2] ? t->src[2]->buf : NULL;
     int ta = t->axis, tb = t->keepdim;
+    int relu = t->op == RT_GEMM_RELU;
     if (c->device == RT_VULKAN && c->vk)
-      rt_vk_gemm(c, t->src[0]->buf, t->src[1]->buf, bias, ta, tb, out);
+      rt_vk_gemm(c, t->src[0]->buf, t->src[1]->buf, bias, ta, tb, relu, out);
     else gemm_cpu(t->src[0]->buf, t->src[1]->buf, bias, ta, tb, out);
+    if (relu && c->device != RT_VULKAN) {   /* CPU: apply ReLU epilogue */
+      for (int i=0;i<out->n;++i) if (out->host[i]<0) out->host[i]=0;
+    }
     if (c->capture && c->capture_nout < RT_MAXBUF) c->capture_outputs[c->capture_nout++] = out;
     c->dispatch_count++; t->buf = out; return;
   }
@@ -643,7 +664,10 @@ static RTTensor* grad_wrt(RT* c, RTTensor* t, int s, RTTensor* g) {
       return scalar(c, 0.f);
     case RT_WHERE: return s == 1 ? rt_mul(c, g, t->src[0])
                                  : (s == 2 ? rt_mul(c, g, rt_sub(c, scalar(c,1.f), t->src[0])) : scalar(c,0.f));
-    case RT_MATMUL: {
+    case RT_MATMUL:
+    case RT_GEMM_RELU: {
+      /* Y = relu(opA(A) @ opB(B) + bias); for GEMM_RELU mask g by gt0(Y). */
+      if (t->op == RT_GEMM_RELU) g = rt_mul(c, g, rt_gt0(c, t));
       /* Y = opA(A) @ opB(B), opX = transpose iff flag set.
        * dY/dA' = g @ B'^T ; dY/dB' = A'^T @ g ; then un-transpose. */
       int ta = t->axis, tb = t->keepdim;

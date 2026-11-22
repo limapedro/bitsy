@@ -99,7 +99,7 @@ void rt_vk_init(RT*);
 void rt_vk_shutdown(RT*);
 void rt_vk_fused(RT*, RtFusion*, RtBuf* out);
 void rt_vk_gemm(RT*, RtBuf* a, RtBuf* b, RtBuf* bias,
-                int trans_a, int trans_b, RtBuf* out);
+                int trans_a, int trans_b, int relu, RtBuf* out);
 void rt_vk_reduce(RT*, RtBuf* in, int kind, int axis, RtBuf* out);
 void rt_vk_capture_begin(RT*);
 void rt_vk_capture_end(RT*);

@@ -58,7 +58,25 @@ this GPU — see FINDINGS_PR15).
 
 ---
 
-## 2026-11-22 03:55 — PR #22 (in progress): pinned-D2H A/B (negative) — reverted
+## 2026-11-22 04:05 — PR #23 (in progress): GEMM+ReLU epilogue fusion (1 dispatch)
+
+`matmul().relu()` previously took **2 dispatches** (GEMM cut + fused ReLU).
+Added `RT_GEMM_RELU` node type: `rt_relu()` folds an unrealized `RT_MATMUL`
+into a new GEMM node with a ReLU epilogue flag (bit 3 of the GEMM flags word);
+`gemm.comp` applies `max(0, v)` after bias. Autograd masks the upstream grad
+with `gt0(Y)` before the matmul backward. CPU path applies ReLU in `realize_node`.
+
+```
+n=256  GEMM 5.81x -> GEMM+ReLU 4.94x  (1 dispatch, diff 4.2e-05)
+n=512  GEMM 3.35x -> GEMM+ReLU 2.59x  (1 dispatch, diff 1.1e-04)
+n=1024 GEMM 2.11x -> GEMM+ReLU 1.91x  (1 dispatch, diff 2.2e-04)
+```
+Tried passing bias directly through GEMM in `Tensor.linear` so `linear+relu`
+would also be one dispatch — bias grads broke (8/10 model parity); reverted that
+part while keeping the (N,) or (1,N) bias shape acceptance. All gates green:
+48/48, 27/27, 25/25, 10/10, 79/79, ctest 2/2.
+
+## 2026-11-22 03:55 — PR #22: pinned-D2H A/B (negative) — reverted
 
 `VK_EXT_external_memory_host` **is present** on this GPU/driver, so I implemented
 aligned host allocations imported as `VkDeviceMemory` — the kernel writes directly
