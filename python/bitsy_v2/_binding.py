@@ -36,4 +36,6 @@ def load(build_dir: Path) -> C.CDLL:
   lib.rt_replay.argtypes=[C.c_void_p]
   lib.rt_replay_submit_only.argtypes=[C.c_void_p]
   lib.rt_replay_submit_async.argtypes=[C.c_void_p]
+  lib.rt_read_ptr.argtypes=[C.c_void_p,C.c_void_p,C.c_int]
+  lib.rt_read_ptr.restype=C.POINTER(C.c_float)
   return lib

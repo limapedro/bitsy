@@ -79,6 +79,11 @@ struct RtVk {
   VkDeviceMemory staging_mem;
   void* staging_map;
   VkDeviceSize staging_size;
+  /* zero-copy readback ring: HOST_CACHED buffers exposed directly to numpy */
+  VkBuffer rb_buf[RT_READBACK_SLOTS];
+  VkDeviceMemory rb_mem[RT_READBACK_SLOTS];
+  void* rb_map[RT_READBACK_SLOTS];
+  VkDeviceSize rb_size[RT_READBACK_SLOTS];
   VkCommandBuffer xfer_cmd;    /* persistent transfer command buffer */
   VkFence xfer_fence;
   int recording;
@@ -379,6 +384,10 @@ void rt_vk_shutdown(RT* c) {
   if (vk->staging) {
     vkUnmapMemory(vk->dev,vk->staging_mem);
     vkDestroyBuffer(vk->dev,vk->staging,NULL); vkFreeMemory(vk->dev,vk->staging_mem,NULL);
+  }
+  for (int i=0;i<RT_READBACK_SLOTS;++i) if (vk->rb_map[i]) {
+    vkUnmapMemory(vk->dev,vk->rb_mem[i]);
+    vkDestroyBuffer(vk->dev,vk->rb_buf[i],NULL); vkFreeMemory(vk->dev,vk->rb_mem[i],NULL);
   }
   if (vk->reduce_s1) vkDestroyPipeline(vk->dev,vk->reduce_s1,NULL);
   if (vk->reduce_part) { vkDestroyBuffer(vk->dev,vk->reduce_part,NULL); vkFreeMemory(vk->dev,vk->reduce_part_mem,NULL); }
@@ -795,6 +804,56 @@ void rt_vk_download_to(RT* c, RtBuf* b, float* out){
   }
 }
 
+/* Get a HOST_CACHED readback buffer of at least `size` bytes in the given slot. */
+static void* rb_get(RtVk* vk, int slot, VkDeviceSize size) {
+  if (slot<0 || slot>=RT_READBACK_SLOTS) slot=0;
+  if (vk->rb_map[slot] && size<=vk->rb_size[slot]) return vk->rb_map[slot];
+  if (vk->rb_map[slot]) {
+    vkUnmapMemory(vk->dev,vk->rb_mem[slot]);
+    vkDestroyBuffer(vk->dev,vk->rb_buf[slot],NULL);
+    vkFreeMemory(vk->dev,vk->rb_mem[slot],NULL);
+  }
+  VkBufferCreateInfo bci={.sType=VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,.size=size,
+    .usage=VK_BUFFER_USAGE_TRANSFER_SRC_BIT|VK_BUFFER_USAGE_TRANSFER_DST_BIT};
+  vkCreateBuffer(vk->dev,&bci,NULL,&vk->rb_buf[slot]);
+  VkMemoryRequirements req; vkGetBufferMemoryRequirements(vk->dev,vk->rb_buf[slot],&req);
+  uint32_t mt=mem_type(vk,req,VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT|VK_MEMORY_PROPERTY_HOST_CACHED_BIT);
+  VkMemoryAllocateInfo ai={.sType=VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,.allocationSize=req.size,.memoryTypeIndex=mt};
+  vkAllocateMemory(vk->dev,&ai,NULL,&vk->rb_mem[slot]);
+  vkBindBufferMemory(vk->dev,vk->rb_buf[slot],vk->rb_mem[slot],0);
+  vkMapMemory(vk->dev,vk->rb_mem[slot],0,req.size,0,&vk->rb_map[slot]);
+  vk->rb_size[slot]=req.size;
+  return vk->rb_map[slot];
+}
+
+/* Zero-copy: ensure t is on device, copy into readback slot, return CPU pointer. */
+const float* rt_vk_read_ptr(RT* c, RtBuf* b, int slot) {
+  RtVk* vk=c->vk; if(!vk||!vk->dev||!b) return NULL;
+  VkDeviceSize sz=sizeof(float)*(size_t)b->n;
+  void* dst=rb_get(vk,slot,sz);
+  rt_vk_wait_pending(vk);
+  if (b->cap_slot) {
+    RtCaptureSlot* sl=(RtCaptureSlot*)b->cap_slot;
+    if (sl->output_in_slot) {
+      VkDeviceSize s2=sz; if(s2>sl->out_size)s2=sl->out_size;
+      copy_buffer(vk,sl->out,vk->rb_buf[slot],s2);
+    } else if (b->vk) copy_buffer(vk,((RtVkBuf*)b->vk)->buf,vk->rb_buf[slot],sz);
+  } else if (b->vk) {
+    RtVkBuf* vb=(RtVkBuf*)b->vk;
+    if (vb->map) { /* already HOST_CACHED — return its own pointer */
+      VkMappedMemoryRange r={.sType=VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
+        .memory=vb->mem,.offset=0,.size=vb->size};
+      vkInvalidateMappedMemoryRanges(vk->dev,1,&r);
+      return (const float*)vb->map;
+    }
+    copy_buffer(vk,vb->buf,vk->rb_buf[slot],sz);
+  } else return (const float*)b->host;
+  VkMappedMemoryRange r={.sType=VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
+    .memory=vk->rb_mem[slot],.offset=0,.size=sz};
+  vkInvalidateMappedMemoryRanges(vk->dev,1,&r);
+  return (const float*)dst;
+}
+
 /* Copy a capture slot's DEVICE_LOCAL out buffer into dst host memory. */
 static void download_slot(RtVk* vk, RtCaptureSlot* sl, float* dst, size_t n) {
   VkDeviceSize sz = sizeof(float)*(size_t)n;
@@ -829,6 +888,7 @@ void rt_vk_submit_only(RT* c){ (void)c; }
 void rt_vk_submit_async(RT* c){ (void)c; }
 void rt_vk_download_outputs(RT* c){ (void)c; }
 void rt_vk_download_to(RT* c, RtBuf* b, float* out){ (void)c; (void)b; (void)out; }
+const float* rt_vk_read_ptr(RT* c, RtBuf* b, int slot){ (void)c; (void)slot; return b?(const float*)b->host:NULL; }
 void rt_vk_upload(RT* c, RtBuf* b, const float* d){ (void)c;(void)b;(void)d; }
 void rt_vk_download(RT* c, RtBuf* b){ (void)c;(void)b; }
 void rt_vk_download_lazy(RT* c, RtBuf* b){ (void)c;(void)b; }

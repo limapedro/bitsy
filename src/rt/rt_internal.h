@@ -107,6 +107,7 @@ void rt_vk_replay(RT*);
 void rt_vk_submit_only(RT*);
 void rt_vk_submit_async(RT*);
 void rt_vk_download_to(RT*, RtBuf*, float*);
+const float* rt_vk_read_ptr(RT*, RtBuf*, int);
 void rt_vk_download_outputs(RT*);
 void rt_vk_upload(RT*, RtBuf* b, const float* data);   /* refresh a leaf's device data */
 void rt_vk_download(RT*, RtBuf* b);                    /* copy device result back to b->host */

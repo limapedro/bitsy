@@ -14,6 +14,11 @@ from . import nn, optim, functional
 __all__ = ["Engine", "Tensor", "nn", "optim", "functional"]
 
 
+class _ZeroCopyArray(np.ndarray):
+  """numpy view of C-owned HOST_CACHED readback memory; keeps RT alive."""
+  pass
+
+
 class _RT:
   """Adapter exposing the methods Tensor expects, backed by ctypes."""
   def __init__(self, lib, device):
@@ -26,6 +31,7 @@ class _RT:
     # the same shape — callers needing a long-lived snapshot should .copy().
     self._read_pool = {}
     self._read_idx = {}
+    self._rb_slot = 0
   def __del__(self): self.lib.rt_destroy(self.ctx)
   def _raw_tensor(self, arr, requires_grad):
     h = self.lib.rt_from_host(self.ctx,
@@ -34,14 +40,17 @@ class _RT:
     return h
   tensor = _raw_tensor
   def get(self, h, shape):
-    key = tuple(shape)
-    pool = self._read_pool.setdefault(key, [])
-    idx = self._read_idx.get(key, 0)
-    while idx >= len(pool) and len(pool) < 32: pool.append(np.zeros(shape, dtype=np.float32))
-    out = pool[idx % len(pool)]
-    self._read_idx[key] = (idx + 1) % 32
-    self.lib.rt_to_host(h, out.ctypes.data_as(C.POINTER(C.c_float)))
-    return out
+    # Zero-copy: C copies device -> persistent HOST_CACHED ring buffer, and we
+    # wrap that memory directly as numpy (no second memcpy). The ring rotates
+    # so concurrently-held arrays do not alias; the view keeps RT alive.
+    n = 1
+    for d in shape: n *= d
+    if n == 0: return np.empty(shape, dtype=np.float32)
+    ptr = self.lib.rt_read_ptr(self.ctx, h, self._rb_slot)
+    self._rb_slot = (self._rb_slot + 1) % 32
+    arr = np.ctypeslib.as_array(ptr, shape=(n,)).reshape(shape).view(_ZeroCopyArray)
+    arr._rt = self
+    return arr
   def binary(self, name, a, b): return getattr(self.lib, f"rt_{name}")(self.ctx, a, b)
   def unary(self, name, a): return getattr(self.lib, f"rt_{name}")(self.ctx, a)
   def gemm(self, a, b, bias=None, ta=0, tb=0):
