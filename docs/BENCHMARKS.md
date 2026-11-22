@@ -58,6 +58,23 @@ this GPU — see FINDINGS_PR15).
 
 ---
 
+## 2026-11-22 23:55 — PR #65: max/min single-block variant measured, atomic path retained
+
+Tested a single-block-per-line max/min kernel (1024 threads, shared-memory
+tree reduction, **no atomics**) to remove both atomic contention and the second
+launch. Correctness diff 0.0 on 2-D and 1-D 1M inputs, but under the rotated
+stable harness it measured **2.20×** slower than PyTorch — one block reducing
+1M elements serially (1024 elements/thread) is worse than 128 blocks with one
+atomic each. Reverted the hook to the atomic path.
+
+Also reduced atomic count 1024→128 blocks in the retained path; rotated
+stable_bench now measures max around **1.23×** (was 1.55×) with sum ~1.0× and
+mean ~1.07×. All other pointwise ops remain 0.8–0.9× (faster).
+
+All gates green twice: v2 48/48, op 27/27, gradcheck 25/25, model 10/10,
+API 113/113, CTest 2/2. End-to-end 4-layer MLP 0.3556 vs 0.4567 ms/step
+(0.78×, 1.28× faster). Core 3,613 lines.
+
 ## 2026-11-22 23:35 — PR #64: add/mul anomaly resolved — it was a measurement-order artifact
 
 Reversing the case order in PR #63's stable harness flipped which ops looked

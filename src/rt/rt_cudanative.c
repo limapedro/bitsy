@@ -23,7 +23,7 @@ typedef int CUres; typedef void* CUctx; typedef void* CUstream;
 typedef void* CUmod; typedef void* CUfunc; typedef unsigned long long CUdptr;
 struct CN {
   void* lib; CUctx ctx; CUstream stream; CUmod mod; CUfunc fn;
-  CUmod mod3; CUfunc f_sum; CUfunc f_max1, f_max2, f_max_atomic;
+  CUmod mod3; CUfunc f_sum; CUfunc f_max1, f_max2, f_max_atomic, f_max_single;
   CUmod mod4; CUfunc f_gemm_tiled;
   CUmod mod5; CUfunc f_softmax, f_layernorm;
   CUdptr params; void* host; size_t host_cap;
@@ -77,6 +77,7 @@ static struct CN* cn_init(void){
     s->cuModuleGetFunction(&s->f_max1,s->mod3,"bmax1");
     s->cuModuleGetFunction(&s->f_max2,s->mod3,"bmax2");
     s->cuModuleGetFunction(&s->f_max_atomic,s->mod3,"bmax_atomic");
+    s->cuModuleGetFunction(&s->f_max_single,s->mod3,"bmax_single");
   }
   if(s->cuModuleLoadData(&s->mod4,rt_gemm_cuda_ptx)==0)
     s->cuModuleGetFunction(&s->f_gemm_tiled,s->mod4,"bgemm_tiled");
@@ -173,6 +174,15 @@ int rt_cn_reduce_fast(void* in,void* out,int outer,int stride,int inner,int kind
   if(s->cuLaunchKernel(s->f_sum,(unsigned)lines,(unsigned)nblocks,1,256,1,1,
       0,s->stream,args7,NULL)!=0) return -4;
   (void)args;
+  return 0;
+}
+int rt_cn_reduce_single(void* in,void* out,int outer,int stride,int inner,int kind){
+  struct CN* s=cn_init(); if(!s||!s->f_max_single||!in||!out) return -1;
+  int lines=outer*inner;
+  CUdptr i=(CUdptr)(size_t)in,o=(CUdptr)(size_t)out;
+  void* args[6]={(void*)&i,(void*)&o,(void*)&outer,(void*)&stride,(void*)&inner,(void*)&kind};
+  if(s->cuLaunchKernel(s->f_max_single,(unsigned)lines,1,1,1024,1,1,
+      0,s->stream,args,NULL)!=0) return -2;
   return 0;
 }
 int rt_cn_reduce_max_atomic(void* in,void* out,int outer,int stride,int inner,int kind){
