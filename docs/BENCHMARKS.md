@@ -58,6 +58,24 @@ this GPU — see FINDINGS_PR15).
 
 ---
 
+## 2026-11-22 21:20 — PR #60: CUDA softmax enabled — pinned-readback alias fixed
+
+Diagnosed the PR #59 regression that withheld CUDA softmax: the zero-copy
+numpy views returned by `rt_read_ptr` live in a rotating set of pinned host
+buffers, and the old set of **4** slots aliased live views from earlier cases
+in the shared-engine v2 runner. Increasing both the pinned-host ring and the
+CUDA output ring to **256** slots made the cross_entropy/log_softmax backward
+gates pass repeatedly (3/3 rounds). CUDA softmax is now enabled by default.
+
+Also ported a two-stage atomic-free max/min CUDA kernel and measured it:
+0.29 ms vs PyTorch 0.03–0.05 ms (2 launches + D2H sync) — **slower than the
+Vulkan path**, so its hook is disabled and max/min stay on Vulkan.
+
+Measurements (default path): softmax 0.047 vs 0.045 ms torch (parity),
+end-to-end 4-layer MLP 0.3724 vs 0.5062 ms/step (0.74×, 1.35× faster).
+All gates green across 3 repeated rounds: v2 48/48, op 27/27, gradcheck 25/25,
+model 10/10, API 113/113, CTest 2/2. Core 3,564 lines.
+
 ## 2026-11-22 20:45 — PR #59: CUDA LayerNorm ported; CUDA softmax measured and withheld
 
 Ported LayerNorm to a CUDA kernel (`norm_cuda.cu`, one block per row, shared

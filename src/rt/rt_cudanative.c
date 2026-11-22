@@ -23,12 +23,13 @@ typedef int CUres; typedef void* CUctx; typedef void* CUstream;
 typedef void* CUmod; typedef void* CUfunc; typedef unsigned long long CUdptr;
 struct CN {
   void* lib; CUctx ctx; CUstream stream; CUmod mod; CUfunc fn;
-  CUmod mod3; CUfunc f_sum;
+  CUmod mod3; CUfunc f_sum; CUfunc f_max1, f_max2;
   CUmod mod4; CUfunc f_gemm_tiled;
   CUmod mod5; CUfunc f_softmax, f_layernorm;
   CUdptr params; void* host; size_t host_cap;
-  void* hostn[4]; int hidx;
+  void* hostn[256]; int hidx;
   CUdptr out_ring[256]; size_t out_cap[256]; int oidx;
+  CUdptr scratch; size_t scratch_cap;
   int dbg;
   CUres (*cuInit)(unsigned); CUres (*cuCtxGetCurrent)(CUctx*);
   CUres (*cuCtxCreate)(CUctx*,unsigned,int); CUres (*cuDeviceGet)(int*,int);
@@ -71,8 +72,11 @@ static struct CN* cn_init(void){
   if(s->cuStreamCreate(&s->stream,1)!=0){ DBG("stream failed"); goto fail; }
   if(s->cuModuleLoadData(&s->mod,rt_fused_cuda_ptx)!=0){ DBG("module failed"); goto fail; }
   if(s->cuModuleGetFunction(&s->fn,s->mod,"bfused")!=0){ DBG("function failed"); goto fail; }
-  if(s->cuModuleLoadData(&s->mod3,rt_reduce_atomic_ptx)==0)
+  if(s->cuModuleLoadData(&s->mod3,rt_reduce_atomic_ptx)==0) {
     s->cuModuleGetFunction(&s->f_sum,s->mod3,"breduce_sum");
+    s->cuModuleGetFunction(&s->f_max1,s->mod3,"bmax1");
+    s->cuModuleGetFunction(&s->f_max2,s->mod3,"bmax2");
+  }
   if(s->cuModuleLoadData(&s->mod4,rt_gemm_cuda_ptx)==0)
     s->cuModuleGetFunction(&s->f_gemm_tiled,s->mod4,"bgemm_tiled");
   if(s->cuModuleLoadData(&s->mod5,rt_norm_cuda_ptx)==0) {
@@ -81,7 +85,7 @@ static struct CN* cn_init(void){
   }
   s->params=0; s->host_cap=64u<<20;
   if(s->cuMemAllocHost(&s->host,s->host_cap)!=0){ DBG("host failed"); goto fail; }
-  for(int i=0;i<4;++i) s->hostn[i]=(char*)s->host+(size_t)(s->host_cap/4)*i;
+  for(int i=0;i<256;++i) s->hostn[i]=(char*)s->host+(size_t)(s->host_cap/256)*i;
   DBG("ready"); G=s; return s;
 fail:
   LFREE(lib); free(s); return NULL;
@@ -97,6 +101,14 @@ int rt_cn_upload(void* dptr,const float* host,size_t bytes){
   return s->cuMemcpyHtoDAsync((CUdptr)(size_t)dptr,host,bytes,s->stream);
 }
 
+void* rt_cn_scratch(size_t bytes){
+  struct CN* s=cn_init(); if(!s) return NULL;
+  if(bytes>s->scratch_cap){
+    if(s->cuMemAlloc(&s->scratch,bytes)!=0) return NULL;
+    s->scratch_cap=bytes;
+  }
+  return (void*)(size_t)s->scratch;
+}
 void* rt_cn_out(size_t bytes){
   struct CN* s=cn_init(); if(!s) return NULL;
   int i=s->oidx&255; s->oidx++;
@@ -126,7 +138,7 @@ int rt_cn_read(const void* dptr, float* host, size_t bytes){
 }
 const float* rt_cn_ptr(const void* dptr,size_t bytes){
   struct CN* s=G; if(!s||!dptr||bytes>s->host_cap/4) return NULL;
-  void* h=s->hostn[s->hidx&3]; s->hidx++;
+  void* h=s->hostn[s->hidx&255]; s->hidx++;
   if(s->dbg) fprintf(stderr,"[cn] ptr dptr=%p host=%p bytes=%zu\n",dptr,h,bytes);
   if(s->cuMemcpyDtoHAsync(h,(CUdptr)(size_t)dptr,bytes,s->stream)!=0) return NULL;
   if(s->cuStreamSynchronize(s->stream)!=0) return NULL;
@@ -150,6 +162,16 @@ int rt_cn_reduce_fast(void* in,void* out,int outer,int stride,int inner,int kind
   if(s->cuLaunchKernel(s->f_sum,(unsigned)lines,(unsigned)nblocks,1,256,1,1,
       0,s->stream,args7,NULL)!=0) return -4;
   (void)args;
+  return 0;
+}
+int rt_cn_reduce_max(void* in,void* part,void* out,int outer,int stride,int inner,int kind){
+  struct CN* s=cn_init(); if(!s||!s->f_max1||!s->f_max2||!in||!part||!out) return -1;
+  int lines=outer*inner, np=64;
+  CUdptr i=(CUdptr)(size_t)in,p=(CUdptr)(size_t)part,o=(CUdptr)(size_t)out;
+  void* a1[7]={(void*)&i,(void*)&p,(void*)&outer,(void*)&stride,(void*)&inner,(void*)&kind,(void*)&np};
+  if(s->cuLaunchKernel(s->f_max1,(unsigned)lines,(unsigned)np,1,256,1,1,0,s->stream,a1,NULL)!=0) return -2;
+  void* a2[4]={(void*)&p,(void*)&o,(void*)&lines,(void*)&np};
+  if(s->cuLaunchKernel(s->f_max2,(unsigned)((lines+255)/256),1,1,256,1,1,0,s->stream,a2,NULL)!=0) return -3;
   return 0;
 }
 int rt_cn_gemm_fast(void* A,void* B,void* bias,void* C,int M,int N,int K,int flags){
