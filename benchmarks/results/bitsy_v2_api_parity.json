@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-22T05:28:28.090272+00:00",
+  "generated_at": "2026-11-22T05:36:52.345464+00:00",
   "environment": {
     "torch": "2.11.0+cu126",
     "gpu": "NVIDIA GeForce GTX 1660 SUPER"
@@ -117,13 +117,13 @@
     },
     {
       "name": "var",
-      "max_abs_diff": 1.1920928955078125e-07,
+      "max_abs_diff": 2.9802322387695312e-08,
       "tol": 0.0001,
       "passed": true
     },
     {
       "name": "std",
-      "max_abs_diff": 1.1920928955078125e-07,
+      "max_abs_diff": 0.0,
       "tol": 0.0001,
       "passed": true
     },
@@ -135,7 +135,7 @@
     },
     {
       "name": "norm2",
-      "max_abs_diff": 1.9073486328125e-06,
+      "max_abs_diff": 0.0,
       "tol": 0.0001,
       "passed": true
     },
@@ -243,13 +243,13 @@
     },
     {
       "name": "sum_all",
-      "max_abs_diff": 1.52587890625e-05,
+      "max_abs_diff": 0.0,
       "tol": 0.0001,
       "passed": true
     },
     {
       "name": "mean_all",
-      "max_abs_diff": 1.1920928955078125e-07,
+      "max_abs_diff": 0.0,
       "tol": 0.0001,
       "passed": true
     },
@@ -285,7 +285,7 @@
     },
     {
       "name": "l1_loss_fwd",
-      "max_abs_diff": 2.384185791015625e-07,
+      "max_abs_diff": 0.0,
       "tol": 0.0001,
       "passed": true
     },
@@ -297,7 +297,7 @@
     },
     {
       "name": "smooth_l1_loss_fwd",
-      "max_abs_diff": 1.7881393432617188e-07,
+      "max_abs_diff": 5.960464477539063e-08,
       "tol": 0.0001,
       "passed": true
     },
@@ -309,7 +309,7 @@
     },
     {
       "name": "bce_loss_fwd",
-      "max_abs_diff": 5.960464477539063e-08,
+      "max_abs_diff": 0.0,
       "tol": 0.0001,
       "passed": true
     },
@@ -333,13 +333,13 @@
     },
     {
       "name": "nll_loss_fwd",
-      "max_abs_diff": 0.0,
+      "max_abs_diff": 1.1920928955078125e-07,
       "tol": 0.0001,
       "passed": true
     },
     {
       "name": "nll_loss_grad",
-      "max_abs_diff": 3.725290298461914e-09,
+      "max_abs_diff": 4.6566128730773926e-09,
       "tol": 0.001,
       "passed": true
     },
@@ -459,13 +459,13 @@
     },
     {
       "name": "poisson_nll",
-      "max_abs_diff": 5.960464477539062e-07,
+      "max_abs_diff": 0.0,
       "tol": 0.0001,
       "passed": true
     },
     {
       "name": "kl_div",
-      "max_abs_diff": 8.940696716308594e-08,
+      "max_abs_diff": 0.0,
       "tol": 0.0001,
       "passed": true
     },

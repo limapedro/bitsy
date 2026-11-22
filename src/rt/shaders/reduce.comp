@@ -2,7 +2,11 @@
 #extension GL_EXT_buffer_reference2 : require
 #extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
 /* Bitsy 0.2 generic reduction along one axis. kind: 0=sum 1=mean 2=max 3=min.
- * Each invocation reduces one (outer, inner) line over the reduction axis. */
+ * One WORKGROUP per (outer,inner) output line; all 256 invocations cooperate:
+ * each thread accumulates a strided slice of the reduction axis, then a shared-
+ * memory tree reduction combines them. Previously one INVOCATION handled the
+ * whole line -> a 1M 1-D reduce ran single-threaded (~800x slower than torch).
+ */
 layout(local_size_x = 256) in;
 layout(buffer_reference, std430, buffer_reference_align = 4) readonly buffer F32 {
   float v[];
@@ -12,20 +16,36 @@ layout(std430, binding = 0) readonly buffer Params { int param[]; };
 uint64_t paddr(int base) {
   return (uint64_t(uint(param[base])) | (uint64_t(uint(param[base + 1])) << 32));
 }
+
+shared float part[256];
+
+float combine(int kind, float a, float b) {
+  if (kind == 2) return max(a, b);
+  if (kind == 3) return min(a, b);
+  return a + b;
+}
+
 void main() {
   int outer = param[0], stride = param[1], inner = param[2], kind = param[3];
   F32 In = F32(paddr(4)), Out = F32(paddr(6));
-  int idx = int(gl_GlobalInvocationID.x);
-  int total = outer * inner;
-  if (idx >= total) return;
-  int o = idx / inner, t = idx % inner;
-  float s = kind == 2 ? -1.0/0.0 : (kind == 3 ? 1.0/0.0 : 0.0);
-  for (int k = 0; k < stride; ++k) {
+  int line = int(gl_WorkGroupID.x);
+  int tid = int(gl_LocalInvocationID.x);
+  int o = line / inner, t = line % inner;
+
+  float init = (kind == 2) ? -1.0/0.0 : ((kind == 3) ? 1.0/0.0 : 0.0);
+  float s = init;
+  for (int k = tid; k < stride; k += 256) {
     float v = In.v[(o * stride + k) * inner + t];
-    if (kind == 2) s = max(s, v);
-    else if (kind == 3) s = min(s, v);
-    else s += v;
+    s = combine(kind, s, v);
   }
-  if (kind == 1) s /= float(stride);
-  Out.v[idx] = s;
+  part[tid] = s;
+  barrier();
+  for (int off = 128; off > 0; off >>= 1) {
+    if (tid < off) part[tid] = combine(kind, part[tid], part[tid + off]);
+    barrier();
+  }
+  if (tid == 0) {
+    if (kind == 1) part[0] /= float(stride);
+    Out.v[line] = part[0];
+  }
 }
