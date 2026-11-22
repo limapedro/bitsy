@@ -11,7 +11,8 @@ from pathlib import Path
 from .tensor import Tensor
 from . import nn, optim, functional
 
-__all__ = ["Engine", "Tensor", "nn", "optim", "functional"]
+from .compiled import Compiled, CompiledMany
+__all__ = ["Engine", "Tensor", "nn", "optim", "functional", "Compiled", "CompiledMany"]
 
 
 class _ZeroCopyArray(np.ndarray):
@@ -105,6 +106,45 @@ class Engine:
   def zero_grad(self, t):
     h = t.h if hasattr(t,"h") else t
     self.lib.rt_zero_grad(h)
+  def compile(self, fn, shapes):
+    """Capture ``fn`` (a pure callable over tensors) into a replayable object.
+
+    ``shapes`` gives the input shapes; ``fn`` is run once inside a capture so
+    the returned Compiled replays the whole graph in one submit per call, with
+    fresh inputs written through CPU-mapped buffers.
+    """
+    inputs = [self.tensor(np.zeros(tuple(s), np.float32)) for s in shapes]
+    # Map inputs BEFORE capture: the graph records their device address, so a
+    # later remap would leave the captured dispatch reading the old buffer.
+    ptrs = [self.map_input(t) for t in inputs]
+    self.capture_begin()
+    out = fn(*inputs)
+    outs = out if isinstance(out, (tuple, list)) else (out,)
+    for t in outs:
+      if hasattr(t, "realize"): t.realize()
+    self.capture_end()
+    return Compiled(self, fn, inputs, outs, ptrs)
+
+  def compile_many(self, fn, shapes, K, zero_grads=None):
+    """Capture K graphs with distinct mapped inputs; one call runs all K in a
+    single submit. Returns a callable taking K input batches (the amortized
+    captured path as a normal Python API)."""
+    inputs, ptrs, outs = [], [], []
+    for gi in range(K):
+      ins = [self.tensor(np.zeros(tuple(s), np.float32)) for s in shapes]
+      ps = [self.map_input(t) for t in ins]
+      self.stream_begin(gi)
+      out = fn(*ins)
+      o = out if isinstance(out, (tuple, list)) else (out,)
+      for t in o:
+        if hasattr(t, "realize"): t.realize()
+      self.stream_end(gi)
+      for leaf in (zero_grads or []):
+        if hasattr(leaf, "h"):
+          self.zero_grad(leaf)
+      inputs.append(ins); ptrs.append(ps); outs.append(o)
+    return CompiledMany(self, fn, inputs, outs, ptrs)
+
   def stream_begin(self, idx): self.lib.rt_stream_begin(self.rt.ctx, idx)
   def stream_end(self, idx): self.lib.rt_stream_end(self.rt.ctx, idx)
   def stream_submit(self, n): self.lib.rt_stream_submit(self.rt.ctx, n)

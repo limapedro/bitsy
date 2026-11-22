@@ -368,6 +368,33 @@ def run(cfg=CFG):
   for _ in range(12): rwant=rwant*np.float32(1.0001)+np.float32(0.0001)
   rec_fwd("eager_ring_wrap", md(rgot,rwant))
 
+  # ---- PR #40: compiled callable API (capture as default path) ----
+  cw1=rng.standard_normal((12,16)).astype(np.float32)
+  cw2=rng.standard_normal((1,12)).astype(np.float32)
+  cdata=[rng.standard_normal((8,16)).astype(np.float32) for _ in range(2)]
+  ce=bv.Engine(device=bv.Engine.VULKAN)
+  cA=ce.tensor(cw1,requires_grad=True); cB=ce.tensor(cw2,requires_grad=True)
+  def cfn(X):
+    y=bv.functional.mse_loss(X.matmul(cA.T()).relu().matmul(cB.T()),cT)
+    y.backward(params=[cA,cB])
+    ce.sgd_update(cA.h,ce.grad_tensor(cA),slr,0.0)
+    ce.sgd_update(cB.h,ce.grad_tensor(cB),slr,0.0)
+    return y
+  cT=ce.tensor(np.zeros((8,1),np.float32))
+  ccf=ce.compile_many(cfn,[(8,16)],2,zero_grads=[cA,cB])
+  ce.upload(cA,cw1); ce.upload(cB,cw2)
+  ccf([[cdata[0]],[cdata[1]]])
+  cga=ce.get(cA.h,(12,16)); cgb=ce.get(cB.h,(1,12))
+  ctx=[torch.from_numpy(d) for d in cdata]
+  ct1=torch.from_numpy(cw1).requires_grad_(True); ct2=torch.from_numpy(cw2).requires_grad_(True)
+  copt=torch.optim.SGD([ct1,ct2],lr=slr)
+  for i in range(2):
+    copt.zero_grad()
+    cl=torch.nn.functional.mse_loss(torch.relu(ctx[i]@ct1.T)@ct2.T,torch.zeros((8,1)))
+    cl.backward(); copt.step()
+  rec_grad("compiled_api_w1", md(cga,ct1.detach().numpy()))
+  rec_grad("compiled_api_w2", md(cgb,ct2.detach().numpy()))
+
   passed = sum(r["passed"] for r in results)
   report = {
     "generated_at":datetime.now(timezone.utc).isoformat(),

@@ -58,6 +58,35 @@ this GPU — see FINDINGS_PR15).
 
 ---
 
+## 2026-11-22 10:00 — PR #40: compiled-callable API — captured replay as the default path
+
+Added `Engine.compile(fn, shapes)` and `Engine.compile_many(fn, shapes, K,
+zero_grads)` (pure Python, `python/bitsy_v2/compiled.py`). A compiled callable
+runs one submit (or K captured graphs in one submit) with fresh inputs written
+through CPU-mapped buffers, making the amortized/captured execution path a
+normal API instead of a benchmark-only trick. `CompiledMany.__call__` returns
+device tensors by default (PyTorch-style async), with `read=True` for host data.
+Inputs must be mapped BEFORE capture so the recorded device address is the mapped
+one; `zero_grads` clears leaf grads between captured graphs (autograd otherwise
+accumulates them across graphs).
+
+New `benchmarks/compact/compiled_bench.py` — full fwd+bwd+SGD steps through the
+high-level API (batch 64, 256→128→1, lr 1e-4, K=6, N=600 fresh batches):
+```
+[PASS] final-weight diff w1=2.38e-07, w2=1.79e-07
+N=600 K=6  compiled 0.2776 | torch 0.3121 ms/step | gap 0.89x  (1.1x FASTER)
+```
+Added `compiled_api_w1/w2` parity gates (API 99 → **101 cases**).
+
+Honest scope: forward-only through the same API is 4.7× slower than PyTorch's
+async launches (one blocking submit per batch); the win requires full training
+steps where PyTorch's optimizer/zero_grad overhead is counted. Fused GEMM
+epilogues and faster single-op reductions were investigated but not shipped:
+the two-stage reduce is already sound and its gap is sync-dominated, not kernel.
+
+Gates: v2 48/48, op 27/27, gradcheck 25/25, model 10/10, API **101/101**, ctest 2/2.
+Core 3,128 lines.
+
 ## 2026-11-22 09:25 — PR #39: per-op ring — 24% off single-call wall, no fence stall on re-record
 
 PR #38 measured the single-call bottleneck: `vkWaitForFences` ~0.44 ms vs
