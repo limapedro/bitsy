@@ -701,7 +701,9 @@ static void realize_node(RT* c, RTTensor* t) {
       for (int i=0;i<t->axis;++i) outer*=(int)ib->dims[i];
       for (int i=t->axis+1;i<ib->ndim;++i) inner*=(int)ib->dims[i];
       void* od=rt_cn_out(sizeof(float)*(size_t)out->n);
-      if (od && rt_cn_reduce_fast(cn_buf(ib),od,outer,stride,inner,kind)==0) {
+      if (od && rt_cn_reduce_sum2(cn_buf(ib),
+               rt_cn_scratch(sizeof(float)*(size_t)(outer*inner)*64),
+               od,outer,stride,inner,kind)==0) {
         out->cn_dptr=od; out->dirty=1; t->buf=out; c->dispatch_count++; return;
       }
     }

@@ -24,6 +24,7 @@ typedef void* CUmod; typedef void* CUfunc; typedef unsigned long long CUdptr;
 struct CN {
   void* lib; CUctx ctx; CUstream stream; CUmod mod; CUfunc fn;
   CUmod mod3; CUfunc f_sum; CUfunc f_max1, f_max2, f_max_atomic, f_max_single;
+  CUfunc f_sum1, f_sum2;
   CUmod mod4; CUfunc f_gemm_tiled;
   CUmod mod5; CUfunc f_softmax, f_layernorm;
   CUdptr params; void* host; size_t host_cap;
@@ -78,6 +79,8 @@ static struct CN* cn_init(void){
     s->cuModuleGetFunction(&s->f_max2,s->mod3,"bmax2");
     s->cuModuleGetFunction(&s->f_max_atomic,s->mod3,"bmax_atomic");
     s->cuModuleGetFunction(&s->f_max_single,s->mod3,"bmax_single");
+    s->cuModuleGetFunction(&s->f_sum1,s->mod3,"bsum1");
+    s->cuModuleGetFunction(&s->f_sum2,s->mod3,"bsum2");
   }
   if(s->cuModuleLoadData(&s->mod4,rt_gemm_cuda_ptx)==0)
     s->cuModuleGetFunction(&s->f_gemm_tiled,s->mod4,"bgemm_tiled");
@@ -174,6 +177,21 @@ int rt_cn_reduce_fast(void* in,void* out,int outer,int stride,int inner,int kind
   if(s->cuLaunchKernel(s->f_sum,(unsigned)lines,(unsigned)nblocks,1,256,1,1,
       0,s->stream,args7,NULL)!=0) return -4;
   (void)args;
+  return 0;
+}
+int rt_cn_reduce_sum2(void* in,void* part,void* out,int outer,int stride,int inner,int kind){
+  struct CN* s=cn_init(); if(!s||!s->f_sum1||!s->f_sum2||!in||!part||!out) return -1;
+  int lines=outer*inner, np=64;
+  CUdptr i=(CUdptr)(size_t)in,p=(CUdptr)(size_t)part,o=(CUdptr)(size_t)out;
+  void* a1[5]={(void*)&i,(void*)&p,(void*)&outer,(void*)&stride,(void*)&inner};
+  void* a1b[6]={(void*)&i,(void*)&p,(void*)&outer,(void*)&stride,(void*)&inner,(void*)&np};
+  if(s->cuLaunchKernel(s->f_sum1,(unsigned)lines,(unsigned)np,1,256,1,1,
+      0,s->stream,a1b,NULL)!=0) return -2;
+  float scale=(kind==1)?(1.f/(float)stride):1.f;
+  void* a2[5]={(void*)&p,(void*)&o,(void*)&lines,(void*)&np,(void*)&scale};
+  if(s->cuLaunchKernel(s->f_sum2,(unsigned)((lines+255)/256),1,1,256,1,1,
+      0,s->stream,a2,NULL)!=0) return -3;
+  (void)a1;
   return 0;
 }
 int rt_cn_reduce_single(void* in,void* out,int outer,int stride,int inner,int kind){
