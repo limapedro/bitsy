@@ -1,9 +1,8 @@
-"""Count lines in the C+Vulkan core. Enforces the 4096-line budget on the
-v0.2 compact runtime (src/rt + include/bitsy_rt), reporting the legacy core
-separately as a reference that will be removed when the rewrite replaces it.
+"""Count lines in the C+Vulkan core and enforce the 4096-line budget.
 
-Prints per-file tables and totals for both; exits non-zero if the COMPACT core
-exceeds the budget. Dataclass config, no argparse.
+After the PR #11 legacy cutover there is a single runtime: `src/rt` +
+`include/bitsy_rt`. The old 5,710-line reference core was deleted; this tool
+no longer reports a separate legacy figure. Dataclass config, no argparse.
 """
 
 from __future__ import annotations
@@ -50,19 +49,14 @@ def show(title:str, rows:list[tuple[int, Path]]) -> int:
 
 
 def run(cfg:CountConfig = CountConfig()) -> int:
-  compact = collect((ROOT / "src" / "rt", ROOT / "include" / "bitsy_rt"))
-  legacy = collect((ROOT / "src", ROOT / "include"))
-  # exclude the compact runtime from the legacy figure
-  legacy = [(n, p) for n, p in legacy if not (str(p).startswith("src\\rt") or str(p).startswith("src/rt") or "bitsy_rt" in str(p))]
-  c_total = show("v0.2 COMPACT core (budget-enforced)", compact)
-  l_total = show("legacy core (reference, removed at cutover)", legacy)
-  print(f"\ncompact={c_total} (budget {cfg.budget}), legacy reference={l_total}")
-  if c_total > cfg.budget:
-    print(f"OVER BUDGET by {c_total - cfg.budget} lines.")
+  core = collect((ROOT / "src" / "rt", ROOT / "include" / "bitsy_rt"))
+  total = show("v0.2 C+Vulkan core (budget-enforced)", core)
+  print(f"\ncompact core={total} (budget {cfg.budget})")
+  if total > cfg.budget:
+    print(f"OVER BUDGET by {total - cfg.budget} lines.")
     return 1 if cfg.fail_over_budget else 0
-  print(f"WITHIN BUDGET ({cfg.budget - c_total} lines spare).")
+  print(f"WITHIN BUDGET ({cfg.budget - total} lines spare).")
   return 0
-
 
 if __name__ == "__main__":
   sys.exit(run())

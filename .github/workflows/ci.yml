@@ -17,8 +17,8 @@ jobs:
       - uses: ilammy/msvc-dev-cmd@v1
       - name: Install Ninja
         run: python -m pip install ninja
-      - name: Configure
-        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DBT_BUILD_TESTS=ON
+      - name: Configure (compact v0.2 runtime)
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DBT_BUILD_TESTS=ON -DBT_BUILD_COMPACT=ON
       - name: Build
         run: cmake --build build
       - name: C unit tests
@@ -27,16 +27,14 @@ jobs:
         run: |
           python -m pip install numpy
           python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
-      - name: Parity harness (isolated ops + gradient-flow gate)
-        run: python tests/parity/run.py
+      - name: v0.2 parity gate (48 cases, bitsy_v2 over compact runtime)
+        run: python tests/parity/v2_runner.py
       - name: Upload parity report
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: parity-report-windows
-          path: |
-            tests/parity/reports/latest.json
-            tests/parity/reports/grad_flow.json
+          path: tests/parity/reports/v2_latest.json
 
   linux:
     name: Linux (gcc + Ninja, software Vulkan available)
@@ -50,26 +48,21 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y cmake ninja-build mesa-vulkan-drivers
-      - name: Configure
-        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DBT_BUILD_TESTS=ON
+      - name: Configure (compact v0.2 runtime)
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DBT_BUILD_TESTS=ON -DBT_BUILD_COMPACT=ON
       - name: Build
         run: cmake --build build
       - name: C unit tests
         run: ctest --test-dir build --output-on-failure
-      - name: Confirm a software Vulkan ICD is present
-        run: |
-          if command -v vulkaninfo >/dev/null; then vulkaninfo --summary; else echo "vulkaninfo not installed; lavapipe present for future Vulkan CI"; fi
       - name: Install PyTorch (CPU) and NumPy
         run: |
           python -m pip install numpy
           python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
-      - name: Parity harness (isolated ops + gradient-flow gate)
-        run: python tests/parity/run.py
+      - name: v0.2 parity gate (48 cases, bitsy_v2 over compact runtime)
+        run: python tests/parity/v2_runner.py
       - name: Upload parity report
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: parity-report-linux
-          path: |
-            tests/parity/reports/latest.json
-            tests/parity/reports/grad_flow.json
+          path: tests/parity/reports/v2_latest.json
