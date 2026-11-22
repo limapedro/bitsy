@@ -116,6 +116,13 @@ RT_API void rt_replay(RT*);
 RT_API void rt_replay_submit_only(RT*);  /* submit + wait, skip output download (profiling) */
 RT_API void rt_replay_submit_async(RT*); /* submit without wait; read waits automatically */
 
+/* Zero-copy readback: returns a pointer to a persistent HOST_CACHED buffer
+ * holding t's data (downloads if dirty). Valid for N_READBACK_SLOT consecutive
+ * calls; each call rotates to a distinct buffer. The pointer stays valid until
+ * the RT context is destroyed. */
+#define RT_READBACK_SLOTS 32
+RT_API const float* rt_read_ptr(RT*, RTTensor*, int slot);
+
 /* Version */
 RT_API const char* rt_version(void);
 

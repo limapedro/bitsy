@@ -58,7 +58,31 @@ this GPU — see FINDINGS_PR15).
 
 ---
 
-## 2026-11-22 03:18 — PR #20 (in progress): HOST_CACHED tiny outputs (reduce 8× → 5×)
+## 2026-11-22 03:35 — PR #21 (in progress): zero-copy readback (loop 0.86× → 0.6×)
+
+**Profile**: after PR #20 the remaining per-call cost was the staging→numpy
+memcpy (~0.3 ms) plus the extra fence submit that produced it.
+
+**Fix**: `rt_read_ptr()` returns a pointer to a persistent HOST_CACHED readback
+ring (32 slots) instead of copying into a fresh numpy array. Python wraps it
+with `np.ctypeslib.as_array` into an ndarray subclass that keeps the RT engine
+alive. Each call rotates slots so concurrently-held arrays don't alias.
+`rt_vk_read_ptr` handles DEVICE_LOCAL outputs (staging copy) and HOST_CACHED
+outputs (return mapped pointer directly).
+
+**Reverted experiment**: combining kernel+download copy into one command buffer
+with a per-output HOST_CACHED buffer regressed the loop 0.65× → 0.94× (extra
+buffer allocation overhead); reverted, kept the ring design.
+
+```
+loop 10 steps:  0.86x -> 0.56-0.67x (bitsy 33-44% FASTER than torch)
+fused chain:    1.49x -> 1.01-1.44x (varies with clock)
+elementwise:    1.7-2.6x -> 1.2-2.4x (relu ~1.2-1.6x)
+reductions:     4-7.6x -> ~4.4-5.9x
+```
+All gates green. Core 2,212 lines.
+
+## 2026-11-22 03:18 — PR #20: HOST_CACHED tiny outputs (reduce 8× → 5×)
 
 A/B measured with `BT_HOSTOUT` flag before making it automatic:
 - HOST_CACHED output buffer: kernel writes straight to CPU-visible RAM, no
@@ -143,10 +167,10 @@ Gap 194× → 3.5×.
 
 ---
 
-## Honest status (updated 2026-11-22 03:18)
-- **Fastest path**: capture/replay with async submit beats PyTorch on the loop
-  (0.81×). Single-call elementwise 1.6–2.3× off (down from 4–5×), fused chain
-  1.7×. GEMM 2.3×. Reductions 8–10× (down from ~800×).
+## Honest status (updated 2026-11-22 03:35)
+- **Fastest path**: capture/replay + zero-copy readback beats PyTorch on the
+  loop by 33–44% (0.56–0.67×). Single-call fused chain ~1.0–1.4×, elementwise
+  1.2–2.4×, GEMM 2.4×, reductions 4–6×. Still no universal parity claim.
 - **No universal parity claim**: the gap is closed only on the loop workload.
 - Clock not pinned; spread in JSON. GEMM tensor-core path blocked on this GPU
   (no `VK_KHR_cooperative_matrix`) — needs different hardware or a decision.

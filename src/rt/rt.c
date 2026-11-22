@@ -731,6 +731,14 @@ void rt_backward(RT* c, RTTensor* loss) {
 }
 RTTensor* rt_grad(const RTTensor* t) { return t->grad; }
 
+const float* rt_read_ptr(RT* c, RTTensor* t, int slot) {
+  if (!t) return NULL;
+  if (!t->buf) rt_realize(c, t);
+  if (!t->buf) return NULL;
+  if (c->vk) return rt_vk_read_ptr(c, t->buf, slot);
+  return (const float*)t->buf->host;
+}
+
 /* ---------- capture / replay ---------- */
 
 void rt_upload(RT* c, RTTensor* t, const float* data) {
