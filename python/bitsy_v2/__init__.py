@@ -64,6 +64,9 @@ class _RT:
     return self.lib.rt_reshape(self.ctx, a, len(shape), (C.c_int64*len(shape))(*shape))
   def backward(self, loss): self.lib.rt_backward(self.ctx, loss)
   def grad(self, t, shape): return self.get(self.lib.rt_grad(t), shape)
+  def grad_refresh(self, t, shape):
+    """Re-read a leaf's gradient from device after a graph replay."""
+    return self.get(self.lib.rt_grad(t), shape).reshape(shape)
 
 
 class Engine:
