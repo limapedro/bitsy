@@ -58,6 +58,24 @@ this GPU — see FINDINGS_PR15).
 
 ---
 
+## 2026-11-22 17:40 — PR #53: CUDA context-order penalty investigation (primary context tested)
+
+Tried to remove the ~0.4 ms penalty seen when bitsy creates the CUDA context
+before PyTorch, so the dual-buffer fast path could be enabled by default:
+1. Replace `cuCtxCreate` with `cuDevicePrimaryCtxRetain` (the primary context is
+   the one PyTorch/CUDA runtime uses). Kept — more correct — but the penalty
+   remains: bitsy-first 1.08 ms vs torch-first 0.52 ms.
+2. Restore the context with `cuCtxSetCurrent` before each CUDA op. Reverted —
+   it made bitsy-first worse (1.22 ms).
+
+The penalty is therefore not context identity or currency; it appears to come
+from CUDA runtime/driver state established by the first `cudaMalloc` after
+context creation. The fast path stays opt-in. With the usual order (PyTorch
+first, or bitsy alone) all 9 pointwise ops still beat PyTorch (gaps 0.56–0.72×).
+
+Gates: v2 48/48, op 27/27, gradcheck 25/25, model 10/10, API 113/113, ctest 2/2.
+Core 3,388 lines.
+
 ## 2026-11-22 17:05 — PR #52: dual CUDA/Vulkan buffers make mixed graphs correct
 
 Gave CUDA-produced tensors a dual representation: each `RtBuf` keeps both a
