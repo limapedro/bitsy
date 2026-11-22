@@ -58,7 +58,26 @@ this GPU — see FINDINGS_PR15).
 
 ---
 
-## 2026-11-22 06:05 — PR #30 (in progress): register-blocked vec4 GEMM
+## 2026-11-22 06:25 — PR #31 (in progress): GPU timestamp profiling — the definitive split
+
+Added Vulkan timestamp queries to the compact runtime (`rt_device_time_ms`,
+`rt_copy_time_ms`) and a reproducible script `benchmarks/compact/timestamp_profile.py`.
+For a single eager `x+x` on 1M elements (median, 20 iters, warmup 8, clock 1530):
+```
+wall 1.433 ms
+  GPU kernel       0.067 ms  ( 4.7%)   <- compute shader
+  GPU D2H copy     0.320 ms  (22.3%)   <- DMA engine
+  host overhead    1.046 ms  (73.0%)   <- submit + fence waits + Python/numpy
+```
+**This is why kernel tuning alone cannot close the single-call gap**: 95% of
+wall time is not the compute kernel. The vec4 GEMM work (PR #30) still helps
+multi-op/graphs, but per-call latency is host-bound. TimestampPeriod 1.0 ns;
+clock logged; spread in `benchmarks/results/timestamp_profile.json`.
+
+All gates green (v2 48/48, op 27/27, gradcheck 25/25, model 10/10, API 88/88,
+ctest 2/2). Core 2,715 lines.
+
+## 2026-11-22 06:05 — PR #30: register-blocked vec4 GEMM
 
 Researched further GEMM strategies (web searches returned nothing usable), then
 implemented `gemm_vec4.comp`: each thread owns a **4×4 output tile** (16

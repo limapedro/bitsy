@@ -128,6 +128,10 @@ RT_API void rt_replay_submit_async(RT*); /* submit without wait; read waits auto
 #define RT_READBACK_SLOTS 32
 RT_API const float* rt_read_ptr(RT*, RTTensor*, int slot);
 
+/* Last eager kernel GPU time in ms (Vulkan timestamp query; 0 if unsupported). */
+RT_API double rt_device_time_ms(const RT*);
+RT_API double rt_copy_time_ms(const RT*);
+
 /* Version */
 RT_API const char* rt_version(void);
 

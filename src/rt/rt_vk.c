@@ -92,6 +92,8 @@ struct RtVk {
   VkDeviceSize rb_size[RT_READBACK_SLOTS];
   VkCommandBuffer xfer_cmd;    /* persistent transfer command buffer */
   VkFence xfer_fence;
+  VkQueryPool ts_pool; float ts_period;
+  RT* ctx;
   int recording;
   VkSemaphore timeline;
   uint64_t tick;
@@ -184,14 +186,21 @@ static void copy_buffer(RtVk* vk, VkBuffer src, VkBuffer dst, VkDeviceSize size)
     vkCreateFence(vk->dev,&fi,NULL,&vk->xfer_fence);
   }
   vkResetCommandBuffer(vk->xfer_cmd,0);
+  if(vk->ts_pool) vkResetQueryPool(vk->dev,vk->ts_pool,2,2);
   VkCommandBufferBeginInfo bi={.sType=VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
   vkBeginCommandBuffer(vk->xfer_cmd,&bi);
+  if(vk->ts_pool) vkCmdWriteTimestamp(vk->xfer_cmd,VK_PIPELINE_STAGE_2_TRANSFER_BIT,vk->ts_pool,2);
   VkBufferCopy region={.srcOffset=0,.dstOffset=0,.size=size};
   vkCmdCopyBuffer(vk->xfer_cmd,src,dst,1,&region);
+  if(vk->ts_pool) vkCmdWriteTimestamp(vk->xfer_cmd,VK_PIPELINE_STAGE_2_TRANSFER_BIT,vk->ts_pool,3);
   vkEndCommandBuffer(vk->xfer_cmd);
   VkSubmitInfo si={.sType=VK_STRUCTURE_TYPE_SUBMIT_INFO,.commandBufferCount=1,.pCommandBuffers=&vk->xfer_cmd};
   vkQueueSubmit(vk->queue,1,&si,vk->xfer_fence);
   vkWaitForFences(vk->dev,1,&vk->xfer_fence,VK_TRUE,UINT64_MAX);
+  if(vk->ts_pool){ uint64_t ct[2];
+    if(vkGetQueryPoolResults(vk->dev,vk->ts_pool,2,2,sizeof(ct),ct,sizeof(uint64_t),
+        VK_QUERY_RESULT_64_BIT|VK_QUERY_RESULT_WAIT_BIT)==VK_SUCCESS)
+      if(vk->ctx) vk->ctx->copy_gpu_ms=(double)(ct[1]-ct[0])*vk->ts_period*1e-6; }
   vkResetFences(vk->dev,1,&vk->xfer_fence);
 }
 
@@ -249,7 +258,7 @@ static VkPipeline sp_pipeline(RtVk* vk, const int specs[25]) {
 
 void rt_vk_init(RT* c) {
   RtVk* vk = (RtVk*)calloc(1, sizeof(RtVk));
-  c->vk = vk;
+  c->vk = vk; vk->ctx = c;
   VkApplicationInfo app = { .sType=VK_STRUCTURE_TYPE_APPLICATION_INFO,
     .pApplicationName="bitsy-rt", .apiVersion=VK_API_VERSION_1_2 };
   VkInstanceCreateInfo ici = { .sType=VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO, .pApplicationInfo=&app };
@@ -275,6 +284,13 @@ void rt_vk_init(RT* c) {
     .queueCreateInfoCount=1, .pQueueCreateInfos=&qci, .pEnabledFeatures=&feats, .pNext=&bda };
   if (vkCreateDevice(vk->phys, &dci, NULL, &vk->dev) != VK_SUCCESS) return;
   vkGetDeviceQueue(vk->dev, vk->qfam, 0, &vk->queue);
+  { VkPhysicalDeviceProperties pp; vkGetPhysicalDeviceProperties(vk->phys,&pp);
+    vk->ts_period = pp.limits.timestampComputeAndGraphics ? pp.limits.timestampPeriod : 0.f; }
+  if (vk->ts_period>0.f) {
+    VkQueryPoolCreateInfo qp={.sType=VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO,
+      .queryType=VK_QUERY_TYPE_TIMESTAMP,.queryCount=4};
+    vkCreateQueryPool(vk->dev,&qp,NULL,&vk->ts_pool);
+  }
 
   VkCommandPoolCreateInfo pci = { .sType=VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
     .queueFamilyIndex=vk->qfam, .flags=VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT };
@@ -406,6 +422,7 @@ void rt_vk_shutdown(RT* c) {
     vkDestroyBuffer(vk->dev,vk->rb_buf[i],NULL); vkFreeMemory(vk->dev,vk->rb_mem[i],NULL);
   }
   for(int i=0;i<2;++i) if(vk->layernorm[i]) vkDestroyPipeline(vk->dev,vk->layernorm[i],NULL);
+  if(vk->ts_pool) vkDestroyQueryPool(vk->dev,vk->ts_pool,NULL);
   if(vk->gemm_v4) vkDestroyPipeline(vk->dev,vk->gemm_v4,NULL);
   for(int i=0;i<4;++i) if(vk->softmax[i]) vkDestroyPipeline(vk->dev,vk->softmax[i],NULL);
   if (vk->reduce_s1) vkDestroyPipeline(vk->dev,vk->reduce_s1,NULL);
@@ -602,12 +619,19 @@ void rt_vk_fused(RT* c, RtFusion* f, RtBuf* out) {
   if (slot) { cap_record(vk, slot, pipe, pc, groups); return; }
   VkCommandBufferBeginInfo bi = { .sType=VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
   vkBeginCommandBuffer(vk->cmd, &bi);
+  if(vk->ts_pool) vkResetQueryPool(vk->dev,vk->ts_pool,0,2);
+  if(vk->ts_pool) vkCmdWriteTimestamp(vk->cmd,VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,vk->ts_pool,0);
   vkCmdBindPipeline(vk->cmd, VK_PIPELINE_BIND_POINT_COMPUTE, pipe);
   vkCmdBindDescriptorSets(vk->cmd, VK_PIPELINE_BIND_POINT_COMPUTE, vk->playout, 0,1,&vk->set,0,NULL);
   vkCmdPushConstants(vk->cmd, vk->playout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(pc), pc);
   vkCmdDispatch(vk->cmd, groups, 1, 1);
+  if(vk->ts_pool) vkCmdWriteTimestamp(vk->cmd,VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,vk->ts_pool,1);
   vkEndCommandBuffer(vk->cmd);
   submit_wait(vk);
+  if(vk->ts_pool){ uint64_t ts[2];
+    if(vkGetQueryPoolResults(vk->dev,vk->ts_pool,0,2,sizeof(ts),ts,sizeof(uint64_t),
+        VK_QUERY_RESULT_64_BIT|VK_QUERY_RESULT_WAIT_BIT)==VK_SUCCESS)
+      c->last_gpu_ms=(double)(ts[1]-ts[0])*vk->ts_period*1e-6; }
   finish_output(vk, out);
 }
 

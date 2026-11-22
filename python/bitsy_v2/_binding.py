@@ -39,6 +39,8 @@ def load(build_dir: Path) -> C.CDLL:
   lib.rt_softmax.argtypes=[C.c_void_p,C.c_void_p,C.c_void_p,C.c_int]; lib.rt_softmax.restype=C.c_void_p
   lib.rt_layernorm.argtypes=[C.c_void_p,C.c_void_p,C.c_void_p,C.c_void_p,C.c_void_p,C.c_float]
   lib.rt_layernorm.restype=C.c_void_p
+  lib.rt_device_time_ms.argtypes=[C.c_void_p]; lib.rt_device_time_ms.restype=C.c_double
+  lib.rt_copy_time_ms.argtypes=[C.c_void_p]; lib.rt_copy_time_ms.restype=C.c_double
   lib.rt_read_ptr.argtypes=[C.c_void_p,C.c_void_p,C.c_int]
   lib.rt_read_ptr.restype=C.POINTER(C.c_float)
   return lib
