@@ -58,6 +58,31 @@ this GPU — see FINDINGS_PR15).
 
 ---
 
+## 2026-11-22 12:20 — PR #44: precise host-cost breakdown — the sync floor is driver-bound
+
+Measured the single-call host path with high-resolution `QueryPerformanceCounter`
+(instrumentation added for the study, then removed) instead of `clock()`:
+
+```
+vkQueueSubmit (compute)   21.5 us/op
+vkQueueSubmit (D2H copy)  15.2 us/op
+vkWaitForFences (copy)    ~818 us/op   (incl. ~390 us GPU compute+copy)
+--> ~430 us/op is pure driver wait overhead
+```
+The fence wait alone is ~80% of the 1.015 ms single-call wall. Tested a genuinely
+different primitive, `vkQueueWaitIdle`, as a replacement: wall 0.999 ms vs 1.015
+ms fence (wait 774 vs 818 us) — **equivalent, no win**. Combined with the
+already-rejected fence polling, timeline semaphore, GPU-written mapped counter,
+and HOST_CACHED large outputs, this establishes the ~0.4 ms floor as a driver
+property of this GTX 1660 Super / Vulkan stack, not a kernel or params issue.
+PyTorch's `add+sync` is 0.038 ms because CUDA's sync uses a different path.
+
+No code shipped except documentation; every gate remains green. This is recorded
+so future work does not re-try the same primitives.
+
+Gates: v2 48/48, op 27/27, gradcheck 25/25, model 10/10, API 108/108, ctest 2/2.
+Core 3,159 lines.
+
 ## 2026-11-22 11:45 — PR #43: single-op gap study (two structural experiments rejected) + timestamp robustness
 
 Attacked the remaining pointwise/reduction gaps directly with two structural
