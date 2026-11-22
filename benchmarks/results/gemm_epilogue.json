@@ -1,0 +1,43 @@
+{
+  "generated_at": "2026-11-22T11:01:37.647091+00:00",
+  "environment": {
+    "torch": "2.11.0+cu126",
+    "gpu": "GTX 1660 SUPER",
+    "clock": [
+      1530.0,
+      1530.0
+    ]
+  },
+  "config": {
+    "build_dir": "E:\\__PROJECTS__\\Hagane\\build-rtvk",
+    "batch": 64,
+    "in_f": 256,
+    "hidden": 128,
+    "out_f": 1,
+    "warmup": 8,
+    "iters": 30,
+    "tol": 0.001,
+    "result_path": "E:\\__PROJECTS__\\Hagane\\benchmarks\\results\\gemm_epilogue.json"
+  },
+  "correctness": {
+    "diff": 4.57763671875e-05,
+    "passed": true
+  },
+  "dispatch_count": 2,
+  "bitsy": {
+    "median_ms": 0.5125000170664862,
+    "spread_ms": [
+      0.3152000135742128,
+      0.999299983959645
+    ]
+  },
+  "torch": {
+    "median_ms": 0.02579999272711575,
+    "spread_ms": [
+      0.025399989681318402,
+      0.028499984182417393
+    ]
+  },
+  "gap": 19.86434734641803,
+  "note": "Unrealized W.T() folded into GEMM trans_b flag; removes one transpose dispatch per linear layer."
+}
