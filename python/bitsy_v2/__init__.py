@@ -56,6 +56,7 @@ class _RT:
   def gemm(self, a, b, bias=None, ta=0, tb=0):
     return self.lib.rt_gemm(self.ctx, a, b, bias or C.c_void_p(), ta, tb)
   def reduce(self, a, kind, axis, keepdim): return self.lib.rt_reduce(self.ctx, a, kind, axis, keepdim)
+  def softmax(self, a, kind): return self.lib.rt_softmax(self.ctx, a, kind)
   def where(self, c, a, b): return self.lib.rt_where(self.ctx, c, a, b)
   def transpose(self, a): return self.lib.rt_transpose(self.ctx, a)
   def reshape(self, a, shape):

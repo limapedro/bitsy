@@ -15,6 +15,7 @@
 #include "rt_fused_sp.spv.h"
 #include "rt_gemm.spv.h"
 #include "rt_reduce.spv.h"
+#include "rt_softmax.spv.h"
 
 #define RT_NBUF 512
 
@@ -66,6 +67,7 @@ struct RtVk {
   VkPipeline gemm[3];       /* tile variants: 16x16x16, 32x32x8, 64x64x8 */
   int gemm_bm[3], gemm_bn[3];
   VkPipeline reduce, reduce_s1;
+  VkPipeline softmax[2];   /* 0=softmax, 1=log_softmax */
   VkBuffer reduce_part; VkDeviceMemory reduce_part_mem;   /* two-stage partials */
   VkPipelineCache pcache;
   RtVkBuf bufs[RT_NBUF];
@@ -314,6 +316,7 @@ void rt_vk_init(RT* c) {
   vk->fused_sp_module = shader(vk, rt_fused_sp_spv, rt_fused_sp_spv_bytes);
   VkShaderModule sg = shader(vk, rt_gemm_spv, rt_gemm_spv_bytes);
   VkShaderModule sr = shader(vk, rt_reduce_spv, rt_reduce_spv_bytes);
+  VkShaderModule ss = shader(vk, rt_softmax_spv, rt_softmax_spv_bytes);
   vk->fused[0] = make_pipeline(vk, sf, 0, 0,0,0);
   vk->gemm[0] = make_pipeline(vk, sg, 1, 16,16,16);
   vk->gemm[1] = make_pipeline(vk, sg, 1, 32,32,8);
@@ -323,6 +326,8 @@ void rt_vk_init(RT* c) {
   vk->gemm_bm[2]=64; vk->gemm_bn[2]=64;
   vk->reduce = make_pipeline(vk, sr, 1, 0,64,0);   /* STAGE=0, NPART=64 */
   vk->reduce_s1 = make_pipeline(vk, sr, 1, 1,64,0); /* STAGE=1, NPART=64 */
+  vk->softmax[0] = make_pipeline(vk, ss, 1, 0,0,0);
+  vk->softmax[1] = make_pipeline(vk, ss, 1, 1,0,0);
 
   /* params + output staging buffers (host visible) */
   VkBufferCreateInfo bci = { .sType=VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
@@ -389,6 +394,8 @@ void rt_vk_shutdown(RT* c) {
     vkUnmapMemory(vk->dev,vk->rb_mem[i]);
     vkDestroyBuffer(vk->dev,vk->rb_buf[i],NULL); vkFreeMemory(vk->dev,vk->rb_mem[i],NULL);
   }
+  if (vk->softmax[0]) vkDestroyPipeline(vk->dev,vk->softmax[0],NULL);
+  if (vk->softmax[1]) vkDestroyPipeline(vk->dev,vk->softmax[1],NULL);
   if (vk->reduce_s1) vkDestroyPipeline(vk->dev,vk->reduce_s1,NULL);
   if (vk->reduce_part) { vkDestroyBuffer(vk->dev,vk->reduce_part,NULL); vkFreeMemory(vk->dev,vk->reduce_part_mem,NULL); }
   vkDestroySemaphore(vk->dev, vk->timeline, NULL);
@@ -637,6 +644,38 @@ void rt_vk_gemm(RT* c, RtBuf* a, RtBuf* b, RtBuf* bias,
   finish_output(vk, out);
 }
 
+void rt_vk_softmax(RT* c, RtBuf* in, RtBuf* out, int kind) {
+  RtVk* vk=c->vk; if(!vk->dev) return;
+  if (in->ndim<1 || in->dims[in->ndim-1]>256) return;  /* shader supports <=256 cols */
+  int cols=(int)in->dims[in->ndim-1], rows=1;
+  for(int i=0;i<in->ndim-1;++i) rows*=(int)in->dims[i];
+  RtCaptureSlot* slot = vk->capturing ? cap_slot_new(vk, out) : NULL;
+  int* p=(int*)(slot ? slot->params_map : vk->params_map);
+  p[0]=rows; p[1]=cols;
+  pack_addr(p,2,vkbuf(c,in)->addr);
+  uint64_t outaddr;
+  if(slot){ VkBufferDeviceAddressInfo ao={.sType=VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,.buffer=slot->out};
+    outaddr=vkGetBufferDeviceAddress(vk->dev,&ao); }
+  else outaddr=vkbuf(c,out)->addr;
+  pack_addr(p,4,outaddr);
+  int pc[4]={rows,cols,kind,0};
+  VkPipeline pipe=vk->softmax[kind?1:0];
+  if(slot){ if(slot->pipeline==VK_NULL_HANDLE){slot->pipeline=pipe;memcpy(slot->pc,pc,sizeof(int)*4);slot->groups=1;}
+    vkCmdBindPipeline(vk->replay_cmd,VK_PIPELINE_BIND_POINT_COMPUTE,pipe);
+    vkCmdBindDescriptorSets(vk->replay_cmd,VK_PIPELINE_BIND_POINT_COMPUTE,vk->playout,0,1,&slot->set,0,NULL);
+    vkCmdPushConstants(vk->replay_cmd,vk->playout,VK_SHADER_STAGE_COMPUTE_BIT,0,sizeof(pc),pc);
+    vkCmdDispatch(vk->replay_cmd,rows,1,1); return; }
+  VkCommandBufferBeginInfo bi={.sType=VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
+  vkBeginCommandBuffer(vk->cmd,&bi);
+  vkCmdBindPipeline(vk->cmd,VK_PIPELINE_BIND_POINT_COMPUTE,pipe);
+  vkCmdBindDescriptorSets(vk->cmd,VK_PIPELINE_BIND_POINT_COMPUTE,vk->playout,0,1,&vk->set,0,NULL);
+  vkCmdPushConstants(vk->cmd,vk->playout,VK_SHADER_STAGE_COMPUTE_BIT,0,sizeof(pc),pc);
+  vkCmdDispatch(vk->cmd,rows,1,1);
+  vkEndCommandBuffer(vk->cmd);
+  submit_wait(vk);
+  finish_output(vk,out);
+}
+
 /* Record both reduce stages + barrier into one command buffer (one submit). */
 static void record_reduce(RtVk* vk, VkCommandBuffer cmd, VkDescriptorSet set,
                           const int pc[4], uint32_t lines) {
@@ -881,6 +920,7 @@ void rt_vk_fused(RT* c, RtFusion* f, RtBuf* o){ (void)c;(void)f;(void)o; }
 void rt_vk_gemm(RT* c, RtBuf* a, RtBuf* b, RtBuf* bias, int ta, int tb, int relu, RtBuf* o){
   (void)c;(void)a;(void)b;(void)bias;(void)ta;(void)tb;(void)relu;(void)o; }
 void rt_vk_reduce(RT* c, RtBuf* i, int kind, int ax, RtBuf* o){ (void)c;(void)i;(void)kind;(void)ax;(void)o; }
+void rt_vk_softmax(RT* c, RtBuf* i, RtBuf* o, int k){ (void)c;(void)i;(void)o;(void)k; }
 void rt_vk_capture_begin(RT* c){ (void)c; }
 void rt_vk_capture_end(RT* c){ (void)c; }
 void rt_vk_replay(RT* c){ (void)c; }

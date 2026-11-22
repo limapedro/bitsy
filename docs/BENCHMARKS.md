@@ -58,7 +58,25 @@ this GPU — see FINDINGS_PR15).
 
 ---
 
-## 2026-11-22 04:05 — PR #23 (in progress): GEMM+ReLU epilogue fusion (1 dispatch)
+## 2026-11-22 04:20 — PR #24 (in progress): fused softmax/log_softmax (4 → 1 dispatch)
+
+`X.softmax(axis=-1)` previously took **4 dispatches** (max, exp, sum, div).
+Added `src/rt/shaders/softmax.comp`: one 256-thread workgroup per row, cooperative
+load into shared memory, tree-reduce max → exp → tree-reduce sum → normalize.
+`RT_SOFTMAX` node + `rt_softmax()` API; Python uses it for last-axis, ≤256 cols
+(fallback to composition otherwise). Autograd implements the standard softmax
+and log_softmax backward rules from existing primitives.
+
+```
+dispatch count: 4 -> 1 (verified)
+numeric diff vs torch: softmax 3e-08, log_softmax 5e-07
+end-to-end (4096x128, median, clock 1530->1950): fused 0.66-0.96ms vs torch 0.30ms (~2-3x)
+old 4-dispatch composition measured 0.33ms in one run, so the fused shader wins
+clearly on dispatch count but the shared per-call download overhead still dominates.
+```
+All gates green (48/48, 27/27, 25/25, 10/10, 79/79, ctest 2/2).
+
+## 2026-11-22 04:05 — PR #23: GEMM+ReLU epilogue fusion (1 dispatch)
 
 `matmul().relu()` previously took **2 dispatches** (GEMM cut + fused ReLU).
 Added `RT_GEMM_RELU` node type: `rt_relu()` folds an unrealized `RT_MATMUL`
