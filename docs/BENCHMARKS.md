@@ -58,7 +58,26 @@ this GPU — see FINDINGS_PR15).
 
 ---
 
-## 2026-11-22 05:05 — PR #27 (doc-only): D2H fence profiling + dedicated transfer queue A/B (negative)
+## 2026-11-22 05:20 — PR #28 (in progress): fused softmax+bias + more APIs; clock-pin attempt
+
+**Clock pinning attempt**: `nvidia-smi -lgc 1530,1530` → "current user does not
+have permission to change clocks" (needs admin). Clocks cannot be pinned from
+this session; every benchmark continues to record start/end clock explicitly
+(e.g. 1530→1950 MHz) so drift is visible. No hidden clock normalisation.
+
+**Softmax+bias fusion**: extended `softmax.comp` with a `HAS_BIAS` spec constant
+and 4 pipeline variants (softmax/logsoftmax × bias/no-bias). `RT_SOFTMAX` now
+carries an optional bias source; `Tensor.softmax/log_softmax(axis, bias=...)` use
+it. Backward covers both inputs.
+```
+softmax(x+bias) 4096x128: 1 dispatch (was 2), diff 6e-08, end-to-end 1.21ms vs torch 0.41ms (~3x)
+```
+**API batch**: `functional.cosine_similarity`, `pairwise_distance`. API parity
+79 → **83 cases**, all green. Feature inventory updated.
+
+Gates: v2 48/48, op 27/27, gradcheck 25/25, model 10/10, API 83/83, ctest 2/2.
+
+## 2026-11-22 05:05 — PR #27: D2H fence profiling + dedicated transfer queue A/B (negative)
 
 Profiled the remaining D2H copy with high-resolution timers (BT_PROF, 4 MB):
 ```

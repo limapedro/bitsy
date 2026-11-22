@@ -68,7 +68,7 @@ struct RtVk {
   VkPipeline gemm[3];       /* tile variants: 16x16x16, 32x32x8, 64x64x8 */
   int gemm_bm[3], gemm_bn[3];
   VkPipeline reduce, reduce_s1;
-  VkPipeline softmax[2];   /* 0=softmax, 1=log_softmax */
+  VkPipeline softmax[4];   /* 0/1 = softmax/logsoftmax, 2/3 = +bias */
   VkPipeline layernorm;
   VkBuffer reduce_part; VkDeviceMemory reduce_part_mem;   /* two-stage partials */
   VkPipelineCache pcache;
@@ -331,6 +331,8 @@ void rt_vk_init(RT* c) {
   vk->reduce_s1 = make_pipeline(vk, sr, 1, 1,64,0); /* STAGE=1, NPART=64 */
   vk->softmax[0] = make_pipeline(vk, ss, 1, 0,0,0);
   vk->softmax[1] = make_pipeline(vk, ss, 1, 1,0,0);
+  vk->softmax[2] = make_pipeline(vk, ss, 1, 0,1,0);  /* kind=0, has_bias=1 */
+  vk->softmax[3] = make_pipeline(vk, ss, 1, 1,1,0);  /* kind=1, has_bias=1 */
   vk->layernorm = make_pipeline(vk, sl, 0, 0,0,0);
 
   /* params + output staging buffers (host visible) */
@@ -399,8 +401,7 @@ void rt_vk_shutdown(RT* c) {
     vkDestroyBuffer(vk->dev,vk->rb_buf[i],NULL); vkFreeMemory(vk->dev,vk->rb_mem[i],NULL);
   }
   if (vk->layernorm) vkDestroyPipeline(vk->dev,vk->layernorm,NULL);
-  if (vk->softmax[0]) vkDestroyPipeline(vk->dev,vk->softmax[0],NULL);
-  if (vk->softmax[1]) vkDestroyPipeline(vk->dev,vk->softmax[1],NULL);
+  for(int i=0;i<4;++i) if(vk->softmax[i]) vkDestroyPipeline(vk->dev,vk->softmax[i],NULL);
   if (vk->reduce_s1) vkDestroyPipeline(vk->dev,vk->reduce_s1,NULL);
   if (vk->reduce_part) { vkDestroyBuffer(vk->dev,vk->reduce_part,NULL); vkFreeMemory(vk->dev,vk->reduce_part_mem,NULL); }
   vkDestroySemaphore(vk->dev, vk->timeline, NULL);
@@ -676,7 +677,7 @@ void rt_vk_layernorm(RT* c, RtBuf* x, RtBuf* w, RtBuf* b, RtBuf* out, float eps)
   vkEndCommandBuffer(cmd); submit_wait(vk); finish_output(vk,out);
 }
 
-void rt_vk_softmax(RT* c, RtBuf* in, RtBuf* out, int kind) {
+void rt_vk_softmax(RT* c, RtBuf* in, RtBuf* bias, RtBuf* out, int kind) {
   RtVk* vk=c->vk; if(!vk->dev) return;
   if (in->ndim<1 || in->dims[in->ndim-1]>256) return;  /* shader supports <=256 cols */
   int cols=(int)in->dims[in->ndim-1], rows=1;
@@ -690,8 +691,9 @@ void rt_vk_softmax(RT* c, RtBuf* in, RtBuf* out, int kind) {
     outaddr=vkGetBufferDeviceAddress(vk->dev,&ao); }
   else outaddr=vkbuf(c,out)->addr;
   pack_addr(p,4,outaddr);
+  if(bias) pack_addr(p,6,vkbuf(c,bias)->addr);
   int pc[4]={rows,cols,kind,0};
-  VkPipeline pipe=vk->softmax[kind?1:0];
+  VkPipeline pipe=vk->softmax[(kind?1:0)+(bias?2:0)];
   if(slot){ if(slot->pipeline==VK_NULL_HANDLE){slot->pipeline=pipe;memcpy(slot->pc,pc,sizeof(int)*4);slot->groups=1;}
     vkCmdBindPipeline(vk->replay_cmd,VK_PIPELINE_BIND_POINT_COMPUTE,pipe);
     vkCmdBindDescriptorSets(vk->replay_cmd,VK_PIPELINE_BIND_POINT_COMPUTE,vk->playout,0,1,&slot->set,0,NULL);
@@ -952,7 +954,7 @@ void rt_vk_fused(RT* c, RtFusion* f, RtBuf* o){ (void)c;(void)f;(void)o; }
 void rt_vk_gemm(RT* c, RtBuf* a, RtBuf* b, RtBuf* bias, int ta, int tb, int relu, RtBuf* o){
   (void)c;(void)a;(void)b;(void)bias;(void)ta;(void)tb;(void)relu;(void)o; }
 void rt_vk_reduce(RT* c, RtBuf* i, int kind, int ax, RtBuf* o){ (void)c;(void)i;(void)kind;(void)ax;(void)o; }
-void rt_vk_softmax(RT* c, RtBuf* i, RtBuf* o, int k){ (void)c;(void)i;(void)o;(void)k; }
+void rt_vk_softmax(RT* c, RtBuf* i, RtBuf* bi, RtBuf* o, int k){ (void)c;(void)i;(void)bi;(void)o;(void)k; }
 void rt_vk_layernorm(RT* c, RtBuf* x, RtBuf* w, RtBuf* b, RtBuf* o, float e){ (void)c;(void)x;(void)w;(void)b;(void)o;(void)e; }
 void rt_vk_capture_begin(RT* c){ (void)c; }
 void rt_vk_capture_end(RT* c){ (void)c; }
