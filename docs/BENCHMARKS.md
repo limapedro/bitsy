@@ -58,6 +58,32 @@ this GPU — see FINDINGS_PR15).
 
 ---
 
+## 2026-11-22 14:40 — PR #48: adaptive auto-capture covers inference/single ops too
+
+Extended `AutoCapture` to cover inference/single-op workloads with an adaptive
+default: `run(..., mode="auto")` selects **captured replay** for training steps
+(zero_grads provided) and **eager execution** for inference (no forced readback —
+results stay as device tensors). Added `AutoCapture.infer(key, fn, shapes,
+inputs)` convenience. Measurement drove the choice: captured replay for a single
+op was slower (2.08 vs 1.27 ms), and K-graph batching for forward-only inference
+was slower (0.203 vs 0.054 ms/step), because PyTorch's async launches avoid a
+per-batch host sync; eager forward-only keeps both paths async.
+
+New `benchmarks/compact/inference_bench.py` (3-layer MLP forward, fresh inputs,
+warmup/median/spread, clock 1530):
+```
+auto-eager 0.0483 | torch 0.0455 ms/step | gap 1.06x (near parity)
+```
+Re-ran the realistic training benchmark: 4-layer MLP fresh-data fwd+bwd+SGD at
+N=600, K=6: **0.3505 vs 0.4443 ms/step, gap 0.79x (1.27x FASTER)**.
+
+Added `auto_infer_eager` parity gate (API 110 → **111 cases**). The adaptive
+path now spans training (captured, wins) and inference (eager, near parity);
+overall parity is still not claimed for synthetic single calls.
+
+Gates: v2 48/48, op 27/27, gradcheck 25/25, model 10/10, API **111/111**, ctest 2/2.
+Core 3,159 lines.
+
 ## 2026-11-22 14:05 — PR #47: realistic multi-layer end-to-end win with auto-capture as default
 
 Stopped chasing the single-call sync floor and pursued the overall-workload win.

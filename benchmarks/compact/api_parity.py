@@ -454,6 +454,16 @@ def run(cfg=CFG):
   rec_grad("auto_capture_w1", md(aga,atw1.detach().numpy()))
   rec_grad("auto_capture_w2", md(agb,atw2.detach().numpy()))
 
+  # ---- PR #48: auto adaptive path for inference (eager, no forced sync) ----
+  ia=rng.standard_normal((8,16)).astype(np.float32)
+  iw=rng.standard_normal((4,16)).astype(np.float32)
+  ie=bv.Engine(device=bv.Engine.VULKAN)
+  IW=ie.tensor(iw)
+  def ifn(X): return X.matmul(IW.T()).relu()
+  ires=ie.auto().infer("ifn",ifn,[(8,16)],[ia])
+  igot=ires[0][0].numpy()
+  rec_fwd("auto_infer_eager", md(igot,np.maximum(ia@iw.T,0)))
+
   passed = sum(r["passed"] for r in results)
   report = {
     "generated_at":datetime.now(timezone.utc).isoformat(),

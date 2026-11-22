@@ -47,12 +47,38 @@ class AutoCapture:
     self.K = K
     self._cache = {}
 
-  def run(self, key, fn, shapes, batches, zero_grads=None):
+  def run(self, key, fn, shapes, batches, zero_grads=None, mode="auto"):
+    """Execute ``batches`` (K groups of inputs) through fn.
+
+    mode="auto" picks captured replay for training steps (zero_grads provided —
+    measured faster because PyTorch/our eager pay backward+optimizer host cost)
+    and eager execution for inference/single ops (capture replay measured slower
+    than eager there). mode="capture" / "eager" force a specific path.
+    """
+    if mode == "auto":
+      mode = "capture" if zero_grads else "eager"
+    if mode == "eager":
+      out=[]
+      for batch in batches:
+        grows=[]
+        for group in batch:
+          ts=[self.eng.tensor(np.asarray(g,dtype=np.float32)) for g in group]
+          grows.append(fn(*ts))
+        out.append(grows)
+      return out
     c = self._cache.get(key)
     if c is None:
       c = self.eng.compile_many(fn, shapes, self.K, zero_grads=zero_grads)
       self._cache[key] = c
     return c(batches)
+
+  def infer(self, key, fn, shapes, inputs):
+    """Inference convenience: ``inputs`` is a list of single input arrays.
+
+    Uses the adaptive default, which selects eager execution for inference
+    workloads where captured replay was measured to be slower.
+    """
+    return self.run(key, fn, shapes, [[[x] for x in inputs]])
 
 
 class CompiledMany:
