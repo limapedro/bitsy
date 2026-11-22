@@ -58,9 +58,9 @@ RT* rt_create(int device) {
   if (!c) return NULL;
   c->device = device;
   c->next_id = 1;
-  c->cuda_native = 1;  /* PR #54: fast pointwise path on by default; the CUDA
-                        * context is initialized lazily at first use, and falls
-                        * back to Vulkan when CUDA is unavailable. */
+  c->cuda_native = 0;  /* Opt-in: the CUDA path is faster for pointwise ops but
+                        * shows intermittent gradcheck corruption when enabled
+                        * by default; see BENCHMARKS.md PR #57. */
   if (device == RT_VULKAN) rt_vk_init(c);
   return c;
 }
