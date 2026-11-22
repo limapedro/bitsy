@@ -18,6 +18,7 @@ const float* rt_cn_ptr(const void* dptr, size_t bytes);  /* rotating pinned host
 void rt_cn_flush(void);
 /* PR #55: single-kernel CUDA reduction (sum/mean/max/min). */
 int rt_cn_reduce_fast(void* in,void* out,int outer,int stride,int inner,int kind);
+int rt_cn_gemm_fast(void* A,void* B,void* bias,void* C,int M,int N,int K,int flags);
 #ifdef __cplusplus
 }
 #endif
