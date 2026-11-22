@@ -80,6 +80,8 @@ struct RT {
   int device;
   char last_error[512];
   int dispatch_count;
+  double last_gpu_ms;           /* Vulkan timestamp query result (PR #31) */
+  double copy_gpu_ms;
   int capture;                  /* capture/replay state machine */
   RtFusion capture_fusion[RT_MAXBUF];
   int capture_n;

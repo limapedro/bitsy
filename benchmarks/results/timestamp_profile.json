@@ -1,0 +1,41 @@
+{
+  "generated_at": "2026-11-22T08:41:16.156715+00:00",
+  "gpu": "NVIDIA GeForce GTX 1660 SUPER",
+  "clock": [
+    1530.0,
+    1530.0
+  ],
+  "config": {
+    "build_dir": "E:\\__PROJECTS__\\Hagane\\build-rtvk",
+    "n": 1048576,
+    "warmup": 8,
+    "iters": 20,
+    "result_path": "E:\\__PROJECTS__\\Hagane\\benchmarks\\results\\timestamp_profile.json"
+  },
+  "median_ms": {
+    "wall": 1.4331500133266672,
+    "gpu_kernel": 0.06675199999999999,
+    "gpu_copy": 0.319984,
+    "host_overhead": 1.0464140133266673
+  },
+  "fraction": {
+    "gpu_kernel": 0.04657711989623013,
+    "gpu_copy": 0.22327320728780117,
+    "host_overhead": 0.7301496728159687
+  },
+  "spread_ms": {
+    "wall": [
+      1.277300005313009,
+      1.977599982637912
+    ],
+    "gpu_kernel": [
+      0.065536,
+      0.06758399999999999
+    ],
+    "gpu_copy": [
+      0.319488,
+      0.334368
+    ]
+  },
+  "note": "GPU times from Vulkan timestamp queries (period 1ns); wall from perf_counter."
+}

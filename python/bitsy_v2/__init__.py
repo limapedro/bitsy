@@ -97,5 +97,7 @@ class Engine:
   def replay(self): self.lib.rt_replay(self.rt.ctx)
   def replay_submit_only(self): self.lib.rt_replay_submit_only(self.rt.ctx)
   def replay_submit_async(self): self.lib.rt_replay_submit_async(self.rt.ctx)
+  def device_time_ms(self): return self.lib.rt_device_time_ms(self.rt.ctx)
+  def copy_time_ms(self): return self.lib.rt_copy_time_ms(self.rt.ctx)
   def dispatch(self): return self.lib.rt_dispatch_count(self.rt.ctx)
   def reset_dispatch(self): self.lib.rt_reset_dispatch_count(self.rt.ctx)

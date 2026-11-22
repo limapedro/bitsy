@@ -854,6 +854,9 @@ const float* rt_read_ptr(RT* c, RTTensor* t, int slot) {
   return (const float*)t->buf->host;
 }
 
+double rt_device_time_ms(const RT* c) { return c ? c->last_gpu_ms : 0.0; }
+double rt_copy_time_ms(const RT* c) { return c ? c->copy_gpu_ms : 0.0; }
+
 /* ---------- capture / replay ---------- */
 
 void rt_upload(RT* c, RTTensor* t, const float* data) {
